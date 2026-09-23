@@ -35,7 +35,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 3. `python Scripts/check_public_docs.py` checks that every public header has a file comment.
 4. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
-The format and documentation checks are CI requirements. They do not rewrite a PR. No clang-tidy, UE compilation, test coverage, or additional test gate is required now.
+The format, documentation, and PR naming checks are CI requirements. They do not rewrite a PR. No clang-tidy, UE compilation, or test coverage gate is required now.
 
 ## Commit and branch names
 
@@ -56,6 +56,8 @@ Use only these prefixes for new commits and working branches:
 | `revert` | Revert an earlier change. |
 
 Commit subjects must use `<prefix>: <short English summary>` or `<prefix>(<scope>): <short English summary>`. Use a lowercase scope when present and start the summary with a verb. Squash-merge commit titles must follow the same rule. Examples: `feat(session): add reservation support` and `docs: clarify provider boundaries`.
+
+PR titles must follow the same format as commit subjects. CI checks the PR title, source branch, and every commit subject in the PR. It checks the allowed prefix, structure, and an English summary beginning with a lowercase letter; reviewers confirm that the first word is a verb and that the summary describes the change.
 
 Working branches must use `<prefix>/<lowercase-kebab-case-description>`, for example `fix/admission-timeout`. The prefix must come from the table above; `main` is the reserved default-branch exception. Do not introduce another prefix without first updating this standard.
 

@@ -1,7 +1,9 @@
+# Copyright (c) 2026 Nelaric
 name: Quality
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, edited]
   push:
     branches: [main]
 
@@ -9,6 +11,25 @@ permissions:
   contents: read
 
 jobs:
+  naming:
+    name: PR and commit naming
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test naming validation
+        run: python -m unittest discover -s Tests -p 'test_git_naming.py'
+      - name: Check PR title, branch, and commits
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python Scripts/check_git_naming.py
+
   format:
     name: Format and text
     runs-on: ubuntu-latest

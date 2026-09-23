@@ -35,7 +35,7 @@
 3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有文件注释。
 4. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
 
-格式和文档检查是 CI 要求，CI 不会自动修改 PR。现阶段不要求 clang-tidy、UE 编译、测试覆盖率或额外的测试门槛。
+格式、文档和 PR 命名检查是 CI 要求，CI 不会自动修改 PR。现阶段不要求 clang-tidy、UE 编译或测试覆盖率门槛。
 
 ## 提交与分支命名
 
@@ -56,6 +56,8 @@
 | `revert` | 撤销先前的改动。 |
 
 提交标题必须使用 `<prefix>: <short English summary>` 或 `<prefix>(<scope>): <short English summary>`。若包含 scope，必须使用小写；英文摘要应以动词开头。Squash 合并时的提交标题也必须遵守同一规则。例如：`feat(session): add reservation support` 和 `docs: clarify provider boundaries`。
+
+PR 标题必须采用与提交标题相同的格式。CI 会检查 PR 标题、源分支名称以及 PR 中每个提交的标题，验证允许的前缀、格式和以小写英文字母开头的英文摘要；摘要首词是否为动词、能否准确描述改动，由审查者确认。
 
 工作分支必须使用 `<prefix>/<lowercase-kebab-case-description>`，例如 `fix/admission-timeout`。前缀必须来自上表；保留的默认分支 `main` 是唯一例外。若需新增前缀，必须先更新本规范。
 

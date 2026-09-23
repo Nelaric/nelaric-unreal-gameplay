@@ -30,8 +30,8 @@
 
 保持 PR 的主题集中。使用 [PR 模板](.github/pull_request_template.md)说明问题、方案、公开 API 或 Provider 影响，以及验证方式。有相关 Issue 或能力提案时请关联；仅当 PR 完全解决该问题时才使用自动关闭关键词。纯文档改动的设计和兼容性影响、没有风险或规范例外的情况，以及没有特别审查提示的情况，可在对应栏目填写 `None`。如有审查重点，请指出相关文件、设计决定、疑问或取舍。申请项目规则例外时，请说明规则、影响范围、原因及考虑过的替代方案。
 
-所有代码贡献都必须遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和[项目编码规范](Docs/CodingStandards/README.zh-CN.md)。项目规范还规定了文本编码、本地检查，以及允许使用的分支名和提交信息前缀。例如，分支名可用 `docs/clarify-contribution-guide`，提交标题可用 `docs: clarify contribution guide`。
+所有代码贡献都必须遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和[项目编码规范](Docs/CodingStandards/README.zh-CN.md)。项目规范还规定了文本编码、本地检查，以及允许使用的 PR 标题、分支名和提交信息前缀。例如，分支名可用 `docs/clarify-contribution-guide`，PR 标题或提交标题可用 `docs: clarify contribution guide`。
 
-按照[构建脚本、工具与审查规范](Docs/CodingStandards/BuildAndReview.zh-CN.md)运行与改动相关的检查，并在 PR 中报告检查结果及工具或环境限制。当前 CI 检查格式和 API 文档，不编译 Unreal Engine，也不强制测试覆盖率门槛。
+按照[构建脚本、工具与审查规范](Docs/CodingStandards/BuildAndReview.zh-CN.md)运行与改动相关的检查，并在 PR 中报告检查结果及工具或环境限制。当前 CI 检查命名、格式和 API 文档，不编译 Unreal Engine，也不强制测试覆盖率门槛。
 
 PR 的目标分支是 `main`。合并前需满足仓库保护规则中的检查与审查要求。维护者会审查正确性、模块边界、API 契约、性能、安全性，以及与 Unreal Engine 5.6 及以上版本的兼容性。

@@ -16,7 +16,7 @@
 
 在 CircleCI 项目的 Advanced 设置中启用 **Build forked pull requests** 后，GitHub OAuth 流水线会构建 Fork PR。`public_quality` 作业使用仅限本仓库的只读 Deploy Key 检出提交，检查文本规范和公开 API 文档；它不拉取 Unreal Engine、不编译插件，也不使用受限 context。**Pass secrets to builds from forked pull requests** 必须保持关闭。贡献者不需要创建 CircleCI 项目或获取项目凭据。
 
-OAuth 流水线会向 GitHub 报告作业状态。应以真实 Fork PR 上显示的状态名称为准，将其设为针对 `main` 的必需检查；GitHub App 流水线不会由 Fork PR 触发，因此不应把其编译状态设为必需 PR 检查。如果 OAuth 状态没有出现，先检查 OAuth 触发器、Fork 构建开关、GitHub webhook 和检出权限，再修改分支保护。
+OAuth 流水线会向 GitHub 回报 `ci/circleci: public_quality`。`Protect main` 规则集已将 CircleCI App 上报的这一状态与三项 GitHub Actions 质量检查一同设为必需检查。GitHub App 的 Unreal 编译仍在合并后执行，因为 GitHub App 流水线不会由 Fork PR 触发。如果 OAuth 状态没有出现，先检查 OAuth 触发器、Fork 构建开关、GitHub webhook 和检出权限，再修改分支保护。
 
 ## CircleCI Linux 插件编译
 

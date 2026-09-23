@@ -16,7 +16,7 @@ See the [contribution guide](../CONTRIBUTING.md) for branch, pull request, and r
 
 The GitHub OAuth pipeline builds fork pull requests when **Build forked pull requests** is enabled in CircleCI project Advanced settings. Its `public_quality` job checks out the commit with a repository-specific read-only deploy key and runs the text and public API documentation checks. It does not pull Unreal Engine, compile the plugin, or use a restricted context. Keep **Pass secrets to builds from forked pull requests** disabled. Contributors do not need a CircleCI project or project credentials.
 
-The OAuth pipeline reports job status to GitHub. Select the actual status shown on a real fork pull request as a required check for `main`; do not use the GitHub App build status as a required PR check, because GitHub App pipelines do not trigger for fork pull requests. If no OAuth status appears, check the OAuth trigger, fork-build setting, GitHub webhook, and checkout access before editing branch protection.
+The OAuth pipeline reports `ci/circleci: public_quality` to GitHub. The `Protect main` ruleset requires that status from CircleCI App, alongside the three GitHub Actions quality checks. The GitHub App Unreal build remains a post-merge check because GitHub App pipelines do not trigger for fork pull requests. If no OAuth status appears, check the OAuth trigger, fork-build setting, GitHub webhook, and checkout access before editing branch protection.
 
 ## CircleCI Linux plugin build
 

@@ -35,6 +35,9 @@ jobs:
               -TargetPlatforms=Linux
 
 workflows:
-  linux_plugin_smoke:
+  linux_plugin_build:
     jobs:
-      - build_plugin_linux
+      - build_plugin_linux:
+          filters:
+            branches:
+              only: main

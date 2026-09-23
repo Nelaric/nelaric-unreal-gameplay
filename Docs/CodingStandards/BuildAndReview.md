@@ -67,4 +67,4 @@ Human-written Markdown and LICENSE, C++ source and headers, and UE C# build scri
 
 ## Review
 
-Review correctness, copyright notices, module boundaries, public API documentation, cancellation and failure behavior, ownership, performance, and secret handling. A PR seeking an exception must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.
+Review correctness, copyright notices, module boundaries, public API documentation, cancellation and failure behavior, ownership, performance, and secret handling. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.

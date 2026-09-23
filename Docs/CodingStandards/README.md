@@ -4,7 +4,7 @@ English | [简体中文](https://github.com/Nelaric/nelaric-unreal-server/blob/m
 
 # Project Coding Standards
 
-These standards apply to every contribution to Nelaric Unreal Server. Follow [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) by default. An explicit rule here takes precedence over an Epic rule only where the two conflict; the project rule must state why the exception exists. Formatting is determined by the pinned tools, not by interpreting prose.
+These standards apply to every contribution to Nelaric Unreal Server. Contributors must follow both [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and these project coding standards. If their requirements conflict, report the conflict in an issue before proceeding; neither standard takes precedence automatically. Formatting is determined by the pinned tools only when their output complies with both standards.
 
 The supported baseline is Unreal Engine 5.6 and later. The project is a gameplay-agnostic, provider-agnostic, multi-module Dedicated Server plugin. Core owns common server control-plane mechanisms. Unreal Engine's NetDriver, replication, Iris, and RPC systems continue to handle high-frequency gameplay networking.
 
@@ -20,11 +20,11 @@ The [copyright notice rule](BuildAndReview.md#copyright-notices) applies to ever
 
 **Must** is mandatory. **Should** is the default unless a PR explains a justified exception. **May** is optional. Public API means declarations intended for use outside their owning module, including Provider contracts and Blueprint-exposed entry points.
 
-## Precedence and exceptions
+## Compliance and conflicts
 
 1. Correctness and Unreal Engine 5.6+ requirements apply first.
-2. These explicit project rules override conflicting Epic rules. All other Epic rules remain in force.
-3. Pinned formatter output is authoritative for whitespace and layout.
-4. A PR requesting an exception must identify the rule, reason, scope, and alternatives considered. A maintainer must approve it. An exception does not silently change the standard for other code.
+2. Follow both Epic and project requirements. If they appear inconsistent, open an issue identifying the exact rules and wait for the standards to be reconciled rather than choosing one rule over the other.
+3. Pinned formatter output is authoritative for whitespace and layout only where it satisfies both standards. Report a conflicting formatter result in an issue.
+4. A PR requesting an exception to a project guideline must identify the rule, reason, scope, and alternatives considered. A maintainer must approve it. Such an exception cannot override an Epic requirement or resolve a conflict between the two standards by itself.
 
 This standard does not prescribe a project-wide choice between plain C++, UObject, and reflected types. Each module chooses the appropriate form and documents its lifetime and thread behavior.

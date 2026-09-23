@@ -4,16 +4,16 @@
 
 # C++ 风格与头文件
 
-除非下文有明确不同的规则，否则遵守 [Epic C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)。项目使用 clang-format 处理代码布局；提交 PR 前请运行锁定版本的格式化工具。
+必须同时遵守 [Epic C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和下文的项目规则。若发现冲突，应创建 Issue 报告，不得自行选择其中一条。项目使用 clang-format 处理代码布局；提交 PR 前请运行锁定版本的格式化工具。
 
 C++ 和 UE C# 构建脚本的块缩进使用制表符，制表符宽度为四个字符。非制表符字符后可以用空格对齐文本。这遵循 Epic 的缩进规则，由格式化工具配置负责执行。
 
 ## 命名与类型
 
-- 根据类型使用 Unreal 前缀（`U`、`A`、`F`、`I`、`E` 和 `T`）。项目自有的公开类型必须在 UE 前缀后包含 `Nelaric`，例如 `FNelaricSessionId` 或 `UNelaricServerSubsystem`。这样可以避免插件与其他插件同时安装时发生命名冲突。Unreal 要求的符号（例如模块入口）不受此限制。
+- 遵循所有适用的 Unreal 类型前缀及命名规则。新的非反射公开 API 放在 `UE::Nelaric::` 命名空间下，必要时可增加领域子命名空间，例如 `UE::Nelaric::FSessionId` 和 `UE::Nelaric::ISessionProvider`。不要仅因类型位于该命名空间中，就在类型名里重复添加 `Nelaric`。Unreal Header Tool 不支持将反射类型放入命名空间，因此项目自有的全局反射类型应在 UE 前缀后包含 `Nelaric`，例如 `UNelaricServerSubsystem`。Unreal 要求的符号（例如模块入口）不受此限制。
 - 模块和日志类别的命名应围绕 `Nelaric` 及所属领域保持一致。优先使用描述机制或职责的名称，而非某个游戏的具体规则。
-- 面向 UE 的代码优先使用 UE 容器、字符串、委托、智能指针及相关设施。内部实现可在适当情况下使用标准库，但稳定的跨模块公开 API 必须使用 UE 类型。不要为同一个 API 同时暴露两套平行约定。
-- 优先使用有类型的常量和 `constexpr`，避免新增宏。按常规使用 UE 所要求的宏。新增项目宏必须说明原因；跨模块功能开关必须集中定义。
+- 遵循 Epic 对标准库的指导。优先使用 UE 容器和字符串；除互操作代码外，避免使用标准库容器和字符串。其他标准库设施可在 Epic 允许且效果更好时使用。稳定的跨模块公开 API 使用 UE 类型；不要在同一个 API 中混用 UE 与标准库约定。
+- 优先使用有类型的常量和 `constexpr`，避免新增宏。按常规使用 UE 所要求的宏。新增项目宏必须说明原因，并遵循 Epic 的全大写 `UE_` 命名规则；跨模块功能开关必须集中定义。
 
 ## 头文件与依赖
 

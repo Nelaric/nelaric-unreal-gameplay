@@ -1,56 +1,56 @@
-name: Capability proposal / 能力提案
-description: Propose a gameplay-agnostic server capability, provider integration, or developer workflow.
-title: "[Proposal]: "
+# Copyright (c) 2026 Nelaric
+name: Capability proposal | 能力提案
+description: Propose a gameplay-agnostic server capability, provider integration, or developer workflow. | 提议与玩法无关的服务器能力、提供方集成或开发流程。
+title: '[Proposal | 提案]: '
 body:
   - type: markdown
     attributes:
-      value: |
-        English and Chinese are both welcome. Search existing issues before proposing a capability. Nelaric provides dedicated server infrastructure mechanisms; gameplay rules and high-frequency replication stay with the game and Unreal Engine. Proposals are welcome even while the framework is being designed.
+      value: English and Chinese are both welcome. Search existing issues before proposing a capability. Nelaric provides dedicated server infrastructure mechanisms; gameplay rules and high-frequency replication stay with the game and Unreal Engine. Proposals are welcome even while the framework is being designed. | 欢迎使用英文或中文。提出能力建议前请搜索现有 Issue。Nelaric 提供独立服务器基础设施机制；玩法规则和高频复制仍由游戏与 Unreal Engine 负责。框架设计期间也欢迎提交提案。
   - type: textarea
     id: problem
     attributes:
-      label: Problem and use case / 问题与使用场景
-      description: Describe the developer need and the concrete server scenario. Explain why existing UE or project mechanisms do not solve it.
-      placeholder: When building a dedicated server, I need to ... because ...
+      label: Problem and use case | 问题与使用场景
+      description: Describe the developer need and the concrete server scenario. Explain why existing UE or project mechanisms do not solve it. | 描述开发需求和具体服务器场景，并解释现有 UE 或项目机制为何无法解决。
+      placeholder: When building a dedicated server, I need to ... because ... | 开发独立服务器时，我需要……，因为……
     validations:
       required: true
   - type: dropdown
     id: area
     attributes:
-      label: Capability area / 能力领域
+      label: Capability area | 能力领域
       options:
-        - Runtime and lifecycle
-        - Player admission and identity
-        - Session and allocation
-        - Generic data and persistence
-        - Backend communication
-        - Operations and observability
-        - Hosting and infrastructure
-        - Extension and provider integration
-        - Development tooling and documentation
-        - Other
+        - Runtime and lifecycle | 运行时与生命周期
+        - Player admission and identity | 玩家准入与身份
+        - Session and allocation | 会话与分配
+        - Generic data and persistence | 通用数据与持久化
+        - Backend communication | 后端通信
+        - Operations and observability | 运维与可观测性
+        - Hosting and infrastructure | 托管与基础设施
+        - Extension and provider integration | 扩展与提供方集成
+        - Development tooling and documentation | 开发工具与文档
+        - Other | 其他
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed behavior / 建议的行为
-      description: Describe the observable behavior or developer workflow. An API sketch is welcome but not required.
-      placeholder: The framework should let a developer ...
+      label: Proposed behavior | 建议的行为
+      description: Describe the observable behavior or developer workflow. An API sketch is welcome but not required. | 描述可观察的行为或开发流程；可以附上 API 草案，但并非必需。
+      placeholder: The framework should let a developer ... | 框架应允许开发者……
     validations:
       required: true
   - type: textarea
     id: boundaries
     attributes:
-      label: Scope and boundaries / 范围与边界
-      description: Explain whether this belongs in Core, an optional provider, or tooling, and what should remain game-specific. If unsure, say so.
-      placeholder: Core would provide ...; a provider or game would decide ...
+      label: Scope and boundaries | 范围与边界
+      description: Explain whether this belongs in Core, an optional provider, or tooling, and what should remain game-specific. If unsure, say so. | 说明该能力属于 Core、可选提供方还是工具，以及哪些部分应由游戏自行实现；如不确定，请直接说明。
+      placeholder: Core would provide ...; a provider or game would decide ... | Core 提供……；提供方或游戏决定……
     validations:
       required: false
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives and references / 替代方案与参考资料
-      description: Mention UE-native approaches, existing providers, related issues, or tradeoffs you considered.
+      label: Alternatives and references | 替代方案与参考资料
+      description: Mention UE-native approaches, existing providers, related issues, or tradeoffs you considered. | 说明考虑过的 UE 原生方案、现有提供方、相关 Issue 或取舍。
     validations:
       required: false

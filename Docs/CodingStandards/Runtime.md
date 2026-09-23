@@ -1,4 +1,8 @@
-﻿# Runtime, Performance, and Security
+﻿<!-- Copyright (c) 2026 Nelaric -->
+
+English | [简体中文](Runtime.zh-CN.md)
+
+# Runtime, Performance, and Security
 
 ## Concurrency and reliability
 

@@ -12,9 +12,9 @@
 
 先搜索[现有 Issue](https://github.com/Nelaric/nelaric-unreal-server/issues)，并阅读[项目概览](README.zh-CN.md)和[编码规范](Docs/CodingStandards/README.zh-CN.md)。通过 [Issue 选择页](https://github.com/Nelaric/nelaric-unreal-server/issues/new/choose)选择合适的表单：
 
-- **缺陷报告：**说明当前已有功能中的问题、复现步骤、预期和实际行为，以及相关环境信息。涉及 Unreal Engine 时，请提供引擎版本、操作系统，以及问题发生在 Editor、客户端还是 Dedicated Server。
-- **能力提案：**说明开发者遇到的问题和使用场景、期望行为，以及能力应由哪一层负责。可以附上公开 API 草案，但不是必需的。
-- **文档问题：**链接到对应页面或章节，并说明内容为何不清晰、不正确或缺失。
+- **缺陷报告**：说明当前已有功能中的问题、复现步骤、预期和实际行为，以及相关环境信息。涉及 Unreal Engine 时，请提供引擎版本、操作系统，以及问题发生在 Editor、客户端还是 Dedicated Server。
+- **能力提案**：说明开发者遇到的问题和使用场景、期望行为，以及能力应由哪一层负责。可以附上公开 API 草案，但不是必需的。
+- **文档问题**：链接到对应页面或章节，并说明内容为何不清晰、不正确或缺失。
 
 不属于上述类别的问题可以使用空白 Issue。每个 Issue 应聚焦一个问题或提案；不要在公开报告中包含凭据、令牌或私人数据。
 

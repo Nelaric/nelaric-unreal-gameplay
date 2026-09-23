@@ -19,7 +19,8 @@ venv/
 node_modules/
 .gradle/
 
-# Local agent workspaces and caches; shared AGENTS.md remains trackable
+# Local agent instructions, workspaces, and caches
+/AGENTS.md
 .agents/
 .agent/
 .codex/

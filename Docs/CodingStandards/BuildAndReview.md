@@ -17,6 +17,28 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 
 The format and documentation checks are CI requirements. They do not rewrite a PR. No clang-tidy, UE compilation, test coverage, or additional test gate is required now.
 
+## Commit and branch names
+
+Use only these prefixes for new commits and working branches:
+
+| Prefix | Purpose |
+| --- | --- |
+| `feat` | Add a capability. |
+| `fix` | Correct a defect. |
+| `docs` | Change documentation only. |
+| `style` | Change formatting without changing behavior. |
+| `refactor` | Restructure code without changing behavior. |
+| `perf` | Improve performance. |
+| `test` | Add or change tests. |
+| `build` | Change build configuration or dependencies. |
+| `ci` | Change automation and CI workflows. |
+| `chore` | Perform repository maintenance not covered above. |
+| `revert` | Revert an earlier change. |
+
+Commit subjects must use `<prefix>: <short English summary>` or `<prefix>(<scope>): <short English summary>`. Use a lowercase scope when present and start the summary with a verb. Squash-merge commit titles must follow the same rule. Examples: `feat(session): add reservation support` and `docs: clarify provider boundaries`.
+
+Working branches must use `<prefix>/<lowercase-kebab-case-description>`, for example `fix/admission-timeout`. The prefix must come from the table above; `main` is the reserved default-branch exception. Do not introduce another prefix without first updating this standard.
+
 ## Text-file exceptions
 
 Human-written Markdown and LICENSE, C++ source and headers, and UE C# build scripts use UTF-8 BOM and CRLF. `.gitattributes`, `.editorconfig`, `.clang-format`, `.csharpierrc`, `.gitignore`, `.json`, `.yml`, `.yaml`, `Doxyfile`, and executable `.py` scripts use UTF-8 without BOM and LF for tool compatibility. The checker enforces these categories.

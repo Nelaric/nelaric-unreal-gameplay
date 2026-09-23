@@ -1,30 +1,30 @@
-# Copyright (c) 2026 Nelaric
-name: Documentation issue | 文档问题
-description: Report unclear, missing, or incorrect project documentation. | 报告项目文档中不清楚、缺失或错误的内容。
-title: '[Docs | 文档]: '
+name: Documentation issue / 文档问题
+description: Report unclear, missing, or incorrect project documentation.
+title: "[Docs]: "
 body:
   - type: markdown
     attributes:
-      value: English and Chinese are both welcome. The repository is in its planning stage, so missing implementation instructions may reflect work that has not started yet. | 欢迎使用英文或中文。仓库仍处于规划阶段，缺失的实现说明可能对应尚未开始的工作。
+      value: |
+        English and Chinese are both welcome. The repository is in its planning stage, so missing implementation instructions may reflect work that has not started yet.
   - type: input
     id: location
     attributes:
-      label: Documentation location | 文档位置
-      description: Link to a page or name the file and section. If the topic is missing, say where you expected to find it. | 提供页面链接或文件名与章节；如果内容缺失，请说明预期在哪里找到。
-      placeholder: README.md or Docs/CodingStandards/... | README.md 或 Docs/CodingStandards/……
+      label: Documentation location / 文档位置
+      description: Link to a page or name the file and section. If the topic is missing, say where you expected to find it.
+      placeholder: README.md or Docs/CodingStandards/...
     validations:
       required: true
   - type: textarea
     id: issue
     attributes:
-      label: What needs improvement? | 需要改进什么？
-      description: Describe what is incorrect, unclear, outdated, or missing and how it affects readers. | 说明错误、不清楚、过时或缺失的内容，以及它对读者的影响。
+      label: What needs improvement? / 需要改进什么？
+      description: Describe what is incorrect, unclear, outdated, or missing and how it affects readers.
     validations:
       required: true
   - type: textarea
     id: suggestion
     attributes:
-      label: Suggested change | 修改建议
-      description: Share an example, corrected wording, or reference if you have one. | 如有示例、修正文案或参考资料，请在此分享。
+      label: Suggested change / 修改建议
+      description: Share an example, corrected wording, or reference if you have one.
     validations:
       required: false

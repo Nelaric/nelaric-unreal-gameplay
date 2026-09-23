@@ -1,8 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
-
-English | [简体中文](README.zh-CN.md)
-
-# Nelaric Unreal Server
+﻿# Nelaric Unreal Server
 
 A gameplay-agnostic, provider-agnostic dedicated server framework for Unreal Engine.
 

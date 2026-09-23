@@ -1,8 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
-
-English | [简体中文](Api.zh-CN.md)
-
-# Public API, Errors, and Documentation
+﻿# Public API, Errors, and Documentation
 
 Design public contracts for C++ first. Expose selected operations to Blueprint when they are useful there, through a clear adapter or reflected entry point. There is no compatibility promise yet; API changes still need to be visible and explained in their PR.
 

@@ -1,7 +1,5 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-English | [简体中文](README.zh-CN.md)
-
 # Project Coding Standards
 
 These standards apply to every contribution to Nelaric Unreal Server. Follow [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) by default. An explicit rule here takes precedence over an Epic rule only where the two conflict; the project rule must state why the exception exists. Formatting is determined by the pinned tools, not by interpreting prose.

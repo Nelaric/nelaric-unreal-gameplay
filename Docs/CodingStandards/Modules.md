@@ -1,8 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
-
-English | [简体中文](Modules.zh-CN.md)
-
-# Modules and Dependency Boundaries
+﻿# Modules and Dependency Boundaries
 
 The plugin is divided into modules with `Public` and `Private` directories. Public headers are contracts; private implementation details must not leak into them.
 

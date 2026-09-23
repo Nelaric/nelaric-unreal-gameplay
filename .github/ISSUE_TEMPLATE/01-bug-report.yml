@@ -1,61 +1,61 @@
-# Copyright (c) 2026 Nelaric
-name: Bug report | 缺陷报告
-description: Report a reproducible problem with the repository, tooling, or implemented framework. | 报告仓库、工具或已实现框架中可复现的问题。
-title: '[Bug | 缺陷]: '
+name: Bug report / 缺陷报告
+description: Report a reproducible problem with the repository, tooling, or implemented framework.
+title: "[Bug]: "
 body:
   - type: markdown
     attributes:
-      value: Thanks for reporting a problem. English and Chinese are both welcome. Please search existing issues first. This project is still in its planning stage, so describe a problem with something that exists today rather than an expected future capability. Do not post tokens, credentials, or private data. | 感谢报告问题。欢迎使用英文或中文。提交前请搜索现有 Issue。项目仍处于规划阶段，请描述当前已有内容中的问题，而非尚未实现的预期能力。请勿公开令牌、凭据或私人数据。
+      value: |
+        Thanks for reporting a problem. English and Chinese are both welcome. Please search existing issues first. This project is still in its planning stage, so describe a problem with something that exists today rather than an expected future capability. Do not post tokens, credentials, or private data.
   - type: textarea
     id: summary
     attributes:
-      label: Problem | 问题描述
-      description: What is broken? Link to the affected file or documentation page if relevant. | 哪部分出现问题？如有相关文件或文档页面，请附上链接。
-      placeholder: A concise description of the problem. | 简要描述问题。
+      label: Problem / 问题描述
+      description: What is broken? Link to the affected file or documentation page if relevant.
+      placeholder: A concise description of the problem.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Reproduction steps | 复现步骤
-      description: Provide the smallest reproducible example or exact commands. If reproduction is impossible, explain what you observed. | 提供最小复现示例或准确命令；如无法复现，请说明观察到的现象。
-      placeholder: |-
-        1. Set up ... | 准备环境……
-        2. Run ... | 执行操作……
-        3. Observe ... | 观察结果……
+      label: Reproduction steps / 复现步骤
+      description: Provide the smallest reproducible example or exact commands. If reproduction is impossible, explain what you observed.
+      placeholder: |
+        1. Set up ...
+        2. Run ...
+        3. Observe ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior | 预期行为
-      placeholder: What should happen? | 预期会发生什么？
+      label: Expected behavior / 预期行为
+      placeholder: What should happen?
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Actual behavior | 实际行为
-      placeholder: What happened instead? | 实际发生了什么？
+      label: Actual behavior / 实际行为
+      placeholder: What happened instead?
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Environment | 环境信息
-      description: Give the relevant repository revision or release, UE version (5.6+ if applicable), operating system, build target (Editor, client, or Dedicated Server), and hosting provider (if applicable). Use "not applicable" for documentation or tooling issues. | 请提供相关仓库修订或版本、UE 版本（适用时为 5.6+）、操作系统、构建目标（编辑器、客户端或独立服务器）及托管提供方（如适用）。文档或工具问题可填写“不适用”。
-      placeholder: |-
-        Repository revision or release | 仓库修订或版本：
-        Unreal Engine version | Unreal Engine 版本：
-        Operating system | 操作系统：
-        Build target | 构建目标：
-        Hosting provider | 托管提供方：
+      label: Environment / 环境信息
+      description: Give the relevant repository revision or release, UE version (5.6+ if applicable), operating system, build target (Editor, client, or Dedicated Server), and hosting provider (if applicable). Use "not applicable" for documentation or tooling issues.
+      placeholder: |
+        Repository revision or release:
+        Unreal Engine version:
+        Operating system:
+        Build target:
+        Hosting provider:
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Logs and supporting evidence | 日志与补充材料
-      description: Add relevant log excerpts, screenshots, a minimal project, or a link to one. Redact secrets and personal data. | 附上相关日志片段、截图、最小项目或链接，并遮盖密钥与个人数据。
+      label: Logs and supporting evidence / 日志与补充材料
+      description: Add relevant log excerpts, screenshots, a minimal project, or a link to one. Redact secrets and personal data.
     validations:
       required: false

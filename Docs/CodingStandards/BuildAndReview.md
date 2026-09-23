@@ -1,7 +1,5 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-English | [简体中文](BuildAndReview.zh-CN.md)
-
 # Build Scripts, Tooling, and Review
 
 ## Copyright notices

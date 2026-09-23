@@ -1,8 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
-
-English | [简体中文](README.zh-CN.md)
-
-# Nelaric Unreal Server API
+﻿# Nelaric Unreal Server API
 
 Nelaric Unreal Server is a gameplay-agnostic, provider-agnostic Dedicated Server framework for Unreal Engine 5.6 and later.
 

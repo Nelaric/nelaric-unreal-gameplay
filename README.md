@@ -8,6 +8,8 @@ This repository is in its initial planning stage. Architecture, supported Unreal
 
 All developers contributing to this project must follow both [Epic Games' Unreal Engine Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [project coding standards](Docs/CodingStandards/). The project standards define our module boundaries, API contracts, review rules, and required automated checks.
 
+See the [contribution guide](CONTRIBUTING.md) for issue and pull request guidance.
+
 ## API Documentation
 
 The [API documentation site](https://nelaric.github.io/nelaric-unreal-server/) publishes the coding standards now and will include the public C++ API when the first modules are added.

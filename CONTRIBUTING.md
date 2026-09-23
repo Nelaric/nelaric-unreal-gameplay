@@ -1,0 +1,33 @@
+﻿# Contributing to Nelaric Unreal Server
+
+Thank you for helping build Nelaric Unreal Server. Reports, design feedback, documentation improvements, and code contributions are welcome in English or Chinese.
+
+The repository is still in its planning stage. There is no usable Unreal Engine plugin or compilable UE project yet. Please describe a proposed capability as a proposal, rather than assuming its API or implementation already exists.
+
+## Before opening an issue
+
+Search [existing issues](https://github.com/Nelaric/nelaric-unreal-server/issues) and read the [project overview](README.md) and [coding standards](Docs/CodingStandards/). Use the [issue chooser](https://github.com/Nelaric/nelaric-unreal-server/issues/new/choose) to select the form that fits:
+
+- **Bug report:** Include what exists today, reproduction steps, expected and actual behavior, and relevant environment details. If Unreal Engine is involved, include its version, operating system, and whether the problem occurs in the Editor, client, or Dedicated Server.
+- **Capability proposal:** Explain the developer problem and use case, desired behavior, and where the responsibility should live. A public API sketch is useful but optional.
+- **Documentation issue:** Link the page or section and explain what is unclear, incorrect, or missing.
+
+Blank issues remain available for topics that do not fit these forms. Keep each issue focused on one problem or proposal, and do not include credentials, tokens, or private data in public reports.
+
+## Project scope
+
+The framework targets Unreal Engine 5.6 and later. It supplies gameplay-agnostic Dedicated Server infrastructure such as lifecycle, admission, sessions, generic persistence, backend communication, observability, and hosting integration. Core defines mechanisms; games and optional providers choose their own policies and implementations. Unreal Engine networking continues to handle high-frequency gameplay state.
+
+When proposing a change, identify whether it belongs in Core, a provider, development tooling, or the game. Inventory, combat, character rules, and matchmaking algorithms are examples of game-specific behavior outside Core.
+
+## Before opening a pull request
+
+For a substantial capability or public API change, open a capability proposal first so the scope and interface can be discussed. Small fixes and documentation corrections can go directly to a pull request.
+
+Keep a pull request focused. Describe the problem, the chosen approach, any public API or provider impact, and how you verified the change. Link the related issue when one exists. If you request an exception to a project rule, name the rule, affected scope, reason, and alternatives considered.
+
+All code contributions must follow [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [project coding standards](Docs/CodingStandards/README.md). The project standards also define text encoding, local checks, and the allowed branch and commit prefixes. Use a branch name such as `docs/clarify-contribution-guide` and a commit subject such as `docs: clarify contribution guide`.
+
+Run the checks relevant to your change as described in [Build Scripts, Tooling, and Review](Docs/CodingStandards/BuildAndReview.md), then report what ran and any tool or environment limitation in the pull request. Current CI checks formatting and API documentation; it does not compile Unreal Engine or enforce test coverage.
+
+Pull requests target `main`. Repository protection requires passing checks and review before merging. Maintainers review correctness, module boundaries, API contracts, performance, security, and compatibility with Unreal Engine 5.6 and later.

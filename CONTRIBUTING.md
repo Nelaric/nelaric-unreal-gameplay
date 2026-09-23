@@ -1,5 +1,7 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
+English | [简体中文](CONTRIBUTING.zh-CN.md)
+
 # Contributing to Nelaric Unreal Server
 
 Thank you for helping build Nelaric Unreal Server. Reports, design feedback, documentation improvements, and code contributions are welcome in English or Chinese.

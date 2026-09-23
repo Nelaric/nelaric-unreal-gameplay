@@ -1,4 +1,8 @@
-﻿# C++ Style and Headers
+﻿<!-- Copyright (c) 2026 Nelaric -->
+
+English | [简体中文](Cpp.zh-CN.md)
+
+# C++ Style and Headers
 
 Follow the [Epic C++ standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) unless an explicit rule below differs. The project uses clang-format for layout; run the pinned version before submitting a PR.
 

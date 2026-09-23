@@ -1,6 +1,6 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-[English](README.md) | 简体中文
+[English](https://github.com/Nelaric/nelaric-unreal-server/blob/main/Docs/Api/README.md) | 简体中文
 
 # Nelaric Unreal Server API
 

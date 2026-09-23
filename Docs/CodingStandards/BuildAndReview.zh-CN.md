@@ -61,7 +61,7 @@
 
 ## 文本文件例外
 
-人工编写的 Markdown 与 LICENSE、C++ 源码和头文件，以及 UE C# 构建脚本使用带 BOM 的 UTF-8 与 CRLF。`.gitattributes`、`.editorconfig`、`.clang-format`、`.csharpierrc`、`.gitignore`、`.json`、`.yml`、`.yaml`、`Doxyfile` 和可执行 `.py` 脚本，为兼容工具而使用不带 BOM 的 UTF-8 与 LF。检查脚本会强制执行这些规则。
+人工编写的 Markdown 与 LICENSE、C++ 源码和头文件，以及 UE C# 构建脚本使用带 BOM 的 UTF-8 与 CRLF。为兼容工具，.gitattributes、.editorconfig、.clang-format、.csharpierrc、.gitignore、.json、.yml、.yaml、Doxyfile 和可执行 .py 脚本使用不带 BOM 的 UTF-8 与 LF。检查脚本会强制执行这些规则。
 
 ## 审查
 

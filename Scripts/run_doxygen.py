@@ -10,7 +10,7 @@ from check_text import ROOT, repository_files
 
 
 def main() -> int:
-    (ROOT / "build").mkdir(exist_ok=True)
+    (ROOT / ".tools").mkdir(exist_ok=True)
     headers = [
         path for path in repository_files()
         if path.is_file() and path.suffix.lower() in {".h", ".hpp"} and "Public" in path.relative_to(ROOT).parts

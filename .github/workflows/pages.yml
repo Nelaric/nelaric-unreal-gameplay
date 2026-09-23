@@ -40,6 +40,6 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/docs/html
+          path: .tools/api-docs/html
       - id: deployment
         uses: actions/deploy-pages@v4

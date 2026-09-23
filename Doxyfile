@@ -1,6 +1,6 @@
 PROJECT_NAME           = "Nelaric Unreal Server"
 PROJECT_BRIEF          = "Dedicated Server framework API"
-OUTPUT_DIRECTORY       = build/docs
+OUTPUT_DIRECTORY       = .tools/api-docs
 CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English
 INPUT                  = Docs/Api/README.md Docs/CodingStandards

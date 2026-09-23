@@ -1,6 +1,71 @@
+# Unreal Engine generated output (also inside plugins)
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
 # Generated API documentation and local tooling outputs
-/build/
 /.tools/
 /.csharpier/
 __pycache__/
 *.pyc
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+venv/
+node_modules/
+.gradle/
+
+# Local agent workspaces and caches; shared AGENTS.md remains trackable
+.agents/
+.agent/
+.codex/
+.claude/
+.cursor/
+.windsurf/
+.continue/
+.aider*/
+.roo/
+.kilocode/
+
+# Visual Studio and generated Unreal project files
+.vs/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.VC.db-shm
+
+# Rider, CLion, VS Code, and other local IDE state
+.idea/
+.vscode/
+.fleet/
+*.iml
+cmake-build-*/
+CMakeFiles/
+
+# Xcode and macOS local state
+*.xcodeproj/
+*.xcworkspace/
+*.xcuserdata/
+*.xcuserstate
+DerivedData/
+.DS_Store
+._*
+.Spotlight-V100/
+.Trashes/
+
+# Windows and Unix editor state
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~

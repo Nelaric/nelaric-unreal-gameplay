@@ -1,0 +1,30 @@
+name: Documentation issue / 文档问题
+description: Report unclear, missing, or incorrect project documentation.
+title: "[Docs]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English and Chinese are both welcome. The repository is in its planning stage, so missing implementation instructions may reflect work that has not started yet.
+  - type: input
+    id: location
+    attributes:
+      label: Documentation location / 文档位置
+      description: Link to a page or name the file and section. If the topic is missing, say where you expected to find it.
+      placeholder: README.md or Docs/CodingStandards/...
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What needs improvement? / 需要改进什么？
+      description: Describe what is incorrect, unclear, outdated, or missing and how it affects readers.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change / 修改建议
+      description: Share an example, corrected wording, or reference if you have one.
+    validations:
+      required: false

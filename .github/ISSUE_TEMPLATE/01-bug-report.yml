@@ -1,0 +1,61 @@
+name: Bug report / 缺陷报告
+description: Report a reproducible problem with the repository, tooling, or implemented framework.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. English and Chinese are both welcome. Please search existing issues first. This project is still in its planning stage, so describe a problem with something that exists today rather than an expected future capability. Do not post tokens, credentials, or private data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Problem / 问题描述
+      description: What is broken? Link to the affected file or documentation page if relevant.
+      placeholder: A concise description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps / 复现步骤
+      description: Provide the smallest reproducible example or exact commands. If reproduction is impossible, explain what you observed.
+      placeholder: |
+        1. Set up ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期行为
+      placeholder: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+      placeholder: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境信息
+      description: Give the relevant repository revision or release, UE version (5.6+ if applicable), operating system, build target (Editor, client, or Dedicated Server), and hosting provider (if applicable). Use "not applicable" for documentation or tooling issues.
+      placeholder: |
+        Repository revision or release:
+        Unreal Engine version:
+        Operating system:
+        Build target:
+        Hosting provider:
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs and supporting evidence / 日志与补充材料
+      description: Add relevant log excerpts, screenshots, a minimal project, or a link to one. Redact secrets and personal data.
+    validations:
+      required: false

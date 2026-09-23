@@ -1,4 +1,6 @@
-﻿# Project Coding Standards
+﻿<!-- Copyright (c) 2026 Nelaric -->
+
+# Project Coding Standards
 
 These standards apply to every contribution to Nelaric Unreal Server. Follow [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) by default. An explicit rule here takes precedence over an Epic rule only where the two conflict; the project rule must state why the exception exists. Formatting is determined by the pinned tools, not by interpreting prose.
 
@@ -11,6 +13,8 @@ The supported baseline is Unreal Engine 5.6 and later. The project is a gameplay
 - [Public API, errors, and documentation](Api.md)
 - [Runtime, concurrency, performance, and security](Runtime.md)
 - [Build scripts, tooling, and review](BuildAndReview.md)
+
+The [copyright notice rule](BuildAndReview.md#copyright-notices) applies to every project-authored file, subject to format-specific exceptions.
 
 **Must** is mandatory. **Should** is the default unless a PR explains a justified exception. **May** is optional. Public API means declarations intended for use outside their owning module, including Provider contracts and Blueprint-exposed entry points.
 

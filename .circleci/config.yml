@@ -58,7 +58,7 @@ jobs:
           name: Validate and check out the PR commit
           command: |
             set -euo pipefail
-            python3 - <<'PY' > /tmp/nelaric-pr-info
+            python3 -c '
             import json
             import os
 
@@ -68,7 +68,7 @@ jobs:
             if not isinstance(number, int) or number < 1 or not isinstance(sha, str):
                 raise SystemExit("Invalid PR build request")
             print(number, sha)
-            PY
+            ' > /tmp/nelaric-pr-info
             read -r pr_number pr_sha < /tmp/nelaric-pr-info
             python3 Scripts/pr_build_policy.py "$pr_number" "$pr_sha"
             git fetch --no-tags https://github.com/Nelaric/nelaric-unreal-server.git "refs/pull/$pr_number/head"

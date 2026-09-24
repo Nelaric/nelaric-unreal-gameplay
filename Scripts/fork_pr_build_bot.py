@@ -124,6 +124,9 @@ def main() -> None:
     token = os.environ["GITHUB_TOKEN"]
     pull = get_pull_request(number, token)
     sha = pull["head"]["sha"]
+    if pull["head"]["repo"]["full_name"] == _REPOSITORY:
+        post_status(sha, "success", "Fork build is not required for an in-repository PR")
+        return
     try:
         verify_pull_request(number, sha, token)
     except PolicyError as error:

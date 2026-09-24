@@ -2,15 +2,15 @@
 
 [English](CONTRIBUTING.md) | 简体中文
 
-# 参与 Nelaric Unreal Server 开发
+# 参与 Nelaric Unreal Gameplay 开发
 
-感谢你参与 Nelaric Unreal Server。我们欢迎使用英语或中文提交问题报告、设计反馈、文档改进和代码贡献。
+感谢你参与 Nelaric Unreal Gameplay。我们欢迎使用英语或中文提交问题报告、设计反馈、文档改进和代码贡献。
 
 `Development/` 下的本地验证工程不纳入 Git。提出新能力时，请说明开发者遇到的问题和预期的玩法制作流程。
 
 ## 创建 Issue 前
 
-先搜索[现有 Issue](https://github.com/Nelaric/nelaric-unreal-server/issues)，并阅读[项目概览](README.zh-CN.md)和[编码规范](Docs/CodingStandards/README.zh-CN.md)。通过 [Issue 选择页](https://github.com/Nelaric/nelaric-unreal-server/issues/new/choose)选择合适的表单：
+先搜索[现有 Issue](https://github.com/Nelaric/nelaric-unreal-gameplay/issues)，并阅读[项目概览](README.zh-CN.md)和[编码规范](Docs/CodingStandards/README.zh-CN.md)。通过 [Issue 选择页](https://github.com/Nelaric/nelaric-unreal-gameplay/issues/new/choose)选择合适的表单：
 
 - **缺陷报告**：说明复现步骤、预期和实际行为，以及相关环境信息。涉及 Unreal Engine 时，请提供引擎版本、操作系统，以及问题发生在单机、监听服务器、独立服务器还是客户端。
 - **能力提案**：说明开发者遇到的问题和使用场景、期望行为，以及能力应由哪一层负责。可以附上公开 API 草案，但不是必需的。
@@ -28,7 +28,7 @@
 
 贡献代码前，建议先创建 Issue，讨论改动是否必要、是否符合项目定位以及预期范围。提前达成共识有助于后续审查，也能提高 PR 被接受的可能性。小型修复和文档更正仍可直接提交 PR。
 
-如果你不是本仓库成员，请先 Fork 仓库，在自己的 Fork 中创建分支，再从该分支向 `Nelaric/nelaric-unreal-server:main` 发起 PR。
+如果你不是本仓库成员，请先 Fork 仓库，在自己的 Fork 中创建分支，再从该分支向 `Nelaric/nelaric-unreal-gameplay:main` 发起 PR。
 
 保持 PR 的主题集中。使用 [PR 模板](.github/pull_request_template.md)说明问题、方案、公开 API 或集成影响，以及验证方式。有相关 Issue 或能力提案时请关联；仅当 PR 完全解决该问题时才使用自动关闭关键词。纯文档改动的设计和兼容性影响、没有风险或规范例外的情况，以及没有特别审查提示的情况，可在对应栏目填写 `None`。如有审查重点，请指出相关文件、设计决定、疑问或取舍。申请项目规则例外时，请说明规则、影响范围、原因及考虑过的替代方案。
 

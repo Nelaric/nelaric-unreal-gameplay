@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-# Nelaric Unreal Server
+# Nelaric Unreal Gameplay
 
 面向 Unreal Engine 的玩法框架，用于快速构建可在单机、监听服务器和独立服务器下运行的玩法模式，并支持版本化玩法内容交付。
 
@@ -18,18 +18,18 @@
 
 ## API 文档
 
-[API 文档网站](https://nelaric.github.io/nelaric-unreal-server/)目前发布编码规范；加入公开头文件后，也会收录公开 C++ API。
+[API 文档网站](https://nelaric.github.io/nelaric-unreal-gameplay/)目前发布编码规范；加入公开头文件后，也会收录公开 C++ API。
 
 ## Star 历史
 
-<a href="https://www.star-history.com/?repos=Nelaric%2Fnelaric-unreal-server&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=Nelaric%2Fnelaric-unreal-gameplay&type=date&legend=top-left">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Nelaric/nelaric-unreal-server&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Nelaric/nelaric-unreal-server&type=date&legend=top-left" />
-    <img alt="Star 历史图表" src="https://api.star-history.com/chart?repos=Nelaric/nelaric-unreal-server&type=date&legend=top-left" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Nelaric/nelaric-unreal-gameplay&type=date&theme=dark&legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Nelaric/nelaric-unreal-gameplay&type=date&legend=top-left" />
+    <img alt="Star 历史图表" src="https://api.star-history.com/chart?repos=Nelaric/nelaric-unreal-gameplay&type=date&legend=top-left" />
   </picture>
 </a>
 
 ## 致谢
 
-感谢所有参与 Nelaric Unreal Server 的贡献者，感谢 Epic Games 提供 Unreal Engine，也感谢 CircleCI 提供 Linux 插件编译服务。
+感谢所有参与 Nelaric Unreal Gameplay 的贡献者，感谢 Epic Games 提供 Unreal Engine，也感谢 CircleCI 提供 Linux 插件编译服务。

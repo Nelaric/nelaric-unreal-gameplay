@@ -2,15 +2,15 @@
 
 English | [简体中文](CONTRIBUTING.zh-CN.md)
 
-# Contributing to Nelaric Unreal Server
+# Contributing to Nelaric Unreal Gameplay
 
-Thank you for helping build Nelaric Unreal Server. Reports, design feedback, documentation improvements, and code contributions are welcome in English or Chinese.
+Thank you for helping build Nelaric Unreal Gameplay. Reports, design feedback, documentation improvements, and code contributions are welcome in English or Chinese.
 
 The local validation project under `Development/` is excluded from Git. Describe the developer problem and intended gameplay workflow when proposing a capability.
 
 ## Before opening an issue
 
-Search [existing issues](https://github.com/Nelaric/nelaric-unreal-server/issues) and read the [project overview](README.md) and [coding standards](Docs/CodingStandards/). Use the [issue chooser](https://github.com/Nelaric/nelaric-unreal-server/issues/new/choose) to select the form that fits:
+Search [existing issues](https://github.com/Nelaric/nelaric-unreal-gameplay/issues) and read the [project overview](README.md) and [coding standards](Docs/CodingStandards/). Use the [issue chooser](https://github.com/Nelaric/nelaric-unreal-gameplay/issues/new/choose) to select the form that fits:
 
 - **Bug report:** Include reproduction steps, expected and actual behavior, and relevant environment details. If Unreal Engine is involved, include its version, operating system, and whether the problem occurs in standalone play, a listen server, a dedicated server, or a client.
 - **Capability proposal:** Explain the developer problem and use case, desired behavior, and where the responsibility should live. A public API sketch is useful but optional.
@@ -28,7 +28,7 @@ When proposing a change, identify whether it belongs in Core, an optional integr
 
 Before contributing code, we recommend opening an issue to discuss whether the change is needed, how it fits the project, and its proposed scope. Reaching agreement early makes the resulting pull request easier to review and more likely to be accepted. Small fixes and documentation corrections may still go directly to a pull request.
 
-If you are not a member of this repository, fork it first. Create a branch in your fork, then open a pull request from that branch to `Nelaric/nelaric-unreal-server:main`.
+If you are not a member of this repository, fork it first. Create a branch in your fork, then open a pull request from that branch to `Nelaric/nelaric-unreal-gameplay:main`.
 
 Keep a pull request focused. Use the [pull request template](.github/pull_request_template.md) to describe the problem, the chosen approach, any public API or integration impact, and how you verified the change. Link a related issue or capability proposal when one exists; use a closing keyword only when the pull request fully resolves it. Use `None` for design and compatibility impact on documentation-only changes, for risks or exceptions when there are none, and for reviewer notes when no specific guidance is needed. Otherwise, point reviewers to the files, decisions, questions, or tradeoffs that need attention. If you request an exception to a project rule, name the rule, affected scope, reason, and alternatives considered.
 

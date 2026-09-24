@@ -58,7 +58,7 @@ class GitNamingTests(unittest.TestCase):
         environment = {
             "GITHUB_REF": "refs/pull/9/merge",
             "GITHUB_API_URL": "https://api.github.test",
-            "GITHUB_REPOSITORY": "Nelaric/nelaric-unreal-server",
+            "GITHUB_REPOSITORY": "Nelaric/nelaric-unreal-gameplay",
             "GITHUB_TOKEN": "test-token",
         }
         pull_request = {

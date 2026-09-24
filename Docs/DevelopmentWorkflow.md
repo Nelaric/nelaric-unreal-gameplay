@@ -29,6 +29,6 @@ The project supports UE 5.6 and later, but CI currently tests only UE 5.6.1 on L
 
 ## If a check fails
 
-Open the failed check from the pull request. The Linux build status links to the matching [CircleCI pipeline](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server), where you can see which build step failed. If a check does not appear or you cannot resolve a failure, leave a comment on the pull request with the link and what you have tried.
+Open the failed check from the pull request. The Linux build status links to the matching [CircleCI pipeline](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-gameplay), where you can see which build step failed. If a check does not appear or you cannot resolve a failure, leave a comment on the pull request with the link and what you have tried.
 
 The workflow definitions are available in [GitHub Actions Quality](../.github/workflows/quality.yml), [Fork PR Linux build](../.github/workflows/fork-pr-linux.yml), [API Pages](../.github/workflows/pages.yml), and [CircleCI](../.circleci/config.yml).

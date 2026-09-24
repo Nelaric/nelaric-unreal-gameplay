@@ -4,7 +4,7 @@
 
 # 核心架构约束
 
-本文规定 Nelaric Unreal Server 的目标架构。
+本文规定 Nelaric Unreal Gameplay 的目标架构。
 
 ## 定位与职责边界
 

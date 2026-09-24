@@ -21,8 +21,8 @@ class PullRequestBuildPolicyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.pull = {
             "state": "open",
-            "base": {"ref": "main", "repo": {"full_name": "Nelaric/nelaric-unreal-server"}},
-            "head": {"sha": SHA, "repo": {"full_name": "LKZ2022/nelaric-unreal-server"}},
+            "base": {"ref": "main", "repo": {"full_name": "Nelaric/nelaric-unreal-gameplay"}},
+            "head": {"sha": SHA, "repo": {"full_name": "LKZ2022/nelaric-unreal-gameplay"}},
         }
 
     def test_rejects_changes_that_can_control_ci_or_build(self) -> None:
@@ -55,7 +55,7 @@ class PullRequestBuildPolicyTests(unittest.TestCase):
                 verify_pull_request(19, SHA)
 
     def test_allows_in_repository_pr_to_build_with_ci_changes(self) -> None:
-        self.pull["head"]["repo"]["full_name"] = "Nelaric/nelaric-unreal-server"
+        self.pull["head"]["repo"]["full_name"] = "Nelaric/nelaric-unreal-gameplay"
         with (
             patch("pr_build_policy.get_pull_request", return_value=self.pull),
             patch("pr_build_policy.changed_paths") as changed_paths_mock,

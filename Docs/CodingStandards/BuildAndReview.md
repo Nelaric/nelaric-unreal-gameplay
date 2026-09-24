@@ -24,7 +24,7 @@ Apply this rule to every new project-authored file and to existing project-autho
 
 - Apply CSharpier to `.Build.cs` and `.Target.cs`. It is as mandatory as clang-format for C++.
 - Keep module dependencies minimal and classify them as public or private according to the headers that need them. Do not put vendor SDK dependencies in Core.
-- Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds the Linux plugin with UE 5.6.1 before and after merge; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
+- Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds fork PRs with UE 5.6.1 before merge and builds pushes to `main` afterward; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
 
 ## Local checks
 
@@ -35,7 +35,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 3. `python Scripts/check_public_docs.py` checks that every public header has a file comment.
 4. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
-The format, documentation, PR naming, and fork PR Linux build statuses are required pull request checks. They do not rewrite a PR. For a fork PR, the Linux build validates the exact PR commit in CircleCI before merge; a separate build runs after a push to `main`. The build bot rejects fork PR changes to CI configuration, automation scripts, Unreal build scripts, plugin descriptors, and related build controls. An in-repository PR receives a successful not-applicable fork-build status. No clang-tidy or test coverage gate is required now.
+Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux plugin build statuses. For a fork PR, CircleCI builds the submitted plugin commit before merge. Changes to CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle them in a source-repository branch. CI builds the plugin again after a merge to `main`. No clang-tidy or test coverage gate is required now.
 
 ## Commit and branch names
 
@@ -67,4 +67,4 @@ Human-written Markdown and LICENSE, C++ source and headers, and UE C# build scri
 
 ## Review
 
-Review correctness, copyright notices, module boundaries, public API documentation, cancellation and failure behavior, ownership, performance, and secret handling. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.
+Review correctness, copyright notices, module boundaries, public API documentation, cancellation and failure behavior, ownership, performance, and security. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.

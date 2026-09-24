@@ -16,7 +16,7 @@ Search [existing issues](https://github.com/Nelaric/nelaric-unreal-server/issues
 - **Capability proposal:** Explain the developer problem and use case, desired behavior, and where the responsibility should live. A public API sketch is useful but optional.
 - **Documentation issue:** Link the page or section and explain what is unclear, incorrect, or missing.
 
-Blank issues remain available for topics that do not fit these forms. Keep each issue focused on one problem or proposal, and do not include credentials, tokens, or private data in public reports.
+Blank issues remain available for topics that do not fit these forms. Keep each issue focused on one problem or proposal, and leave private information out of public reports.
 
 ## Project scope
 
@@ -34,6 +34,8 @@ Keep a pull request focused. Use the [pull request template](.github/pull_reques
 
 All code contributions must follow [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [project coding standards](Docs/CodingStandards/README.md). The project standards also define text encoding, local checks, and the allowed PR title, branch, and commit prefixes. Use a branch name such as `docs/clarify-contribution-guide` and a PR title or commit subject such as `docs: clarify contribution guide`.
 
-Run the checks relevant to your change as described in [Build Scripts, Tooling, and Review](Docs/CodingStandards/BuildAndReview.md), then report what ran and any tool or environment limitation in the pull request. GitHub Actions checks naming, formatting, and API documentation on pull requests. CircleCI's OAuth pipeline runs a secretless public quality check for fork pull requests. A trusted GitHub Actions workflow validates the PR and starts a separate CircleCI GitHub App Linux build of its exact commit before merge; the same App pipeline also builds pushes to `main`. Changes to CI configuration, automation scripts, or Unreal build scripts are rejected by the automated PR build and need maintainer handling. See the [development and CI workflow](Docs/DevelopmentWorkflow.md) for the full sequence, build scope, and credentials. CI does not enforce test coverage.
+Run the checks relevant to your change as described in [Build Scripts, Tooling, and Review](Docs/CodingStandards/BuildAndReview.md). In your pull request, say which checks you ran and mention any you could not run.
+
+GitHub Actions checks naming, formatting, and API documentation. For a pull request from a fork, CircleCI also compiles the submitted plugin commit with Unreal Engine 5.6.1 on Linux before merge. You do not need a CircleCI account or any additional setup. If your change affects CI workflows, automation, Unreal build scripts, or plugin descriptors, discuss it with a maintainer; the automated fork build does not accept changes to those files. See the [development and CI workflow](Docs/DevelopmentWorkflow.md) for the check sequence and build scope. CI does not enforce test coverage.
 
 Pull requests target `main`. Repository protection requires passing checks and review before merging. Maintainers review correctness, module boundaries, API contracts, performance, security, and compatibility with Unreal Engine 5.6 and later.

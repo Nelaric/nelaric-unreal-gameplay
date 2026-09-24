@@ -15,7 +15,8 @@ from pr_build_policy import PolicyError, get_pull_request, verify_pull_request
 
 
 _REPOSITORY = "Nelaric/nelaric-unreal-gameplay"
-_CIRCLECI_PROJECT = "gh/Nelaric/nelaric-unreal-gameplay"
+# CircleCI retains the original project slug after the GitHub repository rename.
+_CIRCLECI_PROJECT = "gh/Nelaric/nelaric-unreal-server"
 _STATUS_CONTEXT = "ci/fork-pr-linux-build"
 _FINAL_STATES = {"success", "failed", "error", "canceled", "unauthorized", "not_run"}
 
@@ -101,7 +102,7 @@ def monitor(number: int, sha: str, nonce: str) -> None:
             pipeline = find_pipeline(nonce)
         if pipeline is not None:
             target_url = (
-                "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-gameplay/"
+                "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
                 f"{pipeline['number']}/details"
             )
             status = workflow_status(pipeline["id"])

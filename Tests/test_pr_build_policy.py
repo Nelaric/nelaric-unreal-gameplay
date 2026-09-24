@@ -22,7 +22,7 @@ class PullRequestBuildPolicyTests(unittest.TestCase):
         self.pull = {
             "state": "open",
             "base": {"ref": "main", "repo": {"full_name": "Nelaric/nelaric-unreal-server"}},
-            "head": {"sha": SHA},
+            "head": {"sha": SHA, "repo": {"full_name": "LKZ2022/nelaric-unreal-server"}},
         }
 
     def test_rejects_changes_that_can_control_ci_or_build(self) -> None:
@@ -53,6 +53,15 @@ class PullRequestBuildPolicyTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(PolicyError, "Protected"):
                 verify_pull_request(19, SHA)
+
+    def test_allows_in_repository_pr_to_build_with_ci_changes(self) -> None:
+        self.pull["head"]["repo"]["full_name"] = "Nelaric/nelaric-unreal-server"
+        with (
+            patch("pr_build_policy.get_pull_request", return_value=self.pull),
+            patch("pr_build_policy.changed_paths") as changed_paths_mock,
+        ):
+            verify_pull_request(19, SHA)
+            changed_paths_mock.assert_not_called()
 
     def test_renaming_a_protected_file_still_blocks_the_build(self) -> None:
         files = [{"filename": "old-config.txt", "previous_filename": ".circleci/config.yml"}]

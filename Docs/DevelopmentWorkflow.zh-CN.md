@@ -11,15 +11,15 @@
 1. 在分支或 Fork 中完成聚焦的改动，运行相关的[本地检查](CodingStandards/BuildAndReview.zh-CN.md#本地检查)。
 2. 向 `main` 发起 PR。创建或更新 PR 后，自动检查会开始运行。
 3. 如果检查失败，修复问题后等待检查通过和维护者审查，再合并 PR。
-4. 合并后，项目会再次在 Linux 上编译插件，并更新 API 文档网站。
+4. 合并后，项目会从 `main` 发布 API 文档网站。验证和插件编译已在 PR 上完成。
 
 ## PR 会运行哪些检查
 
-GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。对于来自 Fork 的 PR，CircleCI 还会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。结果会以 `ci/fork-pr-linux-build` 状态显示在 PR 上。你不需要 CircleCI 账号，也无需额外配置。
+GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。结果会以 `ci/fork-pr-linux-build` 状态显示在 PR 上。你不需要 CircleCI 账号，也无需额外配置。
 
-这四项检查状态都是合并到 `main` 的必需条件。来自源仓库分支的 PR 会收到表示无需单独运行 Fork 编译的通过状态；改动进入 `main` 后，插件仍会再次编译。
+这四项检查状态都是合并到 `main` 的必需条件，均在合并前的 PR 上运行。
 
-自动 Fork 编译不会接受对 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件的改动。如果需要修改这些文件，请先与维护者讨论，并在源仓库的分支中提交。
+对于来自 Fork 的 PR，自动编译不会接受对 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件的改动。如果需要修改这些文件，请先与维护者讨论，并在源仓库的分支中提交。来自源仓库分支的 PR 即使修改这些文件，也会运行 Linux 编译。
 
 ## Linux 编译的范围
 

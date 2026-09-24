@@ -24,7 +24,7 @@ Apply this rule to every new project-authored file and to existing project-autho
 
 - Apply CSharpier to `.Build.cs` and `.Target.cs`. It is as mandatory as clang-format for C++.
 - Keep module dependencies minimal and classify them as public or private according to the headers that need them. Do not put vendor SDK dependencies in Core.
-- Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds fork PRs with UE 5.6.1 before merge and builds pushes to `main` afterward; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
+- Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds PRs with UE 5.6.1 before merge; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
 
 ## Local checks
 
@@ -35,7 +35,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 3. `python Scripts/check_public_docs.py` checks that every public header has a file comment.
 4. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
-Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux plugin build statuses. For a fork PR, CircleCI builds the submitted plugin commit before merge. Changes to CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle them in a source-repository branch. CI builds the plugin again after a merge to `main`. No clang-tidy or test coverage gate is required now.
+Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux plugin build statuses before merge. CircleCI builds the submitted plugin commit, including for branches in this repository. Fork PRs that change CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle those changes in a source-repository branch. No clang-tidy or test coverage gate is required now.
 
 ## Commit and branch names
 

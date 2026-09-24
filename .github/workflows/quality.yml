@@ -4,8 +4,6 @@ name: Quality
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -13,7 +11,6 @@ permissions:
 jobs:
   naming:
     name: PR and commit naming
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -23,8 +20,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test naming validation
-        run: python -m unittest discover -s Tests -p 'test_git_naming.py'
+      - name: Test CI validation
+        run: python -m unittest discover -s Tests -p 'test_*.py'
       - name: Check PR title, branch, and commits
         env:
           GITHUB_TOKEN: ${{ github.token }}

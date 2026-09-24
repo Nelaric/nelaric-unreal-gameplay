@@ -24,4 +24,4 @@ Design public contracts for C++ first. Expose selected operations to Blueprint w
 
 All public types, methods, enums and enum values, constants, Provider contracts, and Blueprint-exposed entry points must have English Doxygen comments. Explain purpose and usage; document parameters and return values, ownership and lifetime, thread expectations, and failure, timeout, and cancellation semantics when relevant. Each public header must have an `@file` or `\file` comment so file-level declarations are included in generated documentation.
 
-CI builds Doxygen HTML and fails on warnings or undocumented public declarations. Reviewers also check whether comments explain behavior accurately; a mechanically present comment is not enough. API documentation is published on GitHub Pages after changes reach `main`.
+The pull request check builds Doxygen HTML and fails on warnings or undocumented public declarations. Reviewers also check whether comments explain behavior accurately; a mechanically present comment is not enough. After merge, the approved documentation is published on GitHub Pages.

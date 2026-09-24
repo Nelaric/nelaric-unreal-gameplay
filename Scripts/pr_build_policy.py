@@ -81,15 +81,19 @@ def verify_pull_request(number: int, expected_sha: str, token: str | None = None
     base = pull.get("base") or {}
     head = pull.get("head") or {}
     base_repository = base.get("repo") or {}
+    head_repository = head.get("repo") or {}
     if pull.get("state") != "open":
         raise PolicyError("Pull request is not open")
     if base_repository.get("full_name") != REPOSITORY or base.get("ref") != "main":
         raise PolicyError("Pull request must target Nelaric/nelaric-unreal-server:main")
     if head.get("sha") != expected_sha:
         raise PolicyError("Pull request changed after the build was requested")
-    protected = [path for path in changed_paths(number, token) if is_protected_path(path)]
-    if protected:
-        raise PolicyError("Protected CI or build files changed: " + ", ".join(protected[:5]))
+    if not head_repository.get("full_name"):
+        raise PolicyError("Pull request head repository is unavailable")
+    if head_repository["full_name"] != REPOSITORY:
+        protected = [path for path in changed_paths(number, token) if is_protected_path(path)]
+        if protected:
+            raise PolicyError("Protected CI or build files changed: " + ", ".join(protected[:5]))
 
 
 def main() -> None:

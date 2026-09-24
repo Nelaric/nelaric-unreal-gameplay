@@ -4,11 +4,13 @@ English | [简体中文](README.zh-CN.md)
 
 # Nelaric Unreal Server
 
-A gameplay-agnostic, provider-agnostic dedicated server framework for Unreal Engine.
+An Unreal Engine gameplay framework for building game modes that run in standalone play, listen servers, and dedicated servers, with versioned gameplay content delivery.
 
-This repository has a UE 5.6 plugin scaffold at `Unreal-Plugins/NelaricServer/`. Its `NelaricCore` module loads but does not yet provide server services or a public API. The local validation project under `Development/` is excluded from Git.
+The plugin is located at `Unreal-Plugins/NelaricServer/`. The local validation project under `Development/` is excluded from Git.
 
 See the [NelaricCore module description](Docs/Modules/NelaricCore.md) for its current responsibility and dependencies.
+
+The [core architecture constraints](Docs/CoreArchitectureConstraints.md) define the gameplay model, network topologies, and content-update boundaries.
 
 ## Contributing
 

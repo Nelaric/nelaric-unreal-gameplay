@@ -6,7 +6,7 @@
 
 本规范适用于 Nelaric Unreal Server 的所有贡献。贡献者必须同时遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和本项目编码规范。如果两者的要求发生冲突，应先创建 Issue 报告具体冲突，再继续相关工作；任何一方都不会自动优先。只有在输出同时符合两套规范时，才以锁定版本的格式化工具决定空白字符和布局。
 
-最低支持版本为 Unreal Engine 5.6。项目是与玩法和服务提供商无关的多模块独立服务器插件。Core 负责通用的服务器控制面机制；高频玩法网络通信仍由 Unreal Engine 的 NetDriver、复制系统、Iris 和 RPC 处理。
+最低支持版本为 Unreal Engine 5.6。项目是支持单机、监听服务器和独立服务器玩法的多模块框架。Core 负责可复用的玩法机制与契约；玩法网络通信仍由 Unreal Engine 的 NetDriver、复制系统、Iris 和 RPC 处理。
 
 ## 规范目录
 
@@ -18,7 +18,7 @@
 
 [版权声明规则](BuildAndReview.zh-CN.md)适用于所有项目自有文件，但需遵守文件格式规定的例外。
 
-<strong>Must（必须）</strong> 表示强制要求。<strong>Should（应该）</strong> 是默认做法，除非 PR 给出合理的例外说明。<strong>May（可以）</strong> 是可选项。“公开 API”指供所属模块之外使用的声明，包括 Provider 契约和向 Blueprint 暴露的入口。
+<strong>Must（必须）</strong> 表示强制要求。<strong>Should（应该）</strong> 是默认做法，除非 PR 给出合理的例外说明。<strong>May（可以）</strong> 是可选项。“公开 API”指供所属模块之外使用的声明，包括玩法扩展契约和向 Blueprint 暴露的入口。
 
 ## 规范遵循与冲突
 

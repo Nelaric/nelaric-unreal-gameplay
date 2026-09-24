@@ -4,11 +4,13 @@
 
 # Nelaric Unreal Server
 
-面向 Unreal Engine 的独立服务器框架，不绑定具体玩法或服务提供商。
+面向 Unreal Engine 的玩法框架，用于快速构建可在单机、监听服务器和独立服务器下运行的玩法模式，并支持版本化玩法内容交付。
 
-仓库已在 `Unreal-Plugins/NelaricServer/` 建立 UE 5.6 插件骨架。`NelaricCore` 模块能够加载，但尚未提供服务器服务或公开 API。`Development/` 下的本地验证工程不纳入 Git。
+插件位于 `Unreal-Plugins/NelaricServer/`。`Development/` 下的本地验证工程不纳入 Git。
 
 模块当前的职责和依赖见 [NelaricCore 模块说明](Docs/Modules/NelaricCore.zh-CN.md)。
+
+玩法模型、网络拓扑和内容更新边界见[核心架构约束](Docs/CoreArchitectureConstraints.zh-CN.md)。
 
 ## 参与贡献
 

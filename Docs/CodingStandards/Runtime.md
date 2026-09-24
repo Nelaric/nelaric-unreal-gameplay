@@ -14,11 +14,11 @@ English | [简体中文](Runtime.zh-CN.md)
 ## Hot paths
 
 - Tick, network callbacks, and other high-frequency paths must not perform blocking file, database, or network I/O.
-- Avoid unbounded allocation, unbounded loops, and per-frame verbose logging in those paths. Move control-plane work to an appropriate asynchronous path and keep the UE replication path intact.
+- Avoid unbounded allocation, unbounded loops, and per-frame verbose logging in those paths. Move blocking or lower-frequency work to an appropriate asynchronous path and keep the UE replication path intact.
 - A justified hot-path exception must explain its cost and bounds in the PR.
 
 ## Logs, configuration, and secrets
 
 - Never log access tokens, server credentials, secrets, or player personal information. Log only the structured diagnostic fields needed to investigate an issue.
-- Read and manage configuration and secrets through a central service. Give each Provider only the values it requires and avoid copying secrets into general runtime metadata or error messages.
+- Read and manage configuration and secrets through a central service. Give each optional integration only the values it requires and avoid copying secrets into general runtime metadata or error messages.
 - Administrative and security-sensitive operations must check authorization and leave an appropriate audit trail without recording secret material.

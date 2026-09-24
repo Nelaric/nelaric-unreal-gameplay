@@ -27,7 +27,7 @@ jobs:
             ' > /tmp/nelaric-pr-info
             read -r pr_number pr_sha < /tmp/nelaric-pr-info
             python3 Scripts/pr_build_policy.py "$pr_number" "$pr_sha"
-            git fetch --no-tags https://github.com/Nelaric/nelaric-unreal-server.git "refs/pull/$pr_number/head"
+            git fetch --no-tags https://github.com/Nelaric/nelaric-unreal-gameplay.git "refs/pull/$pr_number/head"
             actual_sha="$(git rev-parse FETCH_HEAD)"
             test "$actual_sha" = "$pr_sha"
             git checkout --detach "$actual_sha"

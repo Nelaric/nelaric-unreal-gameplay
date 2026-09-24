@@ -1,10 +1,10 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-[English](https://github.com/Nelaric/nelaric-unreal-server/blob/main/Docs/CodingStandards/README.md) | 简体中文
+[English](https://github.com/Nelaric/nelaric-unreal-gameplay/blob/main/Docs/CodingStandards/README.md) | 简体中文
 
 # 项目编码规范
 
-本规范适用于 Nelaric Unreal Server 的所有贡献。贡献者必须同时遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和本项目编码规范。如果两者的要求发生冲突，应先创建 Issue 报告具体冲突，再继续相关工作；任何一方都不会自动优先。只有在输出同时符合两套规范时，才以锁定版本的格式化工具决定空白字符和布局。
+本规范适用于 Nelaric Unreal Gameplay 的所有贡献。贡献者必须同时遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和本项目编码规范。如果两者的要求发生冲突，应先创建 Issue 报告具体冲突，再继续相关工作；任何一方都不会自动优先。只有在输出同时符合两套规范时，才以锁定版本的格式化工具决定空白字符和布局。
 
 最低支持版本为 Unreal Engine 5.6。项目是支持单机、监听服务器和独立服务器玩法的多模块框架。Core 负责可复用的玩法机制与契约；玩法网络通信仍由 Unreal Engine 的 NetDriver、复制系统、Iris 和 RPC 处理。
 

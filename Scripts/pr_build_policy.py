@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 
 
-REPOSITORY = "Nelaric/nelaric-unreal-server"
+REPOSITORY = "Nelaric/nelaric-unreal-gameplay"
 _API_ROOT = f"https://api.github.com/repos/{REPOSITORY}"
 _SHA_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 _PROTECTED_PREFIXES = (
@@ -85,7 +85,7 @@ def verify_pull_request(number: int, expected_sha: str, token: str | None = None
     if pull.get("state") != "open":
         raise PolicyError("Pull request is not open")
     if base_repository.get("full_name") != REPOSITORY or base.get("ref") != "main":
-        raise PolicyError("Pull request must target Nelaric/nelaric-unreal-server:main")
+        raise PolicyError("Pull request must target Nelaric/nelaric-unreal-gameplay:main")
     if head.get("sha") != expected_sha:
         raise PolicyError("Pull request changed after the build was requested")
     if not head_repository.get("full_name"):

@@ -29,6 +29,6 @@ CircleCI 在 Linux 上使用 Unreal Engine 5.6.1 编译并打包 `Unreal-Plugins
 
 ## 检查失败时
 
-从 PR 页面打开失败的检查。Linux 编译状态会链接到对应的 [CircleCI 流水线](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server)，可以查看失败的步骤。如果某项检查没有出现，或你无法解决失败问题，请在 PR 中附上链接和已经尝试过的排查步骤。
+从 PR 页面打开失败的检查。Linux 编译状态会链接到对应的 [CircleCI 流水线](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-gameplay)，可以查看失败的步骤。如果某项检查没有出现，或你无法解决失败问题，请在 PR 中附上链接和已经尝试过的排查步骤。
 
 工作流配置分别位于 [GitHub Actions Quality](../.github/workflows/quality.yml)、[Fork PR Linux build](../.github/workflows/fork-pr-linux.yml)、[API Pages](../.github/workflows/pages.yml) 和 [CircleCI](../.circleci/config.yml)。

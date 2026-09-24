@@ -4,7 +4,7 @@ English | [简体中文](CoreArchitectureConstraints.zh-CN.md)
 
 # Core Architecture Constraints
 
-This document defines the target architecture of Nelaric Unreal Server.
+This document defines the target architecture of Nelaric Unreal Gameplay.
 
 ## Purpose and responsibility boundaries
 

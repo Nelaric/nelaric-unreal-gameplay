@@ -12,7 +12,7 @@ import fork_pr_build_bot
 
 class ForkPrBuildBotTests(unittest.TestCase):
     def test_in_repository_pr_starts_linux_build(self) -> None:
-        pull = {"head": {"sha": "a" * 40, "repo": {"full_name": "Nelaric/nelaric-unreal-server"}}}
+        pull = {"head": {"sha": "a" * 40, "repo": {"full_name": "Nelaric/nelaric-unreal-gameplay"}}}
         with (
             patch.dict(os.environ, {"PR_NUMBER": "23", "GITHUB_TOKEN": "test-token"}),
             patch.object(fork_pr_build_bot, "get_pull_request", return_value=pull),

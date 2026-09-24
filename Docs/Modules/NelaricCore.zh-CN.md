@@ -4,8 +4,8 @@
 
 # NelaricCore
 
-`NelaricCore` 是 `NelaricServer` 插件中的运行时模块。目前仅提供 Unreal 模块的启动和关闭入口，尚未实现服务器服务或公开 C++ API。
+`NelaricCore` 是 `NelaricServer` 插件中的运行时模块。
 
-该模块将承载与玩法无关的服务器控制面机制。Provider 模块可以依赖它；该模块不得依赖具体 Provider 或厂商 SDK。
+该模块承载对局流程、目标、计分和玩家生命周期的通用玩法契约。它基于 Unreal Engine 的玩法与网络系统，不依赖特定玩法类型、后端、技能系统或内容分发 Provider。可选集成模块可以依赖 Core；Core 不依赖这些模块。
 
 模块当前唯一的直接 Unreal 模块依赖是 `Core`，在 `NelaricCore.Build.cs` 中声明为私有依赖。模块没有公开依赖。

@@ -8,7 +8,7 @@ Design public contracts for C++ first. Expose selected operations to Blueprint w
 
 ## Contracts and ownership
 
-- Use UE types in stable public interfaces. Provider contracts are pure C++ interfaces unless a separate Blueprint-facing adapter is needed.
+- Use UE types in stable public interfaces. Design non-reflected gameplay extension contracts as C++ interfaces; expose Blueprint-facing adapters when authors need them.
 - State who creates, owns, and destroys every service. Modules or Subsystems manage service lifetime. Use `TUniquePtr` or `TSharedPtr` for plain C++ ownership where appropriate; a raw pointer is non-owning. Follow UObject ownership and garbage-collection rules for reflected objects.
 - Public methods must state the thread from which they may be called and the thread on which their callbacks run. The default for asynchronous public callbacks is the Game Thread.
 - Do not capture an unprotected UObject raw pointer in work that may outlive it. Use an appropriate weak reference or another lifetime-safe mechanism.
@@ -22,6 +22,6 @@ Design public contracts for C++ first. Expose selected operations to Blueprint w
 
 ## Required API documentation
 
-All public types, methods, enums and enum values, constants, Provider contracts, and Blueprint-exposed entry points must have English Doxygen comments. Explain purpose and usage; document parameters and return values, ownership and lifetime, thread expectations, and failure, timeout, and cancellation semantics when relevant. Each public header must have an `@file` or `\file` comment so file-level declarations are included in generated documentation.
+All public types, methods, enums and enum values, constants, gameplay extension contracts, and Blueprint-exposed entry points must have English Doxygen comments. Explain purpose and usage; document parameters and return values, ownership and lifetime, thread expectations, and failure, timeout, and cancellation semantics when relevant. Each public header must have an `@file` or `\file` comment so file-level declarations are included in generated documentation.
 
 The pull request check builds Doxygen HTML and fails on warnings or undocumented public declarations. Reviewers also check whether comments explain behavior accurately; a mechanically present comment is not enough. After merge, the approved documentation is published on GitHub Pages.

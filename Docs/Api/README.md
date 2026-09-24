@@ -4,6 +4,6 @@ English | [简体中文](https://github.com/Nelaric/nelaric-unreal-server/blob/m
 
 # Nelaric Unreal Server API
 
-Nelaric Unreal Server is a gameplay-agnostic, provider-agnostic Dedicated Server framework for Unreal Engine 5.6 and later.
+Nelaric Unreal Server is a gameplay framework for Unreal Engine 5.6 and later. Its public contracts support gameplay development across standalone, listen-server, and dedicated-server topologies.
 
-The public API reference will appear here when the first plugin modules and public headers are added. Until then, read the [project coding standards](../CodingStandards/README.md) for the contracts that new APIs must follow.
+Public APIs follow the [project coding standards](../CodingStandards/README.md), including the rules for gameplay extension contracts, ownership, errors, and documentation.

@@ -6,8 +6,6 @@ English | [简体中文](README.zh-CN.md)
 
 An Unreal Engine gameplay framework for building game modes that run in standalone play, listen servers, and dedicated servers, with versioned gameplay content delivery.
 
-The plugin is located at `Unreal-Plugins/NelaricServer/`. The local validation project under `Development/` is excluded from Git.
-
 See the [NelaricCore module description](Docs/Modules/NelaricCore.md) for its current responsibility and dependencies.
 
 The [core architecture constraints](Docs/CoreArchitectureConstraints.md) define the gameplay model, network topologies, and content-update boundaries.

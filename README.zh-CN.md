@@ -6,8 +6,6 @@
 
 面向 Unreal Engine 的玩法框架，用于快速构建可在单机、监听服务器和独立服务器下运行的玩法模式，并支持版本化玩法内容交付。
 
-插件位于 `Unreal-Plugins/NelaricServer/`。`Development/` 下的本地验证工程不纳入 Git。
-
 模块当前的职责和依赖见 [NelaricCore 模块说明](Docs/Modules/NelaricCore.zh-CN.md)。
 
 玩法模型、网络拓扑和内容更新边界见[核心架构约束](Docs/CoreArchitectureConstraints.zh-CN.md)。

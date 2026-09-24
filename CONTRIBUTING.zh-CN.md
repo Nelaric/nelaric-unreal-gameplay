@@ -34,6 +34,6 @@
 
 所有代码贡献都必须遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和[项目编码规范](Docs/CodingStandards/README.zh-CN.md)。项目规范还规定了文本编码、本地检查，以及允许使用的 PR 标题、分支名和提交信息前缀。例如，分支名可用 `docs/clarify-contribution-guide`，PR 标题或提交标题可用 `docs: clarify contribution guide`。
 
-按照[构建脚本、工具与审查规范](Docs/CodingStandards/BuildAndReview.zh-CN.md)运行与改动相关的检查，并在 PR 中报告检查结果及工具或环境限制。GitHub Actions 会在 PR 上检查命名、格式和 API 文档；CircleCI 的 OAuth 流水线会对 Fork PR 运行不使用密钥的公开质量检查。改动合并到 `main` 后，另一条 GitHub App 流水线使用 UE 5.6.1 编译和打包 Linux 插件；Unreal 编译不是 PR 的必需检查。完整顺序、构建范围和凭据说明见[开发与 CI 流程](Docs/DevelopmentWorkflow.zh-CN.md)。CI 不强制测试覆盖率门槛。
+按照[构建脚本、工具与审查规范](Docs/CodingStandards/BuildAndReview.zh-CN.md)运行与改动相关的检查，并在 PR 中报告检查结果及工具或环境限制。GitHub Actions 会在 PR 上检查命名、格式和 API 文档；CircleCI 的 OAuth 流水线会对 Fork PR 运行不使用密钥的公开质量检查。另一条可信的 GitHub Actions 工作流会核验 PR，并在合并前启动 CircleCI GitHub App 流水线，编译该 PR 的准确提交；同一条 App 流水线也会在 `main` 推送后编译插件。修改 CI 配置、自动化脚本或 Unreal 构建脚本的 PR 会被自动编译检查拒绝，须由维护者处理。完整顺序、构建范围和凭据说明见[开发与 CI 流程](Docs/DevelopmentWorkflow.zh-CN.md)。CI 不强制测试覆盖率门槛。
 
 PR 的目标分支是 `main`。合并前需满足仓库保护规则中的检查与审查要求。维护者会审查正确性、模块边界、API 契约、性能、安全性，以及与 Unreal Engine 5.6 及以上版本的兼容性。

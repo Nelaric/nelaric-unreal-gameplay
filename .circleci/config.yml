@@ -46,6 +46,62 @@ jobs:
               -Package=/tmp/NelaricServerPackage \
               -TargetPlatforms=Linux
 
+  build_fork_pr_linux:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      PR_EVENT_JSON: "<< pipeline.trigger_parameters.webhook.body >>"
+    steps:
+      - checkout
+      - run:
+          name: Validate and check out the PR commit
+          command: |
+            set -euo pipefail
+            python3 - <<'PY' > /tmp/nelaric-pr-info
+            import json
+            import os
+
+            event = json.loads(os.environ["PR_EVENT_JSON"])
+            number = event["pr"]
+            sha = event["sha"]
+            if not isinstance(number, int) or number < 1 or not isinstance(sha, str):
+                raise SystemExit("Invalid PR build request")
+            print(number, sha)
+            PY
+            read -r pr_number pr_sha < /tmp/nelaric-pr-info
+            python3 Scripts/pr_build_policy.py "$pr_number" "$pr_sha"
+            git fetch --no-tags https://github.com/Nelaric/nelaric-unreal-server.git "refs/pull/$pr_number/head"
+            actual_sha="$(git rev-parse FETCH_HEAD)"
+            test "$actual_sha" = "$pr_sha"
+            git checkout --detach "$actual_sha"
+            test "$(git rev-parse HEAD)" = "$pr_sha"
+      - run:
+          name: Pull Unreal Engine 5.6.1 Linux image
+          no_output_timeout: 30m
+          command: |
+            set -euo pipefail
+            : "${GHCR_USERNAME:?Set GHCR_USERNAME in CircleCI project settings}"
+            : "${GHCR_TOKEN:?Set GHCR_TOKEN in CircleCI project settings}"
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+            docker pull ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1
+            docker logout ghcr.io
+      - run:
+          name: Compile fork PR plugin for Linux
+          no_output_timeout: 30m
+          command: |
+            set -euo pipefail
+            plugin_dir="$(mktemp -d)"
+            cp -a Unreal-Plugins/NelaricServer "$plugin_dir/NelaricServer"
+            chmod -R a+rwX "$plugin_dir"
+            docker run --rm --network none \
+              --mount "type=bind,src=$plugin_dir,dst=/workspace" \
+              ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1 \
+              /home/ue4/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh BuildPlugin \
+              -Plugin=/workspace/NelaricServer/NelaricServer.uplugin \
+              -Package=/tmp/NelaricServerPackage \
+              -TargetPlatforms=Linux
+
 workflows:
   public_pr_quality:
     when: pipeline.definition.id == "68c5c463-f50a-5fe1-b2c5-52d63b91dfc1"
@@ -56,9 +112,17 @@ workflows:
               ignore: main
 
   linux_plugin_build:
-    when: pipeline.definition.id == "ac7bbb47-aaa9-4252-97ca-466912f1782d"
+    when: pipeline.definition.id == "ac7bbb47-aaa9-4252-97ca-466912f1782d" and pipeline.event.name == "push"
     jobs:
       - build_plugin_linux:
+          filters:
+            branches:
+              only: main
+
+  fork_pr_linux_build:
+    when: pipeline.definition.id == "ac7bbb47-aaa9-4252-97ca-466912f1782d" and pipeline.trigger.type == "webhook"
+    jobs:
+      - build_fork_pr_linux:
           filters:
             branches:
               only: main

@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Nelaric
+name: Fork PR Linux build
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  circleci-pr-build:
+    name: Trigger CircleCI Linux build
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out trusted main configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check PR, run CircleCI, and report result
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CIRCLECI_PR_BUILD_WEBHOOK_URL: ${{ secrets.CIRCLECI_PR_BUILD_WEBHOOK_URL }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 Scripts/fork_pr_build_bot.py

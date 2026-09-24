@@ -24,7 +24,7 @@ Apply this rule to every new project-authored file and to existing project-autho
 
 - Apply CSharpier to `.Build.cs` and `.Target.cs`. It is as mandatory as clang-format for C++.
 - Keep module dependencies minimal and classify them as public or private according to the headers that need them. Do not put vendor SDK dependencies in Core.
-- Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. The current post-merge CircleCI job builds the Linux plugin with UE 5.6.1; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
+- Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds the Linux plugin with UE 5.6.1 before and after merge; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
 
 ## Local checks
 
@@ -35,7 +35,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 3. `python Scripts/check_public_docs.py` checks that every public header has a file comment.
 4. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
-The format, documentation, PR naming, and CircleCI public quality checks are required pull request checks. They do not rewrite a PR. CircleCI compiles the plugin after changes reach `main`; the Unreal build is not a required pull request check. No clang-tidy or test coverage gate is required now.
+The format, documentation, PR naming, CircleCI public quality, and fork PR Linux build checks are required pull request checks. They do not rewrite a PR. The Linux build validates the exact PR commit in CircleCI before merge and runs again after a push to `main`. The build bot rejects PR changes to CI configuration, automation scripts, Unreal build scripts, plugin descriptors, and related build controls. No clang-tidy or test coverage gate is required now.
 
 ## Commit and branch names
 

@@ -24,7 +24,7 @@
 
 - 对 `.Build.cs` 和 `.Target.cs` 运行 CSharpier。它与 C++ 的 clang-format 一样属于强制要求。
 - 模块依赖应保持最少，并依据公开头文件的实际需要区分公开与私有依赖。不要在 Core 中加入厂商 SDK 依赖。
-- 面向 UE 5.6 及以上版本。引擎编译 CI 应同时覆盖最低支持版本和最新支持版本。当前 CircleCI 在合并后使用 UE 5.6.1 编译 Linux 插件；最新支持版本仍是覆盖缺口。详见 `Docs/DevelopmentWorkflow.zh-CN.md`。
+- 面向 UE 5.6 及以上版本。引擎编译 CI 应同时覆盖最低支持版本和最新支持版本。CircleCI 在合并前后使用 UE 5.6.1 编译 Linux 插件；最新支持版本仍是覆盖缺口。详见 `Docs/DevelopmentWorkflow.zh-CN.md`。
 
 ## 本地检查
 
@@ -35,7 +35,7 @@
 3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有文件注释。
 4. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
 
-格式、文档、PR 命名和 CircleCI 公开质量检查是必需的 PR 检查，CI 不会自动修改 PR。CircleCI 会在改动进入 `main` 后编译插件；Unreal 编译不是必需的 PR 检查。现阶段不要求 clang-tidy 或测试覆盖率门槛。
+格式、文档、PR 命名、CircleCI 公开质量检查和 Fork PR Linux 编译是必需的 PR 检查，CI 不会自动修改 PR。CircleCI 在合并前编译准确的 PR 提交，并在推送至 `main` 后再次编译。构建 bot 会拒绝修改 CI 配置、自动化脚本、Unreal 构建脚本、插件描述文件及相关构建控制文件的 PR。现阶段不要求 clang-tidy 或测试覆盖率门槛。
 
 ## 提交与分支命名
 

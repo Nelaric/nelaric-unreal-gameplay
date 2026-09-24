@@ -23,9 +23,9 @@ GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API
 
 ## Linux 编译的范围
 
-CircleCI 使用 Unreal Engine 5.6.1，为 Linux 编译和打包 `Unreal-Plugins/NelaricServer/NelaricServer.uplugin`，验证仅含源码的插件。它不会构建游戏或 Dedicated Server 目标，也不会把打包结果发布为可下载产物。作业每次都会下载引擎镜像，目前没有使用编译缓存。
+CircleCI 在 Linux 上使用 Unreal Engine 5.6.1 编译并打包 `Unreal-Plugins/NelaricServer/NelaricServer.uplugin`，以验证仅含源码的插件。该作业不构建游戏或 Dedicated Server 目标，也不发布可下载的打包产物。按当前设计，作业每次运行都会重新下载引擎镜像，且不使用编译缓存。
 
-项目支持 UE 5.6 及以上版本，但 CI 当前只测试 Linux 上的 UE 5.6.1。最新支持版本的验证仍是[构建覆盖缺口](CodingStandards/BuildAndReview.zh-CN.md#unreal-构建脚本)。现阶段不要求自动化测试覆盖率。
+项目支持 UE 5.6 及以上版本，但 CI 目前仅验证 Linux 上的 UE 5.6.1。对最新支持版本的验证仍是[构建覆盖缺口](CodingStandards/BuildAndReview.zh-CN.md#unreal-构建脚本)。现阶段不设自动化测试覆盖率要求。
 
 ## 检查失败时
 

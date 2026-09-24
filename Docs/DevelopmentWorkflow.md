@@ -23,7 +23,7 @@ For a pull request from a fork, the automated build does not accept changes to C
 
 ## What the Linux build covers
 
-CircleCI compiles and packages `Unreal-Plugins/NelaricServer/NelaricServer.uplugin` for Linux with Unreal Engine 5.6.1. This verifies the source-only plugin. It does not build a game or a Dedicated Server target, and it does not publish the package as a downloadable artifact. The engine image is downloaded for each run; the job does not use a build cache.
+CircleCI compiles and packages `Unreal-Plugins/NelaricServer/NelaricServer.uplugin` for Linux with Unreal Engine 5.6.1. This verifies the source-only plugin. It does not build a game or a Dedicated Server target, and it does not publish the package as a downloadable artifact. By design, the job downloads the engine image on every run and does not use a build cache.
 
 The project supports UE 5.6 and later, but CI currently tests only UE 5.6.1 on Linux. Testing the latest supported engine version remains a [build coverage gap](CodingStandards/BuildAndReview.md#unreal-build-scripts). There is no automated test coverage requirement yet.
 

@@ -35,7 +35,7 @@
 3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有文件注释。
 4. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
 
-格式、文档、PR 命名、CircleCI 公开质量检查和 Fork PR Linux 编译是必需的 PR 检查，CI 不会自动修改 PR。CircleCI 在合并前编译准确的 PR 提交，并在推送至 `main` 后再次编译。构建 bot 会拒绝修改 CI 配置、自动化脚本、Unreal 构建脚本、插件描述文件及相关构建控制文件的 PR。现阶段不要求 clang-tidy 或测试覆盖率门槛。
+格式、文档、PR 命名和 Fork PR Linux 编译状态是必需的 PR 检查，CI 不会自动修改 PR。对于 Fork PR，CircleCI 在合并前编译准确的 PR 提交；推送至 `main` 后会另行编译。构建 bot 会拒绝 Fork PR 修改 CI 配置、自动化脚本、Unreal 构建脚本、插件描述文件及相关构建控制文件。源仓库内分支的 PR 会收到表示无需 Fork 编译的成功状态。现阶段不要求 clang-tidy 或测试覆盖率门槛。
 
 ## 提交与分支命名
 

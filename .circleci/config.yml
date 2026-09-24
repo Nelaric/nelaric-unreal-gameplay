@@ -2,18 +2,6 @@
 version: 2.1
 
 jobs:
-  public_quality:
-    docker:
-      - image: cimg/python:3.12
-    steps:
-      - checkout
-      - run:
-          name: Check text conventions
-          command: python Scripts/check_text.py
-      - run:
-          name: Check public API documentation
-          command: python Scripts/check_public_docs.py
-
   build_plugin_linux:
     machine:
       image: ubuntu-2404:current
@@ -103,14 +91,6 @@ jobs:
               -TargetPlatforms=Linux
 
 workflows:
-  public_pr_quality:
-    when: pipeline.definition.id == "68c5c463-f50a-5fe1-b2c5-52d63b91dfc1"
-    jobs:
-      - public_quality:
-          filters:
-            branches:
-              ignore: main
-
   linux_plugin_build:
     when: pipeline.definition.id == "ac7bbb47-aaa9-4252-97ca-466912f1782d" and pipeline.event.name == "push"
     jobs:

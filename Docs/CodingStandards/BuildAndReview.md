@@ -35,7 +35,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 3. `python Scripts/check_public_docs.py` checks that every public header has a file comment.
 4. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
-The format, documentation, PR naming, CircleCI public quality, and fork PR Linux build checks are required pull request checks. They do not rewrite a PR. The Linux build validates the exact PR commit in CircleCI before merge and runs again after a push to `main`. The build bot rejects PR changes to CI configuration, automation scripts, Unreal build scripts, plugin descriptors, and related build controls. No clang-tidy or test coverage gate is required now.
+The format, documentation, PR naming, and fork PR Linux build statuses are required pull request checks. They do not rewrite a PR. For a fork PR, the Linux build validates the exact PR commit in CircleCI before merge; a separate build runs after a push to `main`. The build bot rejects fork PR changes to CI configuration, automation scripts, Unreal build scripts, plugin descriptors, and related build controls. An in-repository PR receives a successful not-applicable fork-build status. No clang-tidy or test coverage gate is required now.
 
 ## Commit and branch names
 

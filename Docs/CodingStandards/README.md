@@ -1,6 +1,6 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-English | [简体中文](https://github.com/Nelaric/nelaric-unreal-gameplay/blob/main/Docs/CodingStandards/README.zh-CN.md)
+English | [简体中文](README.zh-CN.md)
 
 # Project Coding Standards
 

@@ -1,6 +1,6 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-[English](https://github.com/Nelaric/nelaric-unreal-gameplay/blob/main/Docs/CodingStandards/README.md) | 简体中文
+[English](README.md) | 简体中文
 
 # 项目编码规范
 

@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Nelaric Core",
+	"Description": "Shared C++ passkey for conventional internal framework calls.",
+	"Category": "Gameplay",
+	"CreatedBy": "Nelaric",
+	"CreatedByURL": "",
+	"DocsURL": "https://nelaric.github.io/nelaric-unreal-gameplay",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "NelaricCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

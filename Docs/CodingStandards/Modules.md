@@ -14,3 +14,9 @@ The plugin is divided into modules with `Public` and `Private` directories. Publ
 - Keep content-version and update-delivery mechanisms separate from match rules. Foundation may consume a validated content version without depending on a particular patching service.
 
 Every module should state its responsibility and direct dependencies in its module documentation when it is introduced. A new dependency crossing these boundaries requires a PR explanation and maintainer review.
+
+## Internal integration convention
+
+Framework-only C++ methods that must be visible across modules may accept `const UE::Nelaric::FInternalAccessKey&`. The shared key and `FInternalAccess::Key()` live in `NelaricCore/Public/Internal/`, so any module with a normal `NelaricCore` dependency can call them. Keep these methods in the framework-integration `public:` section, name them for their internal purpose, and use ordinary C++ rather than `UFUNCTION` for the non-reflected key parameter. Do not introduce inheritance solely to obtain the key.
+
+This is a discoverable usage convention for an open-source framework, not an authorization boundary. Framework consumers should not call internal methods through this key in normal use. Prefer supported gameplay APIs; use direct internal access only as a last resort when no suitable public API meets the need. Gameplay authors can deliberately include the internal header, but internal methods may change with implementation details. A public header mentioning the key requires a public module dependency on `NelaricCore`; a private implementation-only use needs a private dependency. Dependent plugins must also declare their plugin dependency.

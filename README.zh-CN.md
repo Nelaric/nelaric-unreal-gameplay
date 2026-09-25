@@ -10,9 +10,9 @@
 
 [NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 包含 `NelaricGameplayCore` 运行时模块及 Game、Editor、Server Target。
 
-Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 Foundation 插件。
+Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 Core 和 Foundation 插件。
 
-模块职责和依赖见 [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.zh-CN.md) 与 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
+模块职责和依赖见 [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.zh-CN.md)、[NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.zh-CN.md) 与 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
 
 ## 参与贡献
 

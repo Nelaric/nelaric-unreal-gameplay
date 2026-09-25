@@ -15,9 +15,9 @@
 
 ## PR 会运行哪些检查
 
-GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。结果会以 `ci/fork-pr-linux-build` 状态显示在 PR 上。你不需要 CircleCI 账号，也无需额外配置。
+GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。Game、Editor 和 Server 会分别以 `ci/linux-game-build`、`ci/linux-editor-build` 和 `ci/linux-server-build` 显示为独立检查；原有的 `ci/fork-pr-linux-build` 检查汇总三个 Job 的结果。你不需要 CircleCI 账号，也无需额外配置。
 
-这四项检查状态都是合并到 `main` 的必需条件，均在合并前的 PR 上运行。
+三个 GitHub Actions 检查与 CircleCI 汇总检查仍是合并到 `main` 的必需条件。三个 Target 检查分别显示各自的编译结果。
 
 对于来自 Fork 的 PR，自动编译不会接受对 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件的改动。如果需要修改这些文件，请先与维护者讨论，并在源仓库的分支中提交。来自源仓库分支的 PR 即使修改这些文件，也会运行 Linux 编译。
 

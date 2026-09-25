@@ -15,9 +15,9 @@ This page explains the checks you will see on a pull request. For guidance on pr
 
 ## Checks on a pull request
 
-GitHub Actions checks PR and commit naming, formatting and text conventions, and API documentation. CircleCI also builds the project at the exact submitted commit with Unreal Engine 5.6.1 on Linux, whether the pull request comes from a fork or this repository. The build result appears on the pull request as `ci/fork-pr-linux-build`. You do not need a CircleCI account or any additional setup.
+GitHub Actions checks PR and commit naming, formatting and text conventions, and API documentation. CircleCI also builds the project at the exact submitted commit with Unreal Engine 5.6.1 on Linux, whether the pull request comes from a fork or this repository. Game, Editor, and Server appear as separate pull request checks: `ci/linux-game-build`, `ci/linux-editor-build`, and `ci/linux-server-build`. The existing `ci/fork-pr-linux-build` check summarizes the three jobs. You do not need a CircleCI account or any additional setup.
 
-All four check statuses are required before merging to `main`. They run on the pull request, before the change is merged.
+The three GitHub Actions checks and the CircleCI summary check remain required before merging to `main`. The three target checks show each build result independently.
 
 For a pull request from a fork, the automated build does not accept changes to CI workflows, automation scripts, Unreal build scripts, or plugin descriptors. If your change needs one of these files, discuss it with a maintainer and use a branch in the source repository. Pull requests from branches in this repository can include those changes and still run the Linux build.
 

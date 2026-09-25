@@ -18,6 +18,11 @@ _REPOSITORY = "Nelaric/nelaric-unreal-gameplay"
 # CircleCI retains the original project slug after the GitHub repository rename.
 _CIRCLECI_PROJECT = "gh/Nelaric/nelaric-unreal-server"
 _STATUS_CONTEXT = "ci/fork-pr-linux-build"
+_JOB_CONTEXTS = {
+    "build_game_linux": "ci/linux-game-build",
+    "build_editor_linux": "ci/linux-editor-build",
+    "build_server_linux": "ci/linux-server-build",
+}
 _FINAL_STATES = {"success", "failed", "error", "canceled", "unauthorized", "not_run"}
 
 
@@ -39,8 +44,10 @@ def request_json(url: str, *, token: str | None = None, payload: dict | None = N
         return {}
 
 
-def post_status(sha: str, state: str, description: str, target_url: str | None = None) -> None:
-    payload = {"state": state, "context": _STATUS_CONTEXT, "description": description[:140]}
+def post_status(
+    sha: str, state: str, description: str, target_url: str | None = None, *, context: str = _STATUS_CONTEXT
+) -> None:
+    payload = {"state": state, "context": context, "description": description[:140]}
     if target_url:
         payload["target_url"] = target_url
     request_json(
@@ -48,6 +55,11 @@ def post_status(sha: str, state: str, description: str, target_url: str | None =
         token=os.environ["GITHUB_TOKEN"],
         payload=payload,
     )
+
+
+def post_job_statuses(sha: str, state: str, description: str, target_url: str | None = None) -> None:
+    for context in _JOB_CONTEXTS.values():
+        post_status(sha, state, description, target_url, context=context)
 
 
 def trigger_circleci(number: int, sha: str, nonce: str) -> None:
@@ -83,21 +95,43 @@ def find_pipeline(nonce: str) -> dict | None:
     return None
 
 
-def workflow_status(pipeline_id: str) -> str | None:
+def find_workflow(pipeline_id: str) -> dict | None:
     result = request_json(f"https://circleci.com/api/v2/pipeline/{pipeline_id}/workflow")
     matching = [item for item in result.get("items", []) if item.get("name") == "fork_pr_linux_build"]
     if not matching:
         return None
-    return matching[0].get("status")
+    return matching[0]
 
 
-def monitor(number: int, sha: str, nonce: str) -> None:
+def workflow_jobs(workflow_id: str) -> dict[str, dict]:
+    jobs: dict[str, dict] = {}
+    page_token: str | None = None
+    while True:
+        query = f"?{urllib.parse.urlencode({'page-token': page_token})}" if page_token else ""
+        result = request_json(f"https://circleci.com/api/v2/workflow/{workflow_id}/job{query}")
+        for job in result.get("items", []):
+            if job.get("name") in _JOB_CONTEXTS:
+                jobs[job["name"]] = job
+        page_token = result.get("next_page_token")
+        if not page_token:
+            return jobs
+
+
+def monitor(number: int, sha: str, nonce: str) -> bool:
     deadline = time.monotonic() + 55 * 60
     pipeline: dict | None = None
+    reported: set[str] = set()
+
+    def fail_pending(description: str, target_url: str | None = None) -> None:
+        for name, context in _JOB_CONTEXTS.items():
+            if name not in reported:
+                post_status(sha, "error", description, target_url, context=context)
+
     while time.monotonic() < deadline:
         if get_pull_request(number, os.environ["GITHUB_TOKEN"])["head"]["sha"] != sha:
             post_status(sha, "error", "Superseded by a newer pull request commit")
-            return
+            fail_pending("Superseded by a newer pull request commit")
+            return False
         if pipeline is None:
             pipeline = find_pipeline(nonce)
         if pipeline is not None:
@@ -105,19 +139,43 @@ def monitor(number: int, sha: str, nonce: str) -> None:
                 "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
                 f"{pipeline['number']}/details"
             )
-            status = workflow_status(pipeline["id"])
-            if status in _FINAL_STATES:
-                state = "success" if status == "success" else "failure"
-                post_status(sha, state, f"UE 5.6.1 Linux build: {status}", target_url)
-                if state != "success":
-                    raise RuntimeError(f"CircleCI workflow finished with status {status}")
-                return
+            workflow = find_workflow(pipeline["id"])
+            if workflow:
+                jobs = workflow_jobs(workflow["id"])
+                for name, context in _JOB_CONTEXTS.items():
+                    if name in reported:
+                        continue
+                    job = jobs.get(name)
+                    job_status = job.get("status") if job else None
+                    if job_status not in _FINAL_STATES:
+                        if job is None and workflow.get("status") in _FINAL_STATES:
+                            post_status(sha, "error", f"UE 5.6.1 Linux {name}: missing", target_url, context=context)
+                            reported.add(name)
+                        continue
+                    state = "success" if job_status == "success" else "failure"
+                    job_url = target_url
+                    if job.get("job_number"):
+                        job_url = (
+                            "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
+                            f"{pipeline['number']}/workflows/{workflow['id']}/jobs/{job['job_number']}"
+                        )
+                    post_status(sha, state, f"UE 5.6.1 Linux {name}: {job_status}", job_url, context=context)
+                    reported.add(name)
+                if workflow.get("status") in _FINAL_STATES and len(reported) == len(_JOB_CONTEXTS):
+                    all_succeeded = workflow["status"] == "success" and all(
+                        jobs.get(name, {}).get("status") == "success" for name in _JOB_CONTEXTS
+                    )
+                    state = "success" if all_succeeded else "failure"
+                    post_status(sha, state, f"UE 5.6.1 Linux build: {workflow['status']}", target_url)
+                    return all_succeeded
             if pipeline.get("errors"):
                 post_status(sha, "error", "CircleCI could not start the PR build", target_url)
-                raise RuntimeError("CircleCI pipeline has configuration errors")
+                fail_pending("CircleCI could not start the PR build", target_url)
+                return False
         time.sleep(15)
     post_status(sha, "error", "Timed out waiting for the CircleCI PR build")
-    raise RuntimeError("Timed out waiting for CircleCI")
+    fail_pending("Timed out waiting for the CircleCI PR build")
+    return False
 
 
 def main() -> None:
@@ -129,17 +187,21 @@ def main() -> None:
         verify_pull_request(number, sha, token)
     except PolicyError as error:
         post_status(sha, "failure", str(error))
+        post_job_statuses(sha, "failure", str(error))
         raise
     post_status(sha, "pending", "Waiting for UE 5.6.1 Linux build")
+    post_job_statuses(sha, "pending", "Waiting for UE 5.6.1 Linux build")
     nonce = str(uuid.uuid4())
     try:
         trigger_circleci(number, sha, nonce)
-        monitor(number, sha, nonce)
+        succeeded = monitor(number, sha, nonce)
     except Exception:
         # Never print the webhook URL, which contains a trigger secret.
-        if find_pipeline(nonce) is None:
-            post_status(sha, "error", "Could not start the CircleCI PR build")
+        post_status(sha, "error", "Could not complete the CircleCI PR build")
+        post_job_statuses(sha, "error", "Could not complete the CircleCI PR build")
         raise
+    if not succeeded:
+        raise RuntimeError("CircleCI PR build did not succeed")
 
 
 if __name__ == "__main__":

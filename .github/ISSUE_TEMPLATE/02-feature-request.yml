@@ -10,8 +10,8 @@ body:
     id: problem
     attributes:
       label: Problem and use case | 问题与使用场景
-      description: Describe the developer need and the concrete server scenario. Explain why existing UE or project mechanisms do not solve it. | 描述开发需求和具体服务器场景，并解释现有 UE 或项目机制为何无法解决。
-      placeholder: When building a dedicated server, I need to ... because ... | 开发独立服务器时，我需要……，因为……
+      description: Describe the developer need and a concrete gameplay scenario. Explain why existing UE or project mechanisms do not solve it. | 描述开发需求和具体玩法场景，并解释现有 UE 或项目机制为何无法解决。
+      placeholder: When building a gameplay feature, I need to ... because ... | 开发玩法功能时，我需要……，因为……
     validations:
       required: true
   - type: dropdown

@@ -22,9 +22,9 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用
 | Linux x86_64 | `sh ./Setup/Linux/Setup.sh` |
 | macOS x86_64 或 arm64 | `sh ./Setup/macOS/Setup.sh` |
 
-请先安装带 npm 的 Node.js。脚本还需要网络连接、`curl` 和 `tar`；Linux 需要 `sha256sum`，macOS 需要 `shasum`。无需再单独运行 npm 或 PuerTS 配置命令。脚本从官方 [PuerTS Unreal 1.0.9 发布页](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9)下载 V8 9.4 后端，校验 SHA-256，安装后端及其[许可证](Setup/V8-LICENSE)，准备 TypeScript 编辑器工具，并在本地 `.uproject` 中启用 PuerTS。安装中断后可以重新运行。
+请先安装带 npm 的 Node.js。脚本还需要网络连接、`curl` 和 `tar`；Linux 需要 `sha256sum`，macOS 需要 `shasum`。无需再单独运行 npm 或 PuerTS 配置命令。脚本从官方 [PuerTS Unreal 1.0.9 发布页](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9)下载 V8 9.4 后端，校验 SHA-256，安装后端及其[许可证](Setup/V8-LICENSE)，准备 TypeScript 编辑器工具，并确认共享的 `.uproject` 已启用 PuerTS。安装中断后可以重新运行。
 
-后端二进制文件和下载缓存仅保留在本机，不纳入 Git。Setup 只在本地工作树中修改受 Git 跟踪的 `.uproject`；除非 CI 也配置安装后端，否则共享提交中应保持 `Puerts` 禁用。插件源码随附 PuerTS 的[许可证](NelaricGameplay/Plugins/Puerts/LICENSE)。该配置支持编辑器内的 TypeScript 编译和脚本热重载；正式环境的内容交付与版本激活需另行实现。
+后端二进制文件和下载缓存仅保留在本机，不纳入 Git。共享的 `.uproject` 已启用 PuerTS；构建前请先运行 Setup，安装所需的 V8 后端和 TypeScript 工具。CI 也会在 Linux 构建前安装后端。插件源码随附 PuerTS 的[许可证](NelaricGameplay/Plugins/Puerts/LICENSE)。该配置支持编辑器内的 TypeScript 编译和脚本热重载；正式环境的内容交付与版本激活需另行实现。
 
 模块职责和依赖见 [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.zh-CN.md)、[NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.zh-CN.md) 与 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
 

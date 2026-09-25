@@ -8,15 +8,11 @@
 
 ## 项目结构
 
-使用 Unreal Engine 5.6 或更新版本打开 [NelaricGameplay/NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。这个纳入版本控制的项目是开发入口。`Source/` 只包含项目启动代码和 Game、Editor、Server Target；通用玩法契约放在 `Plugins/NelaricGameplayFoundation/` 中；`Config/` 保存项目通用默认配置。具体玩法规则与表现由接入游戏或可选功能实现。
+纳入版本控制的 [NelaricGameplay/](NelaricGameplay/) 目录是框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 包含启动代码及 Game、Editor、Server Target；通用玩法契约位于 `Plugins/NelaricGameplayFoundation/`，`Config/` 保存项目默认配置。接入游戏和可选功能负责各自的具体规则与表现。
 
-本地 `Development/` 验证工程仍被 Git 排除。Linux CI 会构建纳入版本控制的项目的 Game、Editor 和 Server Target，包括已启用的 Foundation 插件。
+Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 Foundation 插件。
 
-Editor 和 Game Target 可使用已安装的 UE 5.6 发行版构建。Server Target 需要支持服务器目标构建的引擎发行版；当前安装的启动器发行版不提供此能力。
-
-模块当前的职责和依赖见 [NelaricFoundation 模块说明](Docs/Modules/NelaricFoundation.zh-CN.md)。
-
-玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
+模块的职责和依赖见 [NelaricFoundation 模块说明](Docs/Modules/NelaricFoundation.zh-CN.md)；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
 
 ## 参与贡献
 

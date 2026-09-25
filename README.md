@@ -8,15 +8,11 @@ An Unreal Engine gameplay framework for persistent worlds and bounded activities
 
 ## Project layout
 
-Open [NelaricGameplay/NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. This tracked project is the development entry point. Its `Source/` directory contains only project bootstrap code and Game, Editor, and Server targets; shared gameplay contracts belong in `Plugins/NelaricGameplayFoundation/`. `Config/` contains shared project defaults. Game-specific rules and presentation belong in consuming games or optional features.
+The version-controlled [NelaricGameplay/](NelaricGameplay/) directory is the Unreal project for the framework. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains the bootstrap code and Game, Editor, and Server targets. Shared gameplay contracts live in `Plugins/NelaricGameplayFoundation/`, while `Config/` holds project defaults. Consuming games and optional features provide their own rules and presentation.
 
-The local `Development/` validation project remains excluded from Git. Linux CI builds the tracked project's Game, Editor, and Server targets, including the enabled Foundation plugin.
+Linux CI builds this project for Game, Editor, and Server, including the enabled Foundation plugin.
 
-The Editor and Game targets build with the installed UE 5.6 distribution. Building the Server target requires an engine distribution with server-target support; the installed launcher distribution does not provide it.
-
-See the [NelaricFoundation module description](Docs/Modules/NelaricFoundation.md) for its current responsibility and dependencies.
-
-The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) define the gameplay model, network topologies, and content-update boundaries.
+For the module's responsibilities and dependencies, see the [NelaricFoundation module description](Docs/Modules/NelaricFoundation.md). The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
 
 ## Contributing
 

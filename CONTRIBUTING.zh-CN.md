@@ -6,7 +6,7 @@
 
 感谢你参与 Nelaric Unreal Gameplay。我们欢迎使用英语或中文提交问题报告、设计反馈、文档改进和代码贡献。
 
-`Development/` 下的本地验证工程不纳入 Git。提出新能力时，请说明开发者遇到的问题和预期的玩法制作流程。
+纳入版本控制的 `NelaricGameplay/` 项目是开发入口。`Development/` 下的本地验证工程仍不纳入 Git。提出新能力时，请说明开发者遇到的问题和预期的玩法制作流程。
 
 ## 创建 Issue 前
 
@@ -36,6 +36,6 @@
 
 按照[构建脚本、工具与审查规范](Docs/CodingStandards/BuildAndReview.zh-CN.md)运行与改动相关的检查。在 PR 中写明已运行的检查，以及因工具或环境限制未能运行的检查。
 
-GitHub Actions 会检查命名、格式和 API 文档。无论 PR 来自 Fork 还是本仓库分支，CircleCI 都会在合并前用 Unreal Engine 5.6.1 在 Linux 上编译提交的插件代码。你不需要 CircleCI 账号，也无需额外配置。如果 Fork PR 需要修改 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件，请先与维护者讨论，并通过源仓库分支提交。检查顺序和编译范围见[开发与 CI 流程](Docs/DevelopmentWorkflow.zh-CN.md)。CI 不强制测试覆盖率门槛。
+GitHub Actions 会检查命名、格式和 API 文档。无论 PR 来自 Fork 还是本仓库分支，CircleCI 都会在合并前用 Unreal Engine 5.6.1 在 Linux 上编译提交项目的 Game、Editor 和 Server Target。你不需要 CircleCI 账号，也无需额外配置。如果 Fork PR 需要修改 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件，请先与维护者讨论，并通过源仓库分支提交。检查顺序和编译范围见[开发与 CI 流程](Docs/DevelopmentWorkflow.zh-CN.md)。CI 不强制测试覆盖率门槛。
 
 PR 的目标分支是 `main`。合并前需满足仓库保护规则中的检查与审查要求。维护者会审查正确性、模块边界、API 契约、性能、安全性，以及与 Unreal Engine 5.6 及以上版本的兼容性。

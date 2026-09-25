@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.6",
+	"Category": "Games",
+	"Description": "Genre-independent Unreal Engine gameplay framework project.",
+	"Modules": [
+		{
+			"Name": "NelaricGameplay",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "NelaricGameplayCore",
+			"Enabled": true
+		}
+	]
+}

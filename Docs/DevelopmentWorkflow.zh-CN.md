@@ -11,7 +11,7 @@
 1. 在分支或 Fork 中完成聚焦的改动，运行相关的[本地检查](CodingStandards/BuildAndReview.zh-CN.md#本地检查)。
 2. 向 `main` 发起 PR。创建或更新 PR 后，自动检查会开始运行。
 3. 如果检查失败，修复问题后等待检查通过和维护者审查，再合并 PR。
-4. 合并后，项目会从 `main` 发布 API 文档网站。验证和插件编译已在 PR 上完成。
+4. 合并后，项目会从 `main` 发布 API 文档网站。验证和项目 Target 编译已在 PR 上完成。
 
 ## PR 会运行哪些检查
 
@@ -23,7 +23,7 @@ GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API
 
 ## Linux 编译的范围
 
-CircleCI 在 Linux 上使用 Unreal Engine 5.6.1 编译并打包 `Unreal-Plugins/NelaricServer/NelaricServer.uplugin`，以验证仅含源码的插件。该作业不构建游戏或 Dedicated Server 目标，也不发布可下载的打包产物。按当前设计，作业每次运行都会重新下载引擎镜像，且不使用编译缓存。
+CircleCI 在 Linux 上使用 Unreal Engine 5.6.1 构建 `NelaricGameplay/NelaricGameplay.uproject`，以 Development 配置依次编译 `NelaricGameplay`（Game）、`NelaricGameplayEditor`（Editor）和 `NelaricGameplayServer`（Server）Target。启用的 `NelaricGameplayCore` 插件会随项目一起编译。该作业不发布可下载的打包产物。按当前设计，作业每次运行都会重新下载引擎镜像，且不使用编译缓存。
 
 项目支持 UE 5.6 及以上版本，但 CI 目前仅验证 Linux 上的 UE 5.6.1。对最新支持版本的验证仍是[构建覆盖缺口](CodingStandards/BuildAndReview.zh-CN.md#unreal-构建脚本)。现阶段不设自动化测试覆盖率要求。
 

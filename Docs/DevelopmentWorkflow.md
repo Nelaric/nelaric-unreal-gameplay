@@ -11,11 +11,11 @@ This page explains the checks you will see on a pull request. For guidance on pr
 1. Make a focused change on a branch or fork. Run the [local checks](CodingStandards/BuildAndReview.md#local-checks) relevant to your change.
 2. Open a pull request to `main`. The automated checks start when you open or update it.
 3. Review any failure, make a correction, and wait for the checks and maintainer review before merging.
-4. After merge, the API documentation site is published from `main`. Validation and plugin builds have already finished on the pull request.
+4. After merge, the API documentation site is published from `main`. Validation and project target builds have already finished on the pull request.
 
 ## Checks on a pull request
 
-GitHub Actions checks PR and commit naming, formatting and text conventions, and API documentation. CircleCI also builds the exact submitted plugin commit with Unreal Engine 5.6.1 on Linux, whether the pull request comes from a fork or this repository. The build result appears on the pull request as `ci/fork-pr-linux-build`. You do not need a CircleCI account or any additional setup.
+GitHub Actions checks PR and commit naming, formatting and text conventions, and API documentation. CircleCI also builds the project at the exact submitted commit with Unreal Engine 5.6.1 on Linux, whether the pull request comes from a fork or this repository. The build result appears on the pull request as `ci/fork-pr-linux-build`. You do not need a CircleCI account or any additional setup.
 
 All four check statuses are required before merging to `main`. They run on the pull request, before the change is merged.
 
@@ -23,7 +23,7 @@ For a pull request from a fork, the automated build does not accept changes to C
 
 ## What the Linux build covers
 
-CircleCI compiles and packages `Unreal-Plugins/NelaricServer/NelaricServer.uplugin` for Linux with Unreal Engine 5.6.1. This verifies the source-only plugin. It does not build a game or a Dedicated Server target, and it does not publish the package as a downloadable artifact. By design, the job downloads the engine image on every run and does not use a build cache.
+CircleCI builds `NelaricGameplay/NelaricGameplay.uproject` with Unreal Engine 5.6.1 on Linux. It compiles the `NelaricGameplay` (Game), `NelaricGameplayEditor` (Editor), and `NelaricGameplayServer` (Server) targets in Development configuration. The enabled `NelaricGameplayCore` plugin is compiled as part of the project builds. The job does not publish a downloadable package. By design, it downloads the engine image on every run and does not use a build cache.
 
 The project supports UE 5.6 and later, but CI currently tests only UE 5.6.1 on Linux. Testing the latest supported engine version remains a [build coverage gap](CodingStandards/BuildAndReview.md#unreal-build-scripts). There is no automated test coverage requirement yet.
 

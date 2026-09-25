@@ -43,20 +43,22 @@ jobs:
             docker pull ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1
             docker logout ghcr.io
       - run:
-          name: Compile PR plugin for Linux
+          name: Compile PR Game, Editor, and Server targets for Linux
           no_output_timeout: 30m
           command: |
             set -euo pipefail
-            plugin_dir="$(mktemp -d)"
-            cp -a Unreal-Plugins/NelaricServer "$plugin_dir/NelaricServer"
-            chmod -R a+rwX "$plugin_dir"
-            docker run --rm --network none \
-              --mount "type=bind,src=$plugin_dir,dst=/workspace" \
-              ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1 \
-              /home/ue4/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh BuildPlugin \
-              -Plugin=/workspace/NelaricServer/NelaricServer.uplugin \
-              -Package=/tmp/NelaricServerPackage \
-              -TargetPlatforms=Linux
+            project_dir="$(mktemp -d)"
+            cp -a NelaricGameplay "$project_dir/NelaricGameplay"
+            chmod -R a+rwX "$project_dir"
+            for target in NelaricGameplay NelaricGameplayEditor NelaricGameplayServer; do
+              docker run --rm --network none \
+                --mount "type=bind,src=$project_dir,dst=/workspace" \
+                ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1 \
+                /home/ue4/UnrealEngine/Engine/Build/BatchFiles/Linux/Build.sh \
+                "$target" Linux Development \
+                -Project=/workspace/NelaricGameplay/NelaricGameplay.uproject \
+                -WaitMutex -NoHotReload
+            done
 
 workflows:
   fork_pr_linux_build:

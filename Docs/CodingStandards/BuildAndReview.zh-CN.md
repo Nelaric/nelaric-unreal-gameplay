@@ -24,7 +24,7 @@
 
 - 对 `.Build.cs` 和 `.Target.cs` 运行 CSharpier。它与 C++ 的 clang-format 一样属于强制要求。
 - 模块依赖应保持最少，并依据公开头文件的实际需要区分公开与私有依赖。不要在 Core 中加入厂商 SDK 依赖。
-- 面向 UE 5.6 及以上版本。引擎编译 CI 应同时覆盖最低支持版本和最新支持版本。CircleCI 在 PR 合并前使用 UE 5.6.1 编译 Linux 插件；最新支持版本仍是覆盖缺口。详见 `Docs/DevelopmentWorkflow.zh-CN.md`。
+- 面向 UE 5.6 及以上版本。引擎编译 CI 应同时覆盖最低支持版本和最新支持版本。CircleCI 在 PR 合并前使用 UE 5.6.1 编译 Linux 上的 Game、Editor 和 Server Target；最新支持版本仍是覆盖缺口。详见 `Docs/DevelopmentWorkflow.zh-CN.md`。
 
 ## 本地检查
 
@@ -35,7 +35,7 @@
 3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有文件注释。
 4. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
 
-请求审查前，请先运行与改动相关的本地检查。PR 必须在合并前通过格式、API 文档、PR 命名和 Linux 插件编译状态。CircleCI 会编译提交的插件代码，包括来自本仓库分支的 PR。来自 Fork 的 PR 如需修改 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件，请由维护者在源仓库分支处理。现阶段不要求 clang-tidy 或测试覆盖率门槛。
+请求审查前，请先运行与改动相关的本地检查。PR 必须在合并前通过格式、API 文档、PR 命名和 Linux 项目编译状态。CircleCI 会编译提交的项目代码，包括来自本仓库分支的 PR。来自 Fork 的 PR 如需修改 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件，请由维护者在源仓库分支处理。现阶段不要求 clang-tidy 或测试覆盖率门槛。
 
 ## 提交与分支命名
 

@@ -10,9 +10,9 @@ An Unreal Engine gameplay framework for persistent worlds and bounded activities
 
 The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains the `NelaricGameplayCore` runtime module and Game, Editor, and Server targets.
 
-Linux CI builds this project for Game, Editor, and Server, including the enabled Foundation plugin.
+Linux CI builds this project for Game, Editor, and Server, including the enabled Core and Foundation plugins.
 
-See the [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.md) and [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module descriptions for their responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
+See the [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.md), [NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.md), and [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module descriptions for their responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
 
 ## Contributing
 

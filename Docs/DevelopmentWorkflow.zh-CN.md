@@ -15,7 +15,7 @@
 
 ## PR 会运行哪些检查
 
-GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。Linux 编译工作流先验证 PR 并触发 CircleCI，然后在 Actions 运行图中并列显示 Game、Editor 和 Server 三个 Job，最后由汇总 Job 整理结果。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。每个 Actions Job 都在自己的摘要中报告目标结果并链接到相应的 CircleCI 日志。Game、Editor 和 Server 也分别以 `ci/linux-game-build`、`ci/linux-editor-build` 和 `ci/linux-server-build` 显示为独立检查；原有的 `ci/fork-pr-linux-build` 检查汇总三个 Job 的结果。你不需要 CircleCI 账号，也无需额外配置。
+GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。Linux 编译工作流先验证 PR 并触发 CircleCI，然后在 Actions 运行图中并列显示 Game、Editor 和 Server 三个 Job，最后由汇总 Job 整理结果。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。每个 Actions Job 都在自己的摘要中报告目标结果并链接到相应的 CircleCI 日志。CircleCI Job 结束后，Actions Job 日志还会以可折叠分组显示各步骤结果、PR 校验与编译命令及其控制台输出。完整日志仍可在 CircleCI 查看；认证与环境准备步骤的输出不会复制到 Actions。Game、Editor 和 Server 也分别以 `ci/linux-game-build`、`ci/linux-editor-build` 和 `ci/linux-server-build` 显示为独立检查；原有的 `ci/fork-pr-linux-build` 检查汇总三个 Job 的结果。你不需要 CircleCI 账号，也无需额外配置。
 
 三个 GitHub Actions 检查与 CircleCI 汇总检查仍是合并到 `main` 的必需条件。三个 Target 检查分别显示各自的编译结果。
 

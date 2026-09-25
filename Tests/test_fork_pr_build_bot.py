@@ -4,6 +4,8 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -183,10 +185,41 @@ class ForkPrBuildBotTests(unittest.TestCase):
                 "workflow_jobs",
                 return_value={"build_game_linux": {"status": "success", "job_number": 7}},
             ),
+            patch.object(fork_pr_build_bot, "mirror_circleci_job") as mirror,
         ):
             state, detail, url = fork_pr_build_bot.watch_target(23, sha, "nonce", "build_game_linux")
         self.assertEqual(("success", "success"), (state, detail))
         self.assertTrue(url.endswith("/workflows/workflow-id/jobs/7"))
+        mirror.assert_called_once_with(7)
+
+    def test_mirrors_compile_output_without_exposing_auth_logs_or_executing_commands(self) -> None:
+        build = {"steps": [
+            {"name": "Pull Unreal Engine 5.6.1 Linux image", "actions": [{
+                "name": "Pull Unreal Engine 5.6.1 Linux image", "status": "success",
+                "bash_command": "docker login with secret", "has_output": True,
+                "output_url": "https://circleci.com/api/private/output/presigned/auth",
+            }]},
+            {"name": "Compile NelaricGameplayServer for Linux", "actions": [{
+                "name": "Compile NelaricGameplayServer for Linux", "status": "failed",
+                "bash_command": "Build.sh NelaricGameplayServer", "has_output": True,
+                "output_url": "https://circleci.com/api/private/output/presigned/compile",
+            }]},
+        ]}
+        log = StringIO()
+        with (
+            patch.object(fork_pr_build_bot, "request_json", return_value=build),
+            patch.object(fork_pr_build_bot, "_circleci_step_output", return_value=("::error::fake failure\nreal compiler error", False)) as output,
+            patch.object(fork_pr_build_bot.uuid, "uuid4", return_value=type("Id", (), {"hex": "safe-marker"})()),
+            redirect_stdout(log),
+        ):
+            fork_pr_build_bot.mirror_circleci_job(7)
+        transcript = log.getvalue()
+        self.assertIn("CircleCI: Compile NelaricGameplayServer for Linux (failed)", transcript)
+        self.assertIn("Build.sh NelaricGameplayServer", transcript)
+        self.assertIn("::stop-commands::safe-marker\n::error::fake failure\nreal compiler error\n::safe-marker::", transcript)
+        self.assertNotIn("docker login with secret", transcript)
+        self.assertNotIn("presigned/", transcript)
+        output.assert_called_once_with("https://circleci.com/api/private/output/presigned/compile")
 
     def test_actions_summary_requires_all_three_circleci_jobs(self) -> None:
         sha = "a" * 40

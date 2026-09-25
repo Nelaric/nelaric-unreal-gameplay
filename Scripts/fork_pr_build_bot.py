@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -29,6 +30,8 @@ _JOB_LABELS = {
     "build_server_linux": "Server",
 }
 _FINAL_STATES = {"success", "failed", "error", "canceled", "unauthorized", "not_run"}
+_MIRROR_OUTPUT_LIMIT = 4 * 1024 * 1024
+_CIRCLECI_OUTPUT_PREFIX = "https://circleci.com/api/private/output/presigned/"
 
 
 def request_json(url: str, *, token: str | None = None, payload: dict | None = None) -> object:
@@ -190,6 +193,70 @@ def write_summary(lines: list[str]) -> None:
             summary.write("\n".join(lines) + "\n")
 
 
+def _safe_log_text(value: object) -> str:
+    """Keep external text from changing the structure of the Actions log."""
+    text = str(value)
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+    return "".join(char for char in text if char in "\n\t" or ord(char) >= 32)
+
+
+def _circleci_step_output(url: str) -> tuple[str, bool]:
+    if not url.startswith(_CIRCLECI_OUTPUT_PREFIX):
+        raise ValueError("Unexpected CircleCI output URL")
+    request = urllib.request.Request(url, headers={"User-Agent": "nelaric-fork-pr-build-bot"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        raw = response.read(_MIRROR_OUTPUT_LIMIT + 1)
+    if len(raw) > _MIRROR_OUTPUT_LIMIT:
+        return "", True
+    entries = json.loads(raw)
+    if not isinstance(entries, list):
+        raise ValueError("Unexpected CircleCI output format")
+    return "".join(str(entry.get("message", "")) for entry in entries if isinstance(entry, dict)), False
+
+
+def mirror_circleci_job(job_number: int) -> None:
+    """Copy CircleCI step details into the corresponding Actions job log."""
+    build = request_json(f"https://circleci.com/api/v1.1/project/github/Nelaric/nelaric-unreal-server/{job_number}")
+    for step in build.get("steps", []):
+        for action in step.get("actions", []):
+            name = _safe_log_text(action.get("name") or step.get("name") or "CircleCI step").replace("\n", " ")
+            status = _safe_log_text(action.get("status", "unknown")).replace("\n", " ")
+            duration = action.get("run_time_millis")
+            seconds = f", {duration / 1000:.1f}s" if isinstance(duration, (int, float)) else ""
+            print(f"::group::CircleCI: {name} ({status}{seconds})", flush=True)
+            if action.get("exit_code") is not None:
+                print(f"Exit code: {action['exit_code']}", flush=True)
+            # Authentication and setup steps may contain credentials. Mirror only known safe commands.
+            if name == "Validate and check out the PR commit" or (
+                name.startswith("Compile ") and name.endswith(" for Linux")
+            ):
+                command = action.get("bash_command")
+                if command:
+                    print("CircleCI command:", flush=True)
+                    marker = uuid.uuid4().hex
+                    print(f"::stop-commands::{marker}", flush=True)
+                    print(_safe_log_text(command), flush=True)
+                    print(f"::{marker}::", flush=True)
+                output_url = action.get("output_url")
+                if action.get("has_output") and output_url:
+                    try:
+                        output, truncated = _circleci_step_output(output_url)
+                        if truncated:
+                            print(
+                                "Step output exceeds the Actions mirror limit; open the CircleCI job for the full log.",
+                                flush=True,
+                            )
+                        else:
+                            # PR code controls compiler output. Disable GitHub workflow commands while printing it.
+                            marker = uuid.uuid4().hex
+                            print(f"::stop-commands::{marker}", flush=True)
+                            print(_safe_log_text(output), flush=True)
+                            print(f"::{marker}::", flush=True)
+                    except (OSError, ValueError) as error:
+                        print(f"Could not mirror step output ({type(error).__name__}); open the CircleCI job.", flush=True)
+            print("::endgroup::", flush=True)
+
+
 def start_main() -> None:
     number = int(os.environ["PR_NUMBER"])
     token = os.environ["GITHUB_TOKEN"]
@@ -251,6 +318,13 @@ def watch_target(number: int, sha: str, nonce: str, job_name: str) -> tuple[str,
                             "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
                             f"{pipeline['number']}/workflows/{workflow['id']}/jobs/{job['job_number']}"
                         )
+                        try:
+                            mirror_circleci_job(job["job_number"])
+                        except (OSError, ValueError, TypeError, AttributeError) as error:
+                            print(
+                                f"Could not read CircleCI step details ({type(error).__name__}); open the CircleCI job.",
+                                flush=True,
+                            )
                     return "success" if status == "success" else "failure", status, job_url
                 if workflow.get("status") in _FINAL_STATES and job is None:
                     return "error", "CircleCI job was not created", pipeline_url

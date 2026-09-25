@@ -4,7 +4,7 @@ English | [简体中文](NelaricCore.zh-CN.md)
 
 # NelaricCore
 
-`NelaricCore` is the runtime module in the `NelaricServer` plugin.
+`NelaricCore` is the runtime module in the `NelaricGameplay/Plugins/NelaricGameplayCore` plugin. The `NelaricGameplay/NelaricGameplay.uproject` project enables it, and other projects can use it independently.
 
 The module owns common gameplay contracts for match flow, objectives, scoring, and player lifecycle. It builds on Unreal Engine's gameplay and networking systems without requiring a specific genre, backend, ability system, or content-distribution provider. Optional integration modules may depend on Core; Core must not depend on them.
 

@@ -30,12 +30,12 @@ class PullRequestBuildPolicyTests(unittest.TestCase):
             ".circleci/config.yml",
             ".github/workflows/quality.yml",
             "Scripts/pr_build_policy.py",
-            "Unreal-Plugins/NelaricServer/Source/NelaricCore/NelaricCore.Build.cs",
-            "Unreal-Plugins/NelaricServer/NelaricServer.uplugin",
+            "NelaricGameplay/Plugins/NelaricGameplayCore/Source/NelaricCore/NelaricCore.Build.cs",
+            "NelaricGameplay/Plugins/NelaricGameplayCore/NelaricGameplayCore.uplugin",
         ):
             with self.subTest(path=path):
                 self.assertTrue(is_protected_path(path))
-        self.assertFalse(is_protected_path("Unreal-Plugins/NelaricServer/Source/NelaricCore/Private/Core.cpp"))
+        self.assertFalse(is_protected_path("NelaricGameplay/Plugins/NelaricGameplayCore/Source/NelaricCore/Private/Core.cpp"))
 
     def test_accepts_only_the_current_commit_of_an_open_main_pr(self) -> None:
         with (

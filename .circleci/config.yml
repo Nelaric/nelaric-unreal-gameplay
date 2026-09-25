@@ -1,13 +1,8 @@
 # Copyright (c) 2026 Nelaric
 version: 2.1
 
-jobs:
-  build_fork_pr_linux:
-    machine:
-      image: ubuntu-2404:current
-    resource_class: large
-    environment:
-      PR_EVENT_JSON: "<< pipeline.trigger_parameters.webhook.body >>"
+commands:
+  checkout_pr_commit:
     steps:
       - checkout
       - run:
@@ -32,6 +27,8 @@ jobs:
             test "$actual_sha" = "$pr_sha"
             git checkout --detach "$actual_sha"
             test "$(git rev-parse HEAD)" = "$pr_sha"
+  pull_unreal_image:
+    steps:
       - run:
           name: Pull Unreal Engine 5.6.1 Linux image
           no_output_timeout: 30m
@@ -42,27 +39,75 @@ jobs:
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
             docker pull ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1
             docker logout ghcr.io
+  compile_target:
+    parameters:
+      target:
+        type: string
+    steps:
       - run:
-          name: Compile PR plugin for Linux
+          name: Compile << parameters.target >> for Linux
           no_output_timeout: 30m
           command: |
             set -euo pipefail
-            plugin_dir="$(mktemp -d)"
-            cp -a Unreal-Plugins/NelaricServer "$plugin_dir/NelaricServer"
-            chmod -R a+rwX "$plugin_dir"
+            project_dir="$(mktemp -d)"
+            cp -a NelaricGameplay "$project_dir/NelaricGameplay"
+            chmod -R a+rwX "$project_dir"
             docker run --rm --network none \
-              --mount "type=bind,src=$plugin_dir,dst=/workspace" \
+              --mount "type=bind,src=$project_dir,dst=/workspace" \
               ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1 \
-              /home/ue4/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh BuildPlugin \
-              -Plugin=/workspace/NelaricServer/NelaricServer.uplugin \
-              -Package=/tmp/NelaricServerPackage \
-              -TargetPlatforms=Linux
+              /home/ue4/UnrealEngine/Engine/Build/BatchFiles/Linux/Build.sh \
+              << parameters.target >> Linux Development \
+              -Project=/workspace/NelaricGameplay/NelaricGameplay.uproject \
+              -WaitMutex -NoHotReload
+
+jobs:
+  build_game_linux:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      PR_EVENT_JSON: "<< pipeline.trigger_parameters.webhook.body >>"
+    steps:
+      - checkout_pr_commit
+      - pull_unreal_image
+      - compile_target:
+          target: NelaricGameplay
+  build_editor_linux:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      PR_EVENT_JSON: "<< pipeline.trigger_parameters.webhook.body >>"
+    steps:
+      - checkout_pr_commit
+      - pull_unreal_image
+      - compile_target:
+          target: NelaricGameplayEditor
+  build_server_linux:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    environment:
+      PR_EVENT_JSON: "<< pipeline.trigger_parameters.webhook.body >>"
+    steps:
+      - checkout_pr_commit
+      - pull_unreal_image
+      - compile_target:
+          target: NelaricGameplayServer
 
 workflows:
   fork_pr_linux_build:
     when: pipeline.definition.id == "ac7bbb47-aaa9-4252-97ca-466912f1782d" and pipeline.trigger.type == "webhook"
     jobs:
-      - build_fork_pr_linux:
+      - build_game_linux:
+          filters:
+            branches:
+              only: main
+      - build_editor_linux:
+          filters:
+            branches:
+              only: main
+      - build_server_linux:
           filters:
             branches:
               only: main

@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 
 These standards apply to every contribution to Nelaric Unreal Gameplay. Contributors must follow both [Epic Games' Unreal Engine C++ Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and these project coding standards. If their requirements conflict, report the conflict in an issue before proceeding; neither standard takes precedence automatically. Formatting is determined by the pinned tools only when their output complies with both standards.
 
-The supported baseline is Unreal Engine 5.6 and later. The project is a multi-module gameplay framework for standalone, listen-server, and dedicated-server play. Core owns reusable gameplay mechanisms and contracts. Unreal Engine's NetDriver, replication, Iris, and RPC systems continue to handle gameplay networking.
+The supported baseline is Unreal Engine 5.6 and later. The project is a multi-module gameplay framework for standalone, listen-server, and dedicated-server play. Foundation owns shared gameplay contracts; optional modules provide specific mechanisms. Unreal Engine's NetDriver, replication, Iris, and RPC systems continue to handle gameplay networking.
 
 ## Standards
 

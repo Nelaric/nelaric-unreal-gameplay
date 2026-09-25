@@ -12,7 +12,7 @@
 	],
 	"Plugins": [
 		{
-			"Name": "NelaricGameplayCore",
+			"Name": "NelaricGameplayFoundation",
 			"Enabled": true
 		}
 	]

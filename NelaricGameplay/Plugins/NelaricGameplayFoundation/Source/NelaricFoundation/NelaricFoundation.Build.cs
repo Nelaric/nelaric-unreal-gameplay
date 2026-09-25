@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class NelaricCore : ModuleRules
+public class NelaricFoundation : ModuleRules
 {
-	public NelaricCore(ReadOnlyTargetRules Target)
+	public NelaricFoundation(ReadOnlyTargetRules Target)
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;

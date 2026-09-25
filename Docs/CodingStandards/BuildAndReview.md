@@ -23,7 +23,7 @@ Apply this rule to every new project-authored file and to existing project-autho
 ## Unreal build scripts
 
 - Apply CSharpier to `.Build.cs` and `.Target.cs`. It is as mandatory as clang-format for C++.
-- Keep module dependencies minimal and classify them as public or private according to the headers that need them. Do not put vendor SDK dependencies in Core.
+- Keep module dependencies minimal and classify them as public or private according to the headers that need them. Do not put vendor SDK dependencies in Foundation.
 - Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds the Linux Game, Editor, and Server targets with UE 5.6.1 before merge; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
 
 ## Local checks

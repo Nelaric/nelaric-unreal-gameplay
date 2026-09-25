@@ -1,11 +1,11 @@
 # Copyright (c) 2026 Nelaric
 name: Capability proposal | 能力提案
-description: Propose a gameplay-agnostic server capability, provider integration, or developer workflow. | 提议与玩法无关的服务器能力、提供方集成或开发流程。
+description: Propose a reusable gameplay capability, optional integration, or developer workflow. | 提议可复用玩法能力、可选集成或开发流程。
 title: '[Proposal | 提案]: '
 body:
   - type: markdown
     attributes:
-      value: English and Chinese are both welcome. Search existing issues before proposing a capability. Nelaric provides dedicated server infrastructure mechanisms; gameplay rules and high-frequency replication stay with the game and Unreal Engine. Proposals are welcome even while the framework is being designed. | 欢迎使用英文或中文。提出能力建议前请搜索现有 Issue。Nelaric 提供独立服务器基础设施机制；玩法规则和高频复制仍由游戏与 Unreal Engine 负责。框架设计期间也欢迎提交提案。
+      value: English and Chinese are both welcome. Search existing issues before proposing a capability. Nelaric provides shared gameplay contracts; game-specific rules remain with the game, and gameplay replication uses Unreal Engine. Proposals are welcome even while the framework is being designed. | 欢迎使用英文或中文。提出能力建议前请搜索现有 Issue。Nelaric 提供通用玩法契约；具体规则由游戏实现，玩法状态复制使用 Unreal Engine。框架设计期间也欢迎提交提案。
   - type: textarea
     id: problem
     attributes:
@@ -43,8 +43,8 @@ body:
     id: boundaries
     attributes:
       label: Scope and boundaries | 范围与边界
-      description: Explain whether this belongs in Core, an optional provider, or tooling, and what should remain game-specific. If unsure, say so. | 说明该能力属于 Core、可选提供方还是工具，以及哪些部分应由游戏自行实现；如不确定，请直接说明。
-      placeholder: Core would provide ...; a provider or game would decide ... | Core 提供……；提供方或游戏决定……
+      description: Explain whether this belongs in Foundation, an optional provider, or tooling, and what should remain game-specific. If unsure, say so. | 说明该能力属于 Foundation、可选提供方还是工具，以及哪些部分应由游戏自行实现；如不确定，请直接说明。
+      placeholder: Foundation would provide ...; a provider or game would decide ... | Foundation 提供……；提供方或游戏决定……
     validations:
       required: false
   - type: textarea

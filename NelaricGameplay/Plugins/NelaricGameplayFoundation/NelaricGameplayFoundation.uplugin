@@ -2,8 +2,8 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0",
-	"FriendlyName": "Nelaric Gameplay Core",
-	"Description": "Gameplay-agnostic match framework for standalone, listen-server, and dedicated-server play.",
+	"FriendlyName": "Nelaric Gameplay Foundation",
+	"Description": "Genre-independent gameplay foundations for standalone, listen-server, and dedicated-server play.",
 	"Category": "Gameplay",
 	"CreatedBy": "Nelaric",
 	"CreatedByURL": "",
@@ -16,7 +16,7 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "NelaricCore",
+			"Name": "NelaricFoundation",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

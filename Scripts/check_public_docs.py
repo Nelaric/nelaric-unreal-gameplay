@@ -8,7 +8,16 @@ import sys
 
 from check_text import ROOT, repository_files
 
-FILE_COMMENT = re.compile(r"(?:@file|\\file)\b")
+DOC_COMMENT = re.compile(r"/\*\*(.*?)\*/", re.DOTALL)
+FILE_TAG = re.compile(r"@file\b")
+
+
+def has_file_comment(source: str) -> bool:
+    first_comment = DOC_COMMENT.search(source)
+    if first_comment is None or FILE_TAG.search(first_comment.group(1)) is None:
+        return False
+    pragma = source.find("#pragma once")
+    return pragma < 0 or first_comment.start() < pragma
 
 
 def public_headers():
@@ -24,7 +33,7 @@ def main() -> int:
     missing = []
     for path in headers:
         source = path.read_text(encoding="utf-8-sig")
-        if not FILE_COMMENT.search(source):
+        if not has_file_comment(source):
             missing.append(path.relative_to(ROOT).as_posix())
     for path in missing:
         print(f"{path}: missing Doxygen @file comment", file=sys.stderr)

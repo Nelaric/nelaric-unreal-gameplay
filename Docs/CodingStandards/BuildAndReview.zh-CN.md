@@ -32,8 +32,9 @@
 
 1. `python Scripts/check_text.py` 检查文本编码和换行符。
 2. `python Scripts/check_format.py` 检查 C++ 和 UE 构建脚本格式。运行前需安装锁定版本的 clang-format，并恢复本地 .NET 工具清单。
-3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有文件注释。
-4. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
+3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有 `@file` 注释。
+4. `python Scripts/check_doxygen_style.py` 检查正文 25 与 75 字符上限、单行及多行格式、多行注释每段开头的标签，以及枚举注释格式与对齐的一致性。
+5. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
 
 请求审查前，请先运行与改动相关的本地检查。PR 必须在合并前通过格式、API 文档、PR 命名和 Linux 项目编译状态。CircleCI 会编译提交的项目代码，包括来自本仓库分支的 PR。来自 Fork 的 PR 如需修改 CI 工作流、自动化脚本、Unreal 构建脚本或插件描述文件，请由维护者在源仓库分支处理。现阶段不要求 clang-tidy 或测试覆盖率门槛。
 
@@ -67,4 +68,4 @@ PR 标题必须采用与提交标题相同的格式。CI 会检查 PR 标题、�
 
 ## 审查
 
-审查时应关注正确性、版权声明、模块边界、公开 API 文档、取消与失败行为、所有权、性能和安全性。申请项目指导性规则例外的 PR 必须说明规则、原因、受影响代码和替代方案，并获得维护者批准；例外不得覆盖 Epic 的要求，也不能单独解决两套规范之间的冲突。此类冲突应通过 Issue 报告。当前 CI 通过即可满足自动检查门槛；若存在具体行为风险，仍可添加测试。
+审查时应关注正确性、版权声明、模块边界、公开 API 文档的准确性、取消与失败行为、所有权、性能和安全性。CI 检查 Doxygen 注释的机械格式；审查者判断注释是否符合实际契约。申请项目指导性规则例外的 PR 必须说明规则、原因、受影响代码和替代方案，并获得维护者批准；例外不得覆盖 Epic 的要求，也不能单独解决两套规范之间的冲突。此类冲突应通过 Issue 报告。当前 CI 通过即可满足自动检查门槛；若存在具体行为风险，仍可添加测试。

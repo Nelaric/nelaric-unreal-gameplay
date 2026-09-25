@@ -32,8 +32,9 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 
 1. `python Scripts/check_text.py` checks text encoding and line endings.
 2. `python Scripts/check_format.py` checks C++ and UE build-script formatting. Install the pinned clang-format and restore the local .NET tool manifest first.
-3. `python Scripts/check_public_docs.py` checks that every public header has a file comment.
-4. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
+3. `python Scripts/check_public_docs.py` checks that every public header has an `@file` comment.
+4. `python Scripts/check_doxygen_style.py` checks the 25- and 75-character limits, single- and multi-line forms, a tag at the start of every multi-line paragraph, and consistent enum comment style and alignment.
+5. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
 Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux project build status before merge. CircleCI builds the submitted project commit, including for branches in this repository. Fork PRs that change CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle those changes in a source-repository branch. No clang-tidy or test coverage gate is required now.
 
@@ -67,4 +68,4 @@ Human-written Markdown and LICENSE, C++ source and headers, and UE C# build scri
 
 ## Review
 
-Review correctness, copyright notices, module boundaries, public API documentation, cancellation and failure behavior, ownership, performance, and security. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.
+Review correctness, copyright notices, module boundaries, the accuracy of public API documentation, cancellation and failure behavior, ownership, performance, and security. CI checks mechanical Doxygen style; reviewers judge whether comments describe the actual contract. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.

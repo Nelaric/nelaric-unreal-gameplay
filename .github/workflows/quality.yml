@@ -64,5 +64,7 @@ jobs:
           echo "$(dirname "$doxygen_bin")" >> "$GITHUB_PATH"
       - name: Check public header comments
         run: python Scripts/check_public_docs.py
+      - name: Check Doxygen comment style
+        run: python Scripts/check_doxygen_style.py
       - name: Build API documentation
         run: python Scripts/run_doxygen.py

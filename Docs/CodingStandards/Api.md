@@ -22,6 +22,8 @@ Design public contracts for C++ first. Expose selected operations to Blueprint w
 
 ## Required API documentation
 
-All public types, methods, enums and enum values, constants, gameplay extension contracts, and Blueprint-exposed entry points must have English Doxygen comments. Explain purpose and usage; document parameters and return values, ownership and lifetime, thread expectations, and failure, timeout, and cancellation semantics when relevant. Each public header must have an `@file` or `\file` comment so file-level declarations are included in generated documentation.
+All public types, methods, enums and enum values, constants, gameplay extension contracts, and Blueprint-exposed entry points must have English Doxygen comments. Explain purpose and usage; document parameters and return values, ownership and lifetime, thread expectations, and failure, timeout, and cancellation semantics when relevant. Each public header must have an `@file` comment so file-level declarations are included in generated documentation.
+
+Follow the [Doxygen comment standard](Doxygen.md) for declaration coverage, format, content, and comment-line length.
 
 The pull request check builds Doxygen HTML and fails on warnings or undocumented public declarations. Reviewers also check whether comments explain behavior accurately; a mechanically present comment is not enough. After merge, the approved documentation is published on GitHub Pages.

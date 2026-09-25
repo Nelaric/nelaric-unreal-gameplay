@@ -11,7 +11,7 @@ from pathlib import Path
 def main() -> int:
     source = Path(sys.argv[1])
     content = source.read_text(encoding="utf-8-sig")
-    if source.name in {"README.md", "README.zh-CN.md"} and source.parent.name in {"Api", "CodingStandards"}:
+    if source.name in {"README.md", "README.zh-CN.md"} and source.parent.name in {"API", "CodingStandards"}:
         target = "README.zh-CN.md" if source.name == "README.md" else "README.md"
         content = content.replace(f"]({target})", f"](Docs/{source.parent.name}/{target})", 1)
     if source.name == "README.md" and source.parent.name == "CodingStandards":

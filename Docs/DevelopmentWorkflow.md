@@ -15,7 +15,7 @@ This page explains the checks you will see on a pull request. For guidance on pr
 
 ## Checks on a pull request
 
-GitHub Actions checks PR and commit naming, formatting and text conventions, and API documentation. CircleCI also builds the project at the exact submitted commit with Unreal Engine 5.6.1 on Linux, whether the pull request comes from a fork or this repository. Game, Editor, and Server appear as separate pull request checks: `ci/linux-game-build`, `ci/linux-editor-build`, and `ci/linux-server-build`. The existing `ci/fork-pr-linux-build` check summarizes the three jobs. You do not need a CircleCI account or any additional setup.
+GitHub Actions checks PR and commit naming, formatting and text conventions, and API documentation. The Linux build workflow first validates the PR and triggers CircleCI, then shows parallel Game, Editor, and Server jobs in the Actions run graph, followed by a result summary job. CircleCI builds the exact submitted commit with Unreal Engine 5.6.1 on Linux, whether the pull request comes from a fork or this repository. Each Actions job reports its target's result and links to the corresponding CircleCI log in its job summary. Game, Editor, and Server also appear as separate pull request checks: `ci/linux-game-build`, `ci/linux-editor-build`, and `ci/linux-server-build`. The existing `ci/fork-pr-linux-build` check summarizes the three jobs. You do not need a CircleCI account or any additional setup.
 
 The three GitHub Actions checks and the CircleCI summary check remain required before merging to `main`. The three target checks show each build result independently.
 
@@ -29,6 +29,6 @@ The project supports UE 5.6 and later, but CI currently tests only UE 5.6.1 on L
 
 ## If a check fails
 
-Open the failed check from the pull request. The Linux build status links to the matching [CircleCI pipeline](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server), which retains the project's original slug after the GitHub repository rename. There you can see which build step failed. If a check does not appear or you cannot resolve a failure, leave a comment on the pull request with the link and what you have tried.
+Open the failed target job in the GitHub Actions run to read its result summary and follow its CircleCI job log link. The [CircleCI pipeline](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server) retains the project's original slug after the GitHub repository rename. If a check does not appear or you cannot resolve a failure, leave a comment on the pull request with the link and what you have tried.
 
 The workflow definitions are available in [GitHub Actions Quality](../.github/workflows/quality.yml), [Fork PR Linux build](../.github/workflows/fork-pr-linux.yml), [API Pages](../.github/workflows/pages.yml), and [CircleCI](../.circleci/config.yml).

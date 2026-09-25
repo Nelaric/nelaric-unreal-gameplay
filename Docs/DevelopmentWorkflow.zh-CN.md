@@ -15,7 +15,7 @@
 
 ## PR 会运行哪些检查
 
-GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。Game、Editor 和 Server 会分别以 `ci/linux-game-build`、`ci/linux-editor-build` 和 `ci/linux-server-build` 显示为独立检查；原有的 `ci/fork-pr-linux-build` 检查汇总三个 Job 的结果。你不需要 CircleCI 账号，也无需额外配置。
+GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API 文档。Linux 编译工作流先验证 PR 并触发 CircleCI，然后在 Actions 运行图中并列显示 Game、Editor 和 Server 三个 Job，最后由汇总 Job 整理结果。无论 PR 来自 Fork 还是本仓库，CircleCI 都会用 Unreal Engine 5.6.1 在 Linux 上编译准确的 PR 提交。每个 Actions Job 都在自己的摘要中报告目标结果并链接到相应的 CircleCI 日志。Game、Editor 和 Server 也分别以 `ci/linux-game-build`、`ci/linux-editor-build` 和 `ci/linux-server-build` 显示为独立检查；原有的 `ci/fork-pr-linux-build` 检查汇总三个 Job 的结果。你不需要 CircleCI 账号，也无需额外配置。
 
 三个 GitHub Actions 检查与 CircleCI 汇总检查仍是合并到 `main` 的必需条件。三个 Target 检查分别显示各自的编译结果。
 
@@ -29,6 +29,6 @@ GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API
 
 ## 检查失败时
 
-从 PR 页面打开失败的检查。Linux 编译状态会链接到对应的 [CircleCI 流水线](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server)；GitHub 仓库改名后，CircleCI 项目仍使用原 slug。可在该页面查看失败的步骤。如果某项检查没有出现，或你无法解决失败问题，请在 PR 中附上链接和已经尝试过的排查步骤。
+从 PR 页面打开失败的 GitHub Actions 目标 Job，查看结果摘要并点击对应的 CircleCI Job 日志链接。[CircleCI 流水线](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server)在 GitHub 仓库改名后仍使用原项目 slug。如果某项检查没有出现，或你无法解决失败问题，请在 PR 中附上链接和已经尝试过的排查步骤。
 
 工作流配置分别位于 [GitHub Actions Quality](../.github/workflows/quality.yml)、[Fork PR Linux build](../.github/workflows/fork-pr-linux.yml)、[API Pages](../.github/workflows/pages.yml) 和 [CircleCI](../.circleci/config.yml)。

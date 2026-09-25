@@ -11,19 +11,70 @@ permissions:
   statuses: write
 
 jobs:
-  circleci-pr-build:
-    name: Trigger CircleCI Linux build
+  start:
+    name: Validate PR + start CircleCI
     if: github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.start.outputs.sha }}
+      nonce: ${{ steps.start.outputs.nonce }}
     steps:
       - name: Check out trusted main configuration
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Check PR, run CircleCI, and report result
+      - name: Validate PR and start CircleCI pipeline
+        id: start
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CIRCLECI_PR_BUILD_WEBHOOK_URL: ${{ secrets.CIRCLECI_PR_BUILD_WEBHOOK_URL }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python3 Scripts/fork_pr_build_bot.py
+        run: python3 Scripts/fork_pr_build_bot.py start
+
+  build:
+    name: Build (${{ matrix.target.label }})
+    needs: start
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { label: Game, job: build_game_linux }
+          - { label: Editor, job: build_editor_linux }
+          - { label: Server, job: build_server_linux }
+    steps:
+      - name: Check out trusted main configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Track CircleCI ${{ matrix.target.label }} build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_SHA: ${{ needs.start.outputs.sha }}
+          BUILD_NONCE: ${{ needs.start.outputs.nonce }}
+          TARGET_JOB: ${{ matrix.target.job }}
+        run: python3 Scripts/fork_pr_build_bot.py watch
+
+  summary:
+    name: Summarize Linux builds
+    needs: [start, build]
+    if: always() && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted main configuration
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Report Game, Editor, and Server results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_SHA: ${{ needs.start.outputs.sha }}
+          BUILD_NONCE: ${{ needs.start.outputs.nonce }}
+          START_RESULT: ${{ needs.start.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: python3 Scripts/fork_pr_build_bot.py finish

@@ -1,6 +1,6 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-[English](Api.md) | 简体中文
+[English](API.md) | 简体中文
 
 # 公开 API、错误与文档
 

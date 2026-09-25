@@ -4,7 +4,7 @@
 
 # Doxygen 注释规范
 
-本规范适用于项目自有的 C++ 声明及其 API 文档，并与 [Epic C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和[公开 API 契约规范](Api.zh-CN.md)共同使用。公开 API 的代码注释使用英文，向 Blueprint 暴露的声明也一样。
+本规范适用于项目自有的 C++ 声明及其 API 文档，并与 [Epic C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine)和[公开 API 契约规范](API.zh-CN.md)共同使用。公开 API 的代码注释使用英文，向 Blueprint 暴露的声明也一样。
 
 ## 目的与覆盖范围
 

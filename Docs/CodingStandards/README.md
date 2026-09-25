@@ -12,7 +12,7 @@ The supported baseline is Unreal Engine 5.6 and later. The project is a multi-mo
 
 - [C++ style and header hygiene](Cpp.md)
 - [Modules and dependency boundaries](Modules.md)
-- [Public API, errors, and documentation](Api.md)
+- [Public API, errors, and documentation](API.md)
 - [Doxygen comments](Doxygen.md)
 - [Runtime, concurrency, performance, and security](Runtime.md)
 - [Build scripts, tooling, and review](BuildAndReview.md)

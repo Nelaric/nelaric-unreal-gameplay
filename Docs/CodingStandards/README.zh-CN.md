@@ -12,7 +12,7 @@
 
 - [C++ 风格与头文件](Cpp.zh-CN.md)
 - [模块与依赖边界](Modules.zh-CN.md)
-- [公开 API、错误与文档](Api.zh-CN.md)
+- [公开 API、错误与文档](API.zh-CN.md)
 - [Doxygen 注释](Doxygen.zh-CN.md)
 - [运行时、并发、性能与安全](Runtime.zh-CN.md)
 - [构建脚本、工具与审查](BuildAndReview.zh-CN.md)

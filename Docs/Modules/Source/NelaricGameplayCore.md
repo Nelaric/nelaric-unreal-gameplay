@@ -8,6 +8,6 @@ English | [简体中文](NelaricGameplayCore.zh-CN.md)
 
 Gameplay World Settings classes used by this project must derive from `ANelaricWorldSettings`. The project config selects this class as the default World Settings class. A gameplay map that needs additional settings should use a subclass so the shared base remains available. This requirement applies to the `NelaricGameplay` project; projects that use the Foundation plugin independently choose their own World Settings class.
 
-`ANelaricWorldSettings` exposes a `WorldConfig` asset reference. Set it on each gameplay map to select a `UNelaricWorldConfig` from the Foundation plugin. The map retains the asset for its world lifetime; authority-side game code reads and enforces its policy.
+`ANelaricWorldSettings` is an empty base type. A world startup configuration selects its map through a soft reference before the map loads; maps do not select their startup policy through World Settings. Projects may subclass this base for map-specific settings.
 
-`ANelaricWorldSettings` is declared in the public `NelaricWorldSettings.h` header. The module has public dependencies on Unreal's `Core`, `CoreUObject`, and `Engine` modules because its public World Settings type derives from `AWorldSettings`; it also depends publicly on `NelaricFoundation` for the referenced asset type.
+`ANelaricWorldSettings` is declared in the public `NelaricWorldSettings.h` header. The module has public dependencies on Unreal's `Core`, `CoreUObject`, and `Engine` modules because its public World Settings type derives from `AWorldSettings`. The startup asset remains in the separate Foundation plugin, without a Core dependency until runtime startup integration is added.

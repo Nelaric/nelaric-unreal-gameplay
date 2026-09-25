@@ -4,7 +4,7 @@ English | [简体中文](Doxygen.zh-CN.md)
 
 # Doxygen Comments
 
-This standard applies to project-authored C++ declarations and their API documentation. Follow it together with [Epic's C++ coding standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [public API contract rules](Api.md). Public API comments are written in English, including comments on Blueprint-exposed declarations.
+This standard applies to project-authored C++ declarations and their API documentation. Follow it together with [Epic's C++ coding standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [public API contract rules](API.md). Public API comments are written in English, including comments on Blueprint-exposed declarations.
 
 ## Purpose and coverage
 

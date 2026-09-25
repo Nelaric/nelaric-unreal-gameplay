@@ -10,7 +10,7 @@ This standard applies to project-authored C++ declarations and their API documen
 
 Comments explain intent and observable behavior, not the spelling of a declaration or its implementation. Keep names descriptive and update comments whenever a contract changes.
 
-- **Must** document every public type, method, enum and enum value, constant, gameplay extension contract, and Blueprint-exposed entry point. Document public properties and fields, including reflected properties. Document a protected declaration when a derived type relies on its contract.
+- **Must** document every public type, gameplay-facing method in the first `public:` section, enum and enum value, constant, gameplay extension contract, and Blueprint-exposed entry point. Document public properties and fields, including reflected properties. Document a protected declaration when a derived type relies on its contract. Methods in a second `public:` section reserved for framework integration or Unreal lifecycle calls do not require Doxygen comments. No other access specifier may separate the two `public:` sections.
 - **Should** document private declarations only when their intent or invariant is not clear from the code. Use ordinary `//` comments for local implementation details when needed; they are not API documentation.
 - **Must** put each variable declaration on its own line so its meaning can be documented independently. Place a comment immediately before its declaration, except for the short trailing variable and enum comments described below. Document the public declaration once; do not repeat the same contract at its definition.
 - **Must** start each public header with a Doxygen `@file` comment after the copyright notice. This gives file-level declarations a documentation context.
@@ -117,4 +117,4 @@ enum class ETaskResult
 
 ## Review
 
-CI checks comment presence, Doxygen warnings, and mechanical comment style. Reviewers judge whether the English comments accurately describe the code contract, including relevant ownership and runtime behavior. Run the [documentation and text checks](BuildAndReview.md#local-checks) relevant to the change. A generated Doxygen page without warnings does not replace a content review.
+CI checks public-header `@file` comments, Doxygen warnings, and mechanical comment style. Reviewers check the two-section layout and judge whether the English comments accurately describe the gameplay contract, including relevant ownership and runtime behavior. Run the [documentation and text checks](BuildAndReview.md#local-checks) relevant to the change. A generated Doxygen page without warnings does not replace a content review.

@@ -19,7 +19,7 @@ The supported baseline is Unreal Engine 5.6 and later. The project is a multi-mo
 
 The [copyright notice rule](BuildAndReview.md#copyright-notices) applies to every project-authored file, subject to format-specific exceptions.
 
-**Must** is mandatory. **Should** is the default unless a PR explains a justified exception. **May** is optional. Public API means declarations intended for use outside their owning module, including gameplay extension contracts and Blueprint-exposed entry points.
+**Must** is mandatory. **Should** is the default unless a PR explains a justified exception. **May** is optional. Public API means declarations intended for gameplay callers outside their owning implementation, including gameplay extension contracts and Blueprint-exposed entry points. A second `public:` section may expose framework-only methods for C++ integration without making them gameplay API.
 
 ## Compliance and conflicts
 

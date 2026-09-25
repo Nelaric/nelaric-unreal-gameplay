@@ -6,7 +6,7 @@ English | [简体中文](CONTRIBUTING.zh-CN.md)
 
 Thank you for helping build Nelaric Unreal Gameplay. Reports, design feedback, documentation improvements, and code contributions are welcome in English or Chinese.
 
-The tracked `NelaricGameplay/` project is the development entry point. The local validation project under `Development/` remains excluded from Git. Describe the developer problem and intended gameplay workflow when proposing a capability.
+The `NelaricGameplay/` directory contains the framework's Unreal project. Describe the developer problem and intended gameplay workflow when proposing a capability.
 
 ## Before opening an issue
 

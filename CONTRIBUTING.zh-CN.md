@@ -6,7 +6,7 @@
 
 感谢你参与 Nelaric Unreal Gameplay。我们欢迎使用英语或中文提交问题报告、设计反馈、文档改进和代码贡献。
 
-纳入版本控制的 `NelaricGameplay/` 项目是开发入口。`Development/` 下的本地验证工程仍不纳入 Git。提出新能力时，请说明开发者遇到的问题和预期的玩法制作流程。
+`NelaricGameplay/` 目录包含框架的 Unreal 项目。提出新能力时，请说明开发者遇到的问题和预期的玩法制作流程。
 
 ## 创建 Issue 前
 

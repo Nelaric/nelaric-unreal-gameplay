@@ -9,6 +9,5 @@ public class NelaricGameplayCore : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
-		PublicDependencyModuleNames.Add("NelaricFoundation");
 	}
 }

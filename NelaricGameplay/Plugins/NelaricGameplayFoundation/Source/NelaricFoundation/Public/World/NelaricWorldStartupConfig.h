@@ -1,14 +1,17 @@
 ﻿// Copyright (c) 2026 Nelaric
 
-/** @file NelaricWorldConfig.h
- * Declares authored world and activity participation policy.
+/** @file NelaricWorldStartupConfig.h
+ * Declares the map and authored policy selected before starting a world.
  */
 
 #pragma once
 
 #include "Engine/DataAsset.h"
+#include "UObject/SoftObjectPtr.h"
 
-#include "NelaricWorldConfig.generated.h"
+#include "NelaricWorldStartupConfig.generated.h"
+
+class UWorld;
 
 /// Determines how a local activity begins after its player gate is met.
 UENUM(BlueprintType)
@@ -32,20 +35,24 @@ enum class ENelaricActivityJoinInProgressPolicy : uint8
 	Participate,
 };
 
-/** @brief Authored player and activity policy for a gameplay world.
+/** @brief Map and authored player and activity policy for a gameplay world.
  *
- * @details A consuming project creates this asset and selects it for a
- * world. Activity fields provide defaults for local activities in that
- * world. The asset stores policy, not replicated runtime state. It does
- * not admit players, activate gameplay, or start activities by itself.
- * Authority-side gameplay code reads and applies it on the game thread.
+ * @details A consuming project creates this asset and selects it before
+ * loading the referenced map. Activity fields provide defaults for local
+ * activities. The asset stores startup policy, not replicated runtime
+ * state. Authority-side gameplay code validates and applies it on the
+ * game thread. The startup owner retains the asset for the world lifetime.
  */
 UCLASS(BlueprintType)
-class NELARICFOUNDATION_API UNelaricWorldConfig : public UDataAsset
+class NELARICFOUNDATION_API UNelaricWorldStartupConfig : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
 
 public:
+	/// Map to load after selecting and validating this startup config.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "World|Startup", meta = (AssetBundles = "World"))
+	TSoftObjectPtr<UWorld> WorldMap;
+
 	/** @brief Players required to activate world gameplay; 0 has no gate.
 	 *
 	 * @details The world can load and admit players before this threshold.
@@ -107,4 +114,15 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Nelaric|Activity")
 	bool HasValidActivityParticipantLimits() const;
+
+	/** @brief Checks the complete authored startup configuration.
+	 *
+	 * @details Call on the game thread before loading the map. This checks
+	 * the map reference and policy values, but not whether the map can be
+	 * loaded or whether server capacity can accommodate the policy.
+	 *
+	 * @return True if the map reference and authored policy are valid.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Nelaric|World")
+	bool HasValidStartupConfig() const;
 };

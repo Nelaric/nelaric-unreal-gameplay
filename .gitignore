@@ -22,6 +22,10 @@ __pycache__/
 venv/
 node_modules/
 /NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/
+/NelaricGameplay/Content/JavaScript/
+/NelaricGameplay/Typing/
+/NelaricGameplay/tsconfig.json
+/NelaricGameplay/Config/DefaultPuerts.ini
 .gradle/
 
 # Local agent instructions, workspaces, and caches

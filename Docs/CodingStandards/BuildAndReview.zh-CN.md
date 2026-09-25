@@ -32,7 +32,7 @@
 
 1. `python Scripts/check_text.py` 检查文本编码和换行符。
 2. `python Scripts/check_format.py` 检查 C++ 和 UE 构建脚本格式。运行前需安装锁定版本的 clang-format，并恢复本地 .NET 工具清单。
-3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有 `@file` 注释。
+3. `python Scripts/check_public_docs.py` 检查每个公开头文件是否有 `@file` 注释，并检查各类第一个 `public:` 区域的方法是否有 Doxygen 注释；若第一段与第二段 `public:` 之间出现其他访问说明符，则检查失败。第二段不检查方法注释。
 4. `python Scripts/check_doxygen_style.py` 检查正文 25 与 75 字符上限、单行及多行格式、多行注释每段开头的标签，以及枚举注释格式与对齐的一致性。
 5. `python Scripts/run_doxygen.py` 构建 API 网站，并在 Doxygen 警告出现时失败。运行前需安装锁定版本的 Doxygen。
 

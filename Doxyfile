@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nelaric
 PROJECT_NAME           = "Nelaric Unreal Gameplay"
 PROJECT_BRIEF          = "Gameplay framework API"
 OUTPUT_DIRECTORY       = .tools/api-docs
@@ -16,8 +17,9 @@ GENERATE_XML           = NO
 EXTRACT_ALL            = NO
 EXTRACT_PRIVATE        = NO
 EXTRACT_STATIC         = NO
+HIDE_UNDOC_MEMBERS      = YES
 WARNINGS               = YES
-WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_UNDOCUMENTED   = NO
 WARN_IF_DOC_ERROR      = YES
 WARN_IF_INCOMPLETE_DOC = YES
 WARN_NO_PARAMDOC       = YES

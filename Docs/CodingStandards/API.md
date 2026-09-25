@@ -28,4 +28,4 @@ All public types, gameplay-facing methods in the first `public:` section, enums 
 
 Follow the [Doxygen comment standard](Doxygen.md) for declaration coverage, format, content, and comment-line length.
 
-Reviewers check that methods in the first `public:` section have useful Doxygen comments and that no other access specifier separates the two sections. The pull request check builds Doxygen HTML and fails on documentation warnings. Tooling must be aligned with this distinction before framework-only methods are left undocumented in a submitted change. After merge, the approved documentation is published on GitHub Pages.
+The pull request check requires Doxygen comments on methods in the first `public:` section and builds Doxygen HTML, failing on documentation errors and warnings. The repository checker distinguishes the two sections; Doxygen automatically hides undocumented members. Reviewers still check that gameplay-facing comments explain behavior accurately. After merge, the approved documentation is published on GitHub Pages.

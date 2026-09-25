@@ -8,7 +8,7 @@ An Unreal Engine gameplay framework for persistent worlds and bounded activities
 
 ## Project layout
 
-The version-controlled [NelaricGameplay/](NelaricGameplay/) directory is the Unreal project for the framework. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains the bootstrap code and Game, Editor, and Server targets. Shared gameplay contracts live in `Plugins/NelaricGameplayFoundation/`, while `Config/` holds project defaults. Consuming games and optional features provide their own rules and presentation.
+The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains the bootstrap code and Game, Editor, and Server targets. Shared gameplay contracts live in `Plugins/NelaricGameplayFoundation/`, while `Config/` holds project defaults. Consuming games and optional features provide their own rules and presentation.
 
 Linux CI builds this project for Game, Editor, and Server, including the enabled Foundation plugin.
 

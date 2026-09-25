@@ -3,11 +3,11 @@ PROJECT_BRIEF          = "Gameplay framework API"
 OUTPUT_DIRECTORY       = .tools/api-docs
 CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English
-INPUT                  = Docs/Api Docs/CodingStandards
+INPUT                  = Docs/API Docs/CodingStandards
 FILTER_PATTERNS        = *.md="python Scripts/doxygen_markdown_filter.py"
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hpp *.md
-USE_MDFILE_AS_MAINPAGE = Docs/Api/README.md
+USE_MDFILE_AS_MAINPAGE = Docs/API/README.md
 MARKDOWN_SUPPORT       = YES
 GENERATE_HTML          = YES
 HTML_OUTPUT            = html

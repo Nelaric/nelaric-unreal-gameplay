@@ -7,3 +7,7 @@ English | [简体中文](README.zh-CN.md)
 Nelaric Unreal Gameplay is a gameplay framework for Unreal Engine 5.6 and later. Its public contracts support gameplay development across standalone, listen-server, and dedicated-server topologies.
 
 Public APIs follow the [project coding standards](../CodingStandards/README.md), including the rules for gameplay extension contracts, ownership, errors, and documentation.
+
+## Design
+
+- [Network sessions and authority transitions](Core/NetWork/NetworkSessionTransitions.md)

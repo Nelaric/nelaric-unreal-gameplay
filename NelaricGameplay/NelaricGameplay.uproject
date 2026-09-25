@@ -5,7 +5,7 @@
 	"Description": "Genre-independent Unreal Engine gameplay framework project.",
 	"Modules": [
 		{
-			"Name": "NelaricGameplay",
+			"Name": "NelaricGameplayCore",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

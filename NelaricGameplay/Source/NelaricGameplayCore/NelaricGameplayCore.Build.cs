@@ -2,12 +2,13 @@
 
 using UnrealBuildTool;
 
-public class NelaricFoundation : ModuleRules
+public class NelaricGameplayCore : ModuleRules
 {
-	public NelaricFoundation(ReadOnlyTargetRules Target)
+	public NelaricGameplayCore(ReadOnlyTargetRules Target)
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine" });
+		PublicDependencyModuleNames.Add("NelaricFoundation");
 	}
 }

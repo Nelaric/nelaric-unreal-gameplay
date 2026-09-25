@@ -10,6 +10,6 @@ public class NelaricGameplayServerTarget : TargetRules
 		Type = TargetType.Server;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_6;
-		ExtraModuleNames.Add("NelaricGameplay");
+		ExtraModuleNames.Add("NelaricGameplayCore");
 	}
 }

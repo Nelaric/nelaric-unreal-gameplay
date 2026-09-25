@@ -8,7 +8,7 @@
 
 ## 项目结构
 
-[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 包含启动代码及 Game、Editor、Server Target；通用玩法契约位于 `Plugins/NelaricGameplayFoundation/`，`Config/` 保存项目默认配置。接入游戏和可选功能负责各自的具体规则与表现。
+[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 包含启动代码及 Game、Editor、Server Target。
 
 Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 Foundation 插件。
 

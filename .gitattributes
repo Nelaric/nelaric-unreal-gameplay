@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nelaric
 # Git stores normalized text; checked-out code and prose use CRLF.
 *.md text eol=crlf
 *.h text eol=crlf
@@ -19,3 +20,8 @@ Doxyfile text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 *.py text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# Preserve the upstream PuerTS source and license byte-for-byte.
+NelaricGameplay/Plugins/Puerts/** -text -eol

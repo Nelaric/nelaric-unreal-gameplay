@@ -12,6 +12,20 @@ The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unre
 
 Linux CI builds this project for Game, Editor, and Server, including the enabled Core and Foundation plugins.
 
+## PuerTS setup
+
+The repository includes the PuerTS Unreal plugin source. After cloning, run **one** Setup script for your operating system from the repository root:
+
+| System | Command |
+| --- | --- |
+| Windows x64 | `powershell -NoProfile -ExecutionPolicy Bypass -File .\Setup\Windows\Setup.ps1` |
+| Linux x86_64 | `sh ./Setup/Linux/Setup.sh` |
+| macOS x86_64 or arm64 | `sh ./Setup/macOS/Setup.sh` |
+
+Install Node.js with npm first. The script also needs network access, `curl` and `tar`; Linux needs `sha256sum`, and macOS needs `shasum`. No separate npm or PuerTS setup command is needed. The script downloads the V8 9.4 backend from the official [PuerTS Unreal 1.0.9 release](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9), verifies its SHA-256 digest, installs the backend and its [license](Setup/V8-LICENSE), prepares the TypeScript editor tooling, and enables PuerTS in the local `.uproject`. It can be run again after an interrupted setup.
+
+The backend binaries and download cache stay local and are excluded from Git. Setup changes the tracked `.uproject` only in your working tree; keep its `Puerts` entry disabled in shared commits unless CI is configured to install the backend too. PuerTS's own [license](NelaricGameplay/Plugins/Puerts/LICENSE) is included with the plugin source. The setup enables editor TypeScript compilation and script hot reload; production content delivery and version activation are separate from this developer setup.
+
 See the [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.md), [NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.md), and [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module descriptions for their responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
 
 ## Contributing

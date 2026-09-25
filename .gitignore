@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nelaric
 # Unreal Engine generated output (also inside plugins)
 Binaries/
 DerivedDataCache/
@@ -20,6 +21,7 @@ __pycache__/
 .venv/
 venv/
 node_modules/
+/NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/
 .gradle/
 
 # Local agent instructions, workspaces, and caches

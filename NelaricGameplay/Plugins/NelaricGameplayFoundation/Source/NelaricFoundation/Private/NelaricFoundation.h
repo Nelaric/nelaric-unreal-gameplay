@@ -4,7 +4,7 @@
 
 #include "Modules/ModuleManager.h"
 
-class FNelaricCoreModule : public IModuleInterface
+class FNelaricFoundationModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override;

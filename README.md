@@ -4,19 +4,15 @@ English | [简体中文](README.zh-CN.md)
 
 # Nelaric Unreal Gameplay
 
-An Unreal Engine gameplay framework for building game modes that run in standalone play, listen servers, and dedicated servers, with versioned gameplay content delivery.
+An Unreal Engine gameplay framework for persistent worlds and bounded activities across standalone play, listen servers, and dedicated servers, with versioned gameplay content delivery.
 
 ## Project layout
 
-Open [NelaricGameplay/NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. This tracked project is the development entry point. Its `Source/` directory contains only project bootstrap code and Game, Editor, and Server targets; reusable gameplay mechanisms belong in `Plugins/NelaricGameplayCore/`. `Config/` contains shared project defaults. Game-specific rules and presentation belong in consuming games or optional features.
+The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains the bootstrap code and Game, Editor, and Server targets.
 
-The local `Development/` validation project remains excluded from Git. Linux CI builds the tracked project's Game, Editor, and Server targets, including the enabled Core plugin.
+Linux CI builds this project for Game, Editor, and Server, including the enabled Foundation plugin.
 
-The Editor and Game targets build with the installed UE 5.6 distribution. Building the Server target requires an engine distribution with server-target support; the installed launcher distribution does not provide it.
-
-See the [NelaricCore module description](Docs/Modules/NelaricCore.md) for its current responsibility and dependencies.
-
-The [core architecture constraints](Docs/CoreArchitectureConstraints.md) define the gameplay model, network topologies, and content-update boundaries.
+For the module's responsibilities and dependencies, see the [NelaricFoundation module description](Docs/Modules/NelaricFoundation.md). The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
 
 ## Contributing
 

@@ -23,7 +23,7 @@
 ## Unreal 构建脚本
 
 - 对 `.Build.cs` 和 `.Target.cs` 运行 CSharpier。它与 C++ 的 clang-format 一样属于强制要求。
-- 模块依赖应保持最少，并依据公开头文件的实际需要区分公开与私有依赖。不要在 Core 中加入厂商 SDK 依赖。
+- 模块依赖应保持最少，并依据公开头文件的实际需要区分公开与私有依赖。不要在 Foundation 中加入厂商 SDK 依赖。
 - 面向 UE 5.6 及以上版本。引擎编译 CI 应同时覆盖最低支持版本和最新支持版本。CircleCI 在 PR 合并前使用 UE 5.6.1 编译 Linux 上的 Game、Editor 和 Server Target；最新支持版本仍是覆盖缺口。详见 `Docs/DevelopmentWorkflow.zh-CN.md`。
 
 ## 本地检查

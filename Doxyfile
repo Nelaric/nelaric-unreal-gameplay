@@ -1,5 +1,5 @@
-PROJECT_NAME           = "Nelaric Unreal Server"
-PROJECT_BRIEF          = "Dedicated Server framework API"
+PROJECT_NAME           = "Nelaric Unreal Gameplay"
+PROJECT_BRIEF          = "Gameplay framework API"
 OUTPUT_DIRECTORY       = .tools/api-docs
 CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English

@@ -10,7 +10,7 @@
 
 ## Design and compatibility | 设计与兼容性
 
-<!-- Describe any Core/Provider boundary, public API, behavior, or Unreal Engine 5.6+ compatibility impact. Write "None" for a documentation-only change. | 说明对 Core/Provider 边界、公开 API、行为或 Unreal Engine 5.6+ 兼容性的影响。仅修改文档时填写 "None"。 -->
+<!-- Describe any Foundation/Provider boundary, public API, behavior, or Unreal Engine 5.6+ compatibility impact. Write "None" for a documentation-only change. | 说明对 Foundation/Provider 边界、公开 API、行为或 Unreal Engine 5.6+ 兼容性的影响。仅修改文档时填写 "None"。 -->
 
 ## Verification | 验证
 

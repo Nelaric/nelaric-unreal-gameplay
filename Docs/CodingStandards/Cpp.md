@@ -18,7 +18,7 @@ Use tabs for block indentation in C++ and UE C# build scripts, with a tab width 
 ## Headers and dependencies
 
 - Public headers must be self-contained: a consumer can include one without relying on incidental include order. Include what the declaration needs and forward-declare where that is sufficient.
-- Put implementation-only includes and declarations in `Private`. A Core public header must not include a concrete optional integration or vendor SDK header.
+- Put implementation-only includes and declarations in `Private`. A Foundation public header must not include a concrete optional integration or vendor SDK header.
 - Keep header dependencies small. Do not use a broad include solely to obtain a forward-declarable type.
 - Follow Unreal Header Tool requirements for reflected declarations, including the placement of generated headers. These requirements take precedence over mechanical include sorting.
 

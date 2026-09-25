@@ -19,7 +19,7 @@
 
 [版权声明规则](BuildAndReview.zh-CN.md)适用于所有项目自有文件，但需遵守文件格式规定的例外。
 
-<strong>Must（必须）</strong> 表示强制要求。<strong>Should（应该）</strong> 是默认做法，除非 PR 给出合理的例外说明。<strong>May（可以）</strong> 是可选项。“公开 API”指供所属模块之外使用的声明，包括玩法扩展契约和向 Blueprint 暴露的入口。
+<strong>Must（必须）</strong> 表示强制要求。<strong>Should（应该）</strong> 是默认做法，除非 PR 给出合理的例外说明。<strong>May（可以）</strong> 是可选项。“公开 API”指面向玩法调用方的声明，包括玩法扩展契约和向 Blueprint 暴露的入口。第二个 `public:` 区域可以为 C++ 框架集成开放内部方法，但不因此成为玩法 API。
 
 ## 规范遵循与冲突
 

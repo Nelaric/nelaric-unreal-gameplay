@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Nelaric
 """Check the repository's explicit UTF-8 and newline rules without rewriting files."""
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ BOM = b"\xef\xbb\xbf"
 CRLF_SUFFIXES = {".md", ".h", ".hpp", ".cpp", ".cc", ".cxx", ".cs"}
 LF_SUFFIXES = {".json", ".yml", ".yaml", ".py"}
 LF_NAMES = {".gitattributes", ".gitignore", ".editorconfig", ".clang-format", ".csharpierrc", "Doxyfile"}
+VENDORED_ROOTS = {Path("NelaricGameplay/Plugins/Puerts")}
 
 
 def repository_files() -> list[Path]:
@@ -21,7 +23,13 @@ def repository_files() -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [ROOT / name.decode("utf-8") for name in result.stdout.split(b"\0") if name]
+    return [
+        ROOT / relative
+        for name in result.stdout.split(b"\0")
+        if name
+        for relative in [Path(name.decode("utf-8"))]
+        if not any(relative.is_relative_to(vendor) for vendor in VENDORED_ROOTS)
+    ]
 
 
 def main() -> int:

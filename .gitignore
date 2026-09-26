@@ -23,6 +23,11 @@ __pycache__/
 .venv/
 venv/
 node_modules/
+obj/
+/NelaricGameplay/Content/JavaScript/
+/NelaricGameplay/Typing/
+/NelaricGameplay/tsconfig.json
+/NelaricGameplay/Config/DefaultPuerts.ini
 .gradle/
 
 # Local agent instructions, workspaces, and caches

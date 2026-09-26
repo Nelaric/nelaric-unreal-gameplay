@@ -14,7 +14,7 @@
 
 ## 项目结构
 
-[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 只保留最小主游戏模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplayFoundation` 插件的 `NelaricFoundation` 模块中。
+[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/README.zh-CN.md) 包含四个互不依赖的玩法模板模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplayFoundation` 插件的 `NelaricFoundation` 模块中。
 
 Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 Core、Foundation 和 PuerTS 插件。
 

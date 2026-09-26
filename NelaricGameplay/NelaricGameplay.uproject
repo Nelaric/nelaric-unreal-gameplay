@@ -5,7 +5,22 @@
 	"Description": "Genre-independent Unreal Engine gameplay framework project.",
 	"Modules": [
 		{
-			"Name": "NelaricGameplay",
+			"Name": "NelaricOpenWorldTemplate",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NelaricBattleRoyaleTemplate",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NelaricMobaTemplate",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "NelaricSandboxTemplate",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

@@ -1,8 +1,11 @@
+# Copyright (c) 2026 Nelaric
+
 # Unreal Engine generated output (also inside plugins)
 Binaries/
 DerivedDataCache/
 Intermediate/
 Saved/
+/NelaricGameplay/Config/DefaultInput.ini
 
 # Local Unreal development project
 /Development/
@@ -53,6 +56,7 @@ node_modules/
 .vscode/
 .fleet/
 *.iml
+*.DotSettings.user
 cmake-build-*/
 CMakeFiles/
 

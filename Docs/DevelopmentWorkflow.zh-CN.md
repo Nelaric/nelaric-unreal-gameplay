@@ -23,9 +23,9 @@ GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API
 
 ## Linux 编译的范围
 
-一次 CircleCI 流水线会同时启动三个独立的 Linux Job，使用 Unreal Engine 5.6.1 构建 `NelaricGameplay/NelaricGameplay.uproject`，分别以 Development 配置编译 `NelaricGameplay`（Game）、`NelaricGameplayEditor`（Editor）和 `NelaricGameplayServer`（Server）Target。每个 Job 都会检出同一 PR 提交并使用独立工作区，避免 Unreal 构建产物冲突。已启用的 Core、Foundation 和 PuerTS 插件会随项目一起编译。PuerTS 使用仓库内的 V8 后端；这些编译不会运行 Setup 或安装编辑器 TypeScript 工具。只有三个 Job 都成功，工作流才会成功。工作流不发布可下载的打包产物；每个 Job 都会重新下载引擎镜像，且不使用编译缓存。
+一次 CircleCI 流水线会同时启动三个独立的 Linux Job，使用 Unreal Engine 5.6.1 构建 `NelaricGameplay/NelaricGameplay.uproject`，分别以 Development 配置编译 `NelaricGameplay`（Game）、`NelaricGameplayEditor`（Editor）和 `NelaricGameplayServer`（Server）Target。Editor Target 编译完成后，其 Job 会运行 `Nelaric.*` 层级中与 Editor 兼容的自动化测试；导出报告中出现失败或未运行的测试时，该 Job 会失败。如果当前尚未注册此类测试，Job 会明确报告。每个 Job 都会检出同一 PR 提交并使用独立工作区，避免 Unreal 构建产物冲突。已启用的 Core、Foundation 和 PuerTS 插件会随项目一起编译。PuerTS 使用仓库内的 V8 后端；这些编译不会运行 Setup 或安装编辑器 TypeScript 工具。只有三个 Job 都成功，工作流才会成功。工作流不发布可下载的打包产物；每个 Job 都会重新下载引擎镜像，且不使用编译缓存。
 
-项目支持 UE 5.6 及以上版本，但 CI 目前仅验证 Linux 上的 UE 5.6.1。对最新支持版本的验证仍是[构建覆盖缺口](CodingStandards/BuildAndReview.zh-CN.md#unreal-构建脚本)。现阶段不设自动化测试覆盖率要求。
+项目支持 UE 5.6 及以上版本，但 CI 目前仅验证 Linux 上的 UE 5.6.1。对最新支持版本的验证仍是[构建覆盖缺口](CodingStandards/BuildAndReview.zh-CN.md#unreal-构建脚本)。每项独立框架功能都必须有自动化测试，但不设数值化的代码覆盖率门槛。
 
 ## 检查失败时
 

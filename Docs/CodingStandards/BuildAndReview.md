@@ -32,7 +32,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 
 1. `python Scripts/check_text.py` checks text encoding and line endings.
 2. `python Scripts/check_format.py` checks C++ and UE build-script formatting. Install the pinned clang-format and restore the local .NET tool manifest first.
-3. `python Scripts/check_public_docs.py` checks that every public header has an `@file` comment.
+3. `python Scripts/check_public_docs.py` checks every public header for an `@file` comment and methods in each class's first `public:` section for Doxygen comments. It rejects another access specifier between the first and second `public:` sections. The second section is not checked for method comments.
 4. `python Scripts/check_doxygen_style.py` checks the 25- and 75-character limits, single- and multi-line forms, a tag at the start of every multi-line paragraph, and consistent enum comment style and alignment.
 5. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 

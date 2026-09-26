@@ -19,7 +19,7 @@
  * World Settings on the game thread like other world actors.
  */
 UCLASS(Blueprintable)
-class NELARICGAMEPLAYCORE_API ANelaricWorldSettings : public AWorldSettings
+class NELARICFOUNDATION_API ANelaricWorldSettings : public AWorldSettings
 {
 	GENERATED_BODY()
 };

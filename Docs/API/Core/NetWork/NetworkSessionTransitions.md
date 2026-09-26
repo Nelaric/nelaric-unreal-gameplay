@@ -31,6 +31,46 @@ A transition does not necessarily change maps. World travel, network-role change
 
 A server-led map change within the same authority and a client-initiated move to another server have different ownership of the travel decision. The transition must preserve that distinction. A dedicated server starts and loads its configured local world as a server process; it is not a runtime destination mode for a client or listen-server process.
 
+## Authority confirmation before execution
+
+`RequestTransition` records intent and returns a handle; it does not authorize
+travel or a network-role change. The source authority must approve departure,
+and the destination authority must approve admission and reserve any required
+capacity. For a standalone endpoint, the local authoritative world makes that
+endpoint's decision. A client cannot substitute its own approval for a remote
+authority. Host shutdown or a server-led map change likewise starts from the
+server's decision, not from a client request alone.
+
+The coordinator correlates both confirmations with the same request identity,
+source session generation, destination identity, and deadline. It validates
+the confirmations and destination reservation immediately before execution.
+Only then may it invoke travel, open or close listening, or hand off gameplay
+authority. A refusal, lost authority, mismatched or expired confirmation, or
+timeout ends the request without starting those actions. Cancellation before
+execution releases a destination reservation. If execution has started,
+cancellation cannot promise to undo completed Unreal travel.
+
+Approval is separate from completion. After execution, the coordinator still
+verifies the resulting world, connection, runtime state, and authority before
+reporting success. A network mode alone cannot identify a destination server
+or prove either approval. The destination and approval transport must be
+provided by the consuming session integration; a GameInstance subsystem is
+not itself a client-owned RPC endpoint.
+
+The current project integration handles client-to-client moves through a
+PlayerController RPC and a target Online Beacon. Its target decision currently
+returns `true` while active `WorldStartupConfig.MaxPlayers` retrieval is left
+at `TODO(NELARIC-TRANSITION-CAPACITY-INTEGRATION)`. It does not yet reserve
+capacity or validate a reservation at `PreLogin`; those safeguards above
+remain requirements for enforcing a real destination capacity limit.
+
+Callers provide a `FTransitionDestination` containing two generic
+`FNetworkEndpoint` values. Each endpoint has a host address and port: the game
+endpoint selects the travel connection, and the beacon endpoint selects the
+target approval channel. The destination server must listen on the supplied
+beacon port; `ANelaricGameModeBase::TransitionBeaconListenPort` defaults to
+15000 and can be configured for that server.
+
 ## Starting and admitting a world
 
 A startup owner selects and retains a world startup configuration before loading its map. The configuration defines the authored map and player policy, not the current network role or replicated runtime state. The owner validates the configuration and target capacity before travel. Once the destination world and its intended role are confirmed, the authority creates its runtime state and applies the startup policy. Admission stays closed until that preparation is complete; the configured initial admission policy then determines whether it opens.

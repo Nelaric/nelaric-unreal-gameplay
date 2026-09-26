@@ -8,7 +8,7 @@
 
 ## 项目结构
 
-[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 包含 `NelaricGameplayCore` 运行时模块及 Game、Editor、Server Target。
+[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 `Source/` 只保留最小主游戏模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplayFoundation` 插件的 `NelaricFoundation` 模块中。
 
 Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 Core、Foundation 和 PuerTS 插件。
 
@@ -36,7 +36,7 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用
 
 体积最大的 V8 Windows 静态库和 Node.js 运行时二进制文件通过 Git LFS 存储，其余后端文件直接纳入 Git。克隆前请安装 Git LFS，以便检出这些二进制文件。如果检出的是 V8 Windows 库的 LFS 指针，Windows Setup 会获取实际文件。下载缓存仅保留在本机。PuerTS 已启用；需要编辑器 TypeScript 工具时，每次克隆运行一次 Setup。Linux CI 无需运行 Setup，就会使用仓库内默认的 V8 后端编译 PuerTS。仓库保留了 [PuerTS](NelaricGameplay/Plugins/Puerts/LICENSE)、[V8](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE)、[QuickJS](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE) 和 [Node.js](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) 的许可证。该配置支持编辑器内的 TypeScript 编译和脚本热重载；正式环境的内容交付与版本激活需另行实现。
 
-模块职责和依赖见 [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.zh-CN.md)、[NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.zh-CN.md) 与 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
+模块职责和依赖见 [NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.zh-CN.md) 与 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
 
 ## 参与贡献
 

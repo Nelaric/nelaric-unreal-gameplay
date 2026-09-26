@@ -8,7 +8,7 @@ An Unreal Engine gameplay framework for persistent worlds and bounded activities
 
 ## Project layout
 
-The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains the `NelaricGameplayCore` runtime module and Game, Editor, and Server targets.
+The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's `Source/` contains a minimal primary game module and Game, Editor, and Server targets. The reusable runtime code lives in the `NelaricFoundation` module of the `NelaricGameplayFoundation` plugin.
 
 Linux CI builds this project for Game, Editor, and Server, including the enabled Core, Foundation, and PuerTS plugins.
 
@@ -36,7 +36,7 @@ Install Node.js with npm first. Setup also needs network access, `curl`, and `ta
 
 The largest V8 Windows static library and the Node.js runtime binaries are stored in Git LFS; other backend files are stored directly in Git. Install Git LFS before cloning so these binaries are checked out. If the Windows V8 checkout contains an LFS pointer, Windows Setup retrieves that library. The download cache stays local. PuerTS is already enabled; run Setup once per clone when you need the editor TypeScript tooling. Linux CI compiles PuerTS with the bundled default V8 backend without running Setup. PuerTS's own [license](NelaricGameplay/Plugins/Puerts/LICENSE), the [V8 license](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE), the [QuickJS license](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE), and the [Node.js license](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) are retained. This setup supports editor TypeScript compilation and script hot reload; production content delivery and version activation require separate implementation.
 
-See the [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.md), [NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.md), and [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module descriptions for their responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
+See the [NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.md) and [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module descriptions for their responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
 
 ## Contributing
 

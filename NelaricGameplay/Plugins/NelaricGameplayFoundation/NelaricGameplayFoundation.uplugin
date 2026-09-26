@@ -23,10 +23,6 @@
 	],
 	"Plugins": [
 		{
-			"Name": "NelaricCore",
-			"Enabled": true
-		},
-		{
 			"Name": "OnlineSubsystemUtils",
 			"Enabled": true
 		}

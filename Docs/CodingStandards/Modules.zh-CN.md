@@ -17,6 +17,6 @@
 
 ## 内部集成约定
 
-必须跨模块可见的框架内部 C++ 方法可以接收 `const Nelaric::FInternalAccessKey&`。统一的 Key 和 `FInternalAccess::Key()` 位于 `NelaricCore/Public/Internal/`，正常依赖 `NelaricCore` 的模块均可调用。此类方法放在框架集成用的第二个 `public:` 区域，以名称标明内部用途；Key 不参与反射，因此不要把它作为 `UFUNCTION` 参数。不要只为取得 Key 而引入继承。
+Foundation 公开头文件中供模块内部调用的 C++ 集成方法可以接收 `const Nelaric::FFoundationInternalAccessKey&`。Key 和 `FFoundationInternalAccess::Key()` 位于 `NelaricFoundation/Private/Internal/`，仅供该模块的实现使用。此类方法放在框架集成用的第二个 `public:` 区域，以名称标明内部用途；Key 不参与反射，因此不要把它作为 `UFUNCTION` 参数。不要只为取得 Key 而引入继承。
 
-这是面向开源框架的可识别使用约定，不是授权边界。框架使用者通常不得通过此 Key 调用内部方法，应优先使用受支持的玩法公开 API；只有公开 API 确实无法满足需求时，才将直接访问内部方法作为万不得已的办法。玩法作者可以有意包含内部头文件，但内部方法可能随实现变化。公开头文件使用 Key 时，应公开依赖 `NelaricCore`；仅实现文件使用时，私有依赖即可。依赖该插件的其他插件还应声明插件依赖。
+Key 用于标记 Foundation 模块内的实现调用，不是授权边界。公开头文件可在 C++ 集成方法签名中前置声明 `Nelaric::FFoundationInternalAccessKey`，但不得包含私有定义，也不得向玩法模块提供取得 Key 的入口。调用方应位于所属模块的 `Private` 目录。框架使用者应使用受支持的玩法公开 API。未来若需跨模块集成，应单独设计并记录公开契约及其模块依赖。

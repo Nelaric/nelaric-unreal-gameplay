@@ -6,18 +6,18 @@
 
 `NelaricCore` 是 `NelaricGameplay/Plugins/NelaricCore` 插件中的运行时模块。项目在 Game、Editor 和 Server Target 中启用该插件。模块提供供多个框架模块按约定使用的统一 C++ Passkey，直接依赖只有 Unreal 的 `Core` 模块。
 
-在公开头文件中包含 `Internal/InternalAccessKey.h`，并让普通 C++ 框架集成方法接收 `const UE::Nelaric::FInternalAccessKey&`。任何依赖 `NelaricCore` 的模块都可以包含 `Internal/InternalAccess.h`，调用时传入 `UE::Nelaric::FInternalAccess::Key()`。不要将带有此参数的方法标记为 `UFUNCTION`：Key 不是可反射的 `USTRUCT`。Blueprint 入口应单独设计。
+在公开头文件中包含 `Internal/InternalAccessKey.h`，并让普通 C++ 框架集成方法接收 `const Nelaric::FInternalAccessKey&`。任何依赖 `NelaricCore` 的模块都可以包含 `Internal/InternalAccess.h`，调用时传入 `Nelaric::FInternalAccess::Key()`。不要将带有此参数的方法标记为 `UFUNCTION`：Key 不是可反射的 `USTRUCT`。Blueprint 入口应单独设计。
 
 ```cpp
 // 公开头文件中，框架类的第二个 public 区域。
-void InternalInitialize(const UE::Nelaric::FInternalAccessKey& Access);
+void InternalInitialize(const Nelaric::FInternalAccessKey& Access);
 ```
 
 ```cpp
 // 依赖 NelaricCore 的模块的实现文件。
 #include "Internal/InternalAccess.h"
 
-Object.InternalInitialize(UE::Nelaric::FInternalAccess::Key());
+Object.InternalInitialize(Nelaric::FInternalAccess::Key());
 ```
 
 调用方不能自行构造、复制、移动或析构 Key；公开的 Access Controller 提供进程生命周期内有效的 Key。`Internal` 路径、方法名和 Key 参数在调用处表明预期用途。玩法 C++ 也可以有意取得 Key，所以这是使用约定，不是访问限制。调用者无需继承辅助类。

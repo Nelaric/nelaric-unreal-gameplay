@@ -3,7 +3,7 @@
 #include "Internal/InternalAccess.h"
 #include "Modules/ModuleManager.h"
 
-const UE::Nelaric::FInternalAccessKey& UE::Nelaric::FInternalAccess::Key()
+const Nelaric::FInternalAccessKey& Nelaric::FInternalAccess::Key()
 {
 	static const FInternalAccessKey Instance;
 	return Instance;

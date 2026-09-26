@@ -5,8 +5,7 @@
 #include "Engine/EngineBaseTypes.h"
 #include "NelaricGameModeBase.h"
 
-bool ANelaricTransitionBeaconClient::BeginTargetApproval(const UE::Nelaric::FNetworkEndpoint& Endpoint,
-                                                         uint64 RequestId)
+bool ANelaricTransitionBeaconClient::BeginTargetApproval(const Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId)
 {
 	if (RequestId == 0 || !Endpoint.IsValid() || PendingRequestId != 0)
 	{

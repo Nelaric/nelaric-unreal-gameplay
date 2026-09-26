@@ -43,8 +43,8 @@ enum class ENelaricActivityJoinInProgressPolicy : uint8
  * state. Authority-side gameplay code validates and applies it on the
  * game thread. The startup owner retains the asset for the world lifetime.
  */
-UCLASS(BlueprintType)
-class NELARICFOUNDATION_API UNelaricWorldStartupConfig : public UPrimaryDataAsset
+UCLASS(MinimalAPI, BlueprintType)
+class UNelaricWorldStartupConfig : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
 
@@ -102,7 +102,7 @@ public:
 	 * minimum; true otherwise.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Nelaric|World")
-	bool HasValidPlayerLimits() const;
+	NELARICFOUNDATION_API bool HasValidPlayerLimits() const;
 
 	/** @brief Checks the authored activity participant-count limits.
 	 *
@@ -113,7 +113,7 @@ public:
 	 * minimum; true otherwise.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Nelaric|Activity")
-	bool HasValidActivityParticipantLimits() const;
+	NELARICFOUNDATION_API bool HasValidActivityParticipantLimits() const;
 
 	/** @brief Checks the complete authored startup configuration.
 	 *
@@ -124,5 +124,5 @@ public:
 	 * @return True if the map reference and authored policy are valid.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Nelaric|World")
-	bool HasValidStartupConfig() const;
+	NELARICFOUNDATION_API bool HasValidStartupConfig() const;
 };

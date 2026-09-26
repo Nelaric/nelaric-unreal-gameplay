@@ -19,14 +19,14 @@ class ANelaricTransitionBeaconHost;
  * ANelaricPlayerController by default and hosts destination approval
  * requests. Access game mode state on the game thread.
  */
-UCLASS(Blueprintable)
-class NELARICFOUNDATION_API ANelaricGameModeBase : public AGameModeBase
+UCLASS(MinimalAPI, Blueprintable)
+class ANelaricGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
 
 public:
 	/// Selects the project's player controller for this game mode.
-	ANelaricGameModeBase();
+	NELARICFOUNDATION_API ANelaricGameModeBase();
 
 	/// Port on which this server listens for transition approval beacons.
 	UPROPERTY(EditDefaultsOnly, Category = "Nelaric|Transition", meta = (ClampMin = "1", ClampMax = "65535"))
@@ -40,13 +40,13 @@ public:
 	 *
 	 * @return True while destination capacity integration is pending.
 	 */
-	bool CanAcceptTransition() const;
+	NELARICFOUNDATION_API bool CanAcceptTransition() const;
 
 	/** @brief Starts the target approval beacon on an online server.
 	 *
 	 * @details Unreal calls this on the authoritative game thread.
 	 */
-	virtual void StartPlay() override;
+	NELARICFOUNDATION_API virtual void StartPlay() override;
 
 private:
 	UPROPERTY(Transient)

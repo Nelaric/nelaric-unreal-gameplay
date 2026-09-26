@@ -16,6 +16,7 @@ CLASS_BODY = re.compile(r"\b(?:class|struct)\b[^;{}]*\{", re.DOTALL)
 ACCESS = re.compile(r"(?m)^[ \t]*(?:public|protected|private):[ \t]*$")
 CALL = re.compile(r"\b([A-Za-z_~]\w*)\s*\(")
 NON_METHOD_CALLS = {"UFUNCTION", "UPROPERTY", "GENERATED_BODY", "GENERATED_UCLASS_BODY", "GENERATED_USTRUCT_BODY"}
+DECLARATION_PREFIX = re.compile(r"[\w:\s<>,*&\[\]]+")
 
 
 def code_only(source: str) -> str:
@@ -36,7 +37,12 @@ def closing_brace(code: str, opening: int) -> int:
 
 def has_preceding_doxygen(lines: list[str], line_index: int) -> bool:
     previous = line_index - 1
-    while previous >= 0 and (not lines[previous].strip() or lines[previous].lstrip().startswith("UFUNCTION(")):
+    while previous >= 0:
+        line = lines[previous].strip()
+        # clang-format may put export macros and return types before the name.
+        prefix = DECLARATION_PREFIX.fullmatch(line) and line not in {"public:", "protected:", "private:"}
+        if line and not line.startswith("UFUNCTION(") and not prefix:
+            break
         previous -= 1
     if previous < 0:
         return False

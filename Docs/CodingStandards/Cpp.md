@@ -22,6 +22,13 @@ Use tabs for block indentation in C++ and UE C# build scripts, with a tab width 
 - Keep header dependencies small. Do not use a broad include solely to obtain a forward-declarable type.
 - Follow Unreal Header Tool requirements for reflected declarations, including the placement of generated headers. These requirements take precedence over mechanical include sorting.
 
+## UCLASS exports
+
+- Every project-authored `UCLASS` must explicitly include `MinimalAPI` in its `UCLASS(...)` declaration. This applies to all modules and to classes in both `Public` and `Private`, including abstract, internal, editor, and test classes.
+- Do not put the owning module's `*_API` macro on a `UCLASS` class declaration. Whole-class export is forbidden; retain `MinimalAPI` when adding cross-module functionality.
+- Export only individual non-inline methods that require cross-module C++ linkage, by placing the owning module's `*_API` macro on those method declarations. Include constructors and other methods needed for supported cross-module derivation where necessary. Do not export implementation-only methods merely because they are public or reflected.
+- `MinimalAPI` controls native symbol exports; it does not replace `UFUNCTION` or Blueprint exposure specifiers. Type visibility alone does not export non-inline method implementations. See Epic's [class specifiers](https://dev.epicgames.com/documentation/unreal-engine/class-specifiers) for the engine semantics.
+
 ## Source text
 
 Code and human-written documentation use UTF-8 with BOM and CRLF. Tool configuration and executable scripts may use UTF-8 without BOM and LF where required for interoperability; the exceptions are listed in [Build scripts and tooling](BuildAndReview.md). Do not mix newline styles within a file.

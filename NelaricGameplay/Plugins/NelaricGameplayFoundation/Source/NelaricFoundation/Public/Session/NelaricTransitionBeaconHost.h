@@ -15,12 +15,12 @@
  * @details The authoritative world owns this actor while accepting
  * pre-travel transition requests. The game mode makes each decision.
  */
-UCLASS(Transient, NotPlaceable)
-class NELARICFOUNDATION_API ANelaricTransitionBeaconHost : public AOnlineBeaconHostObject
+UCLASS(MinimalAPI, Transient, NotPlaceable)
+class ANelaricTransitionBeaconHost : public AOnlineBeaconHostObject
 {
 	GENERATED_BODY()
 
 public:
 	/// Selects the matching beacon client type and network identifier.
-	ANelaricTransitionBeaconHost(const FObjectInitializer& ObjectInitializer);
+	NELARICFOUNDATION_API ANelaricTransitionBeaconHost(const FObjectInitializer& ObjectInitializer);
 };

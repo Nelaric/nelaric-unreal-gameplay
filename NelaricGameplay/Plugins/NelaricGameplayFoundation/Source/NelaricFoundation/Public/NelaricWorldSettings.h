@@ -18,8 +18,8 @@
  * startup configuration is selected before a map is loaded. Access
  * World Settings on the game thread like other world actors.
  */
-UCLASS(Blueprintable)
-class NELARICFOUNDATION_API ANelaricWorldSettings : public AWorldSettings
+UCLASS(MinimalAPI, Blueprintable)
+class ANelaricWorldSettings : public AWorldSettings
 {
 	GENERATED_BODY()
 };

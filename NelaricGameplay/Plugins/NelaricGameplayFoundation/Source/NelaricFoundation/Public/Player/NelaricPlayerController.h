@@ -23,8 +23,8 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(FNelaricDepartureDecision, uint64, const 
  * The current server approves a valid departure request immediately.
  * Destination admission uses a separate pre-travel connection.
  */
-UCLASS(Blueprintable)
-class NELARICFOUNDATION_API ANelaricPlayerController : public APlayerController
+UCLASS(MinimalAPI, Blueprintable)
+class ANelaricPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
@@ -40,7 +40,7 @@ public:
 	 * @param TargetAddress Destination server URL or host address.
 	 * @return True if the request was sent, false for invalid local input.
 	 */
-	bool RequestDepartureApproval(uint64 RequestId, const FString& TargetAddress);
+	NELARICFOUNDATION_API bool RequestDepartureApproval(uint64 RequestId, const FString& TargetAddress);
 
 	/** @brief Observes decisions returned by the current server.
 	 *
@@ -49,7 +49,14 @@ public:
 	 *
 	 * @return Delegate reporting identity, destination, and approval.
 	 */
-	FNelaricDepartureDecision& OnDepartureDecision();
+	NELARICFOUNDATION_API FNelaricDepartureDecision& OnDepartureDecision();
+
+public:
+	// Native subclasses in other modules need these virtual definitions.
+	NELARICFOUNDATION_API virtual void ServerRequestDepartureApproval_Implementation(uint64 RequestId,
+	                                                                                 const FString& TargetAddress);
+	NELARICFOUNDATION_API virtual void
+	ClientReceiveDepartureDecision_Implementation(uint64 RequestId, const FString& TargetAddress, bool bApproved);
 
 private:
 	UFUNCTION(Server, Reliable)

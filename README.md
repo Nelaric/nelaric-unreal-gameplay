@@ -5,6 +5,10 @@ English | [简体中文](README.zh-CN.md)
 # Nelaric Unreal Gameplay
 
 [![Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FNelaric%2Fnelaric-unreal-gameplay%2Fproperties%2Fvalues&query=%24%5B0%5D.value&label=version&color=blue)](https://github.com/Nelaric/nelaric-unreal-gameplay/custom-properties)
+[![UE 5.6+](https://img.shields.io/badge/UE-5.6%2B-313131?logo=unrealengine&logoColor=white)](NelaricGameplay/NelaricGameplay.uproject)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Unreal CI](https://github.com/Nelaric/nelaric-unreal-gameplay/actions/workflows/fork-pr-linux.yml/badge.svg)](https://github.com/Nelaric/nelaric-unreal-gameplay/actions/workflows/fork-pr-linux.yml)
 
 An Unreal Engine gameplay framework for persistent worlds and bounded activities across standalone play, listen servers, and dedicated servers, with versioned gameplay content delivery.
 

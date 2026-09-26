@@ -1,23 +1,21 @@
 ﻿// Copyright (c) 2026 Nelaric
 
-/** @file InternalAccess.h
+/** @file FoundationInternalAccess.h
  * Provides the shared key for internal C++ integration calls.
  */
 
 #pragma once
 
-#include "Internal/InternalAccessKey.h"
+#include "Internal/FoundationInternalAccessKey.h"
 
 namespace Nelaric
 {
 /** @brief Supplies the conventional key for framework integration.
  *
- * @details Available to any C++ module depending on NelaricCore.
- * Framework consumers should use supported gameplay APIs. Call an
- * internal method through this key only as a last resort
- * when no suitable public API meets the need.
+ * @details Available only inside the NelaricFoundation module.
+ * Gameplay callers use supported public APIs.
  */
-class NELARICCORE_API FInternalAccess final
+class FFoundationInternalAccess final
 {
 public:
 	/** @brief Returns the shared key for internal C++ calls.
@@ -27,6 +25,6 @@ public:
 	 *
 	 * @return The shared internal access key.
 	 */
-	static const FInternalAccessKey& Key();
+	static const FFoundationInternalAccessKey& Key();
 };
 } // namespace Nelaric

@@ -8,8 +8,6 @@ public class NelaricFoundation : ModuleRules
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PublicDependencyModuleNames.AddRange(
-			new string[] { "Core", "CoreUObject", "Engine", "NelaricCore", "OnlineSubsystemUtils" }
-		);
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "OnlineSubsystemUtils" });
 	}
 }

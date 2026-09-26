@@ -40,12 +40,13 @@ under NelaricGameplay/Plugins/Puerts/ThirdParty:
 - libffi headers and libraries in Include/ffi and Library/ffi: license in
   ThirdPartyLicenses/libffi-LICENSE and copyright notices in the headers.
 
-V8: The checked-in project keeps PuerTS disabled. The Setup scripts enable
-it with V8 9.4.146.24, downloaded from the official PuerTS Unreal_v1.0.9
-release. V8 binaries are not stored in this Git repository. The V8 license
-is retained in Setup/V8-LICENSE and copied to
-the installed backend directory as LICENSE. The V8 license identifies further
-components with their own terms.
+V8: The checked-in project enables PuerTS with the V8 9.4.146.24 backend
+from the official PuerTS Unreal_v1.0.9 release. The V8 headers and
+Windows, Linux, and macOS libraries are stored under
+NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24. Large library
+file Win64MD/wee8.lib uses Git LFS. The V8 license is retained both in Setup/V8-LICENSE
+and the backend directory as LICENSE. It identifies further components
+with their own terms.
 
 The Setup scripts also install TypeScript into a local, Git-ignored
 node_modules directory using npm. Node.js and npm are setup prerequisites;

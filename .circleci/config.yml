@@ -70,10 +70,6 @@ jobs:
     steps:
       - checkout_pr_commit
       - pull_unreal_image
-      - run:
-          name: Install PuerTS V8 backend and tooling
-          no_output_timeout: 30m
-          command: sh Setup/Linux/Setup.sh
       - compile_target:
           target: NelaricGameplay
   build_editor_linux:
@@ -85,10 +81,6 @@ jobs:
     steps:
       - checkout_pr_commit
       - pull_unreal_image
-      - run:
-          name: Install PuerTS V8 backend and tooling
-          no_output_timeout: 30m
-          command: sh Setup/Linux/Setup.sh
       - compile_target:
           target: NelaricGameplayEditor
   build_server_linux:
@@ -100,10 +92,6 @@ jobs:
     steps:
       - checkout_pr_commit
       - pull_unreal_image
-      - run:
-          name: Install PuerTS V8 backend and tooling
-          no_output_timeout: 30m
-          command: sh Setup/Linux/Setup.sh
       - compile_target:
           target: NelaricGameplayServer
 

@@ -21,7 +21,7 @@ __pycache__/
 .venv/
 venv/
 node_modules/
-/NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/
+obj/
 /NelaricGameplay/Content/JavaScript/
 /NelaricGameplay/Typing/
 /NelaricGameplay/tsconfig.json

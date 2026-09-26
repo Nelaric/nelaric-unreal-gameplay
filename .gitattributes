@@ -25,3 +25,6 @@ Doxyfile text eol=lf
 
 # Preserve the upstream PuerTS source and license byte-for-byte.
 NelaricGameplay/Plugins/Puerts/** -text -eol
+
+# Store the largest Windows V8 static library in the configured Git LFS endpoint.
+NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/Lib/Win64MD/wee8.lib filter=lfs diff=lfs merge=lfs -text

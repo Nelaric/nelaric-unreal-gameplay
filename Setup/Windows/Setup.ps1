@@ -33,6 +33,17 @@ if (Test-Path -LiteralPath $backend) {
             throw "Existing V8 backend is incomplete: $relative"
         }
     }
+    $staticLibrary = Join-Path $backend 'Lib/Win64MD/wee8.lib'
+    if ((Get-Item -LiteralPath $staticLibrary).Length -lt 1048576) {
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            throw 'Git LFS is required to retrieve the bundled Windows V8 library.'
+        }
+        Write-Host 'Retrieving the bundled V8 library from Git LFS...'
+        & git lfs pull --include='NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/Lib/Win64MD/wee8.lib'
+        if ($LASTEXITCODE -ne 0 -or (Get-Item -LiteralPath $staticLibrary).Length -lt 1048576) {
+            throw 'Could not retrieve the Windows V8 library from Git LFS.'
+        }
+    }
     Write-Host 'V8 backend is already installed.'
 } else {
     $validArchive = (Test-Path -LiteralPath $archive) -and

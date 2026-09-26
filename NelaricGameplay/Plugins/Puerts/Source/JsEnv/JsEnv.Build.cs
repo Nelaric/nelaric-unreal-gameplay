@@ -5,6 +5,7 @@
 * This file is subject to the terms and conditions defined in file 'LICENSE', which is part of this source code package.
 */
 
+using System;
 using System.Collections.Generic;
 using UnrealBuildTool;
 using System.IO;
@@ -56,6 +57,15 @@ public class JsEnv : ModuleRules
     
     public JsEnv(ReadOnlyTargetRules Target) : base(Target)
     {
+        string backend = (Environment.GetEnvironmentVariable("PUERTS_BACKEND") ?? "v8").ToLowerInvariant();
+        if (backend != "v8" && backend != "quickjs" && backend != "nodejs")
+        {
+            throw new BuildException("PUERTS_BACKEND must be v8, quickjs, or nodejs.");
+        }
+
+        UseNodejs = backend == "nodejs";
+        UseQuickjs = backend == "quickjs";
+
         PublicDefinitions.Add("USING_IN_UNREAL_ENGINE");
         //PublicDefinitions.Add("WITH_V8_FAST_CALL");
         
@@ -567,6 +577,12 @@ public class JsEnv : ModuleRules
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
             string V8LibraryPath = Path.Combine(LibraryPath, "macOS");
+#if UE_5_2_OR_LATER
+            if (Target.Architecture == UnrealArch.Arm64)
+            {
+                V8LibraryPath = Path.Combine(LibraryPath, "macOS_arm64");
+            }
+#endif
             if (Node16)
             {
                 PublicAdditionalLibraries.Add(Path.Combine(V8LibraryPath, "libnode.93.dylib"));
@@ -605,7 +621,7 @@ public class JsEnv : ModuleRules
         else if (Target.Platform == UnrealTargetPlatform.Linux) 
         {
             string V8LibraryPath = Path.Combine(LibraryPath, "Linux");
-            PublicAdditionalLibraries.Add(Path.Combine(V8LibraryPath, "libnode.so"));
+            PublicAdditionalLibraries.Add(Path.Combine(V8LibraryPath, "libnode.so.93"));
             RuntimeDependencies.Add("$(TargetOutputDir)/libnode.so.93", Path.Combine(V8LibraryPath, "libnode.so.93"));
         }
     }

@@ -47,9 +47,18 @@ NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24. The large
 Lib/Win64MD/wee8.lib file uses Git LFS. The V8 license is retained in
 Setup/V8-LICENSE and in the backend directory as LICENSE. It identifies
 further components with their own terms.
+QuickJS: The checked-in PuerTS QuickJS backend under
+NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs comes from the official
+Unreal_v1.0.9 release. Its QuickJS license is retained in that directory
+as LICENSE.
+
+Node.js: The checked-in PuerTS Node.js 16.16.0 backend under
+NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16 comes from the same
+release. Its license and bundled third-party notices are retained in that
+directory as LICENSE. Large runtime binaries use Git LFS.
 
 The Setup scripts also install TypeScript into a local, Git-ignored
-node_modules directory using npm. Node.js and npm are setup prerequisites;
-they are not bundled with this repository. Any redistribution of a package
-containing these or other dependencies must retain the notices and license
-texts required by those components.
+node_modules directory using npm. An external Node.js executable and npm
+are setup prerequisites; neither executable is bundled with this repository.
+Any redistribution of a package containing these or other dependencies must
+retain the notices and license texts required by those components.

@@ -10,6 +10,14 @@ public class NelaricGameplayTarget : TargetRules
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_6;
-		ExtraModuleNames.Add("NelaricGameplay");
+		ExtraModuleNames.AddRange(
+			new string[]
+			{
+				"NelaricOpenWorldTemplate",
+				"NelaricBattleRoyaleTemplate",
+				"NelaricMobaTemplate",
+				"NelaricSandboxTemplate",
+			}
+		);
 	}
 }

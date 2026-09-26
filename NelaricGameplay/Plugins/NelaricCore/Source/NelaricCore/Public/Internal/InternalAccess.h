@@ -8,7 +8,7 @@
 
 #include "Internal/InternalAccessKey.h"
 
-namespace UE::Nelaric
+namespace Nelaric
 {
 /** @brief Supplies the conventional key for framework integration.
  *
@@ -29,4 +29,4 @@ public:
 	 */
 	static const FInternalAccessKey& Key();
 };
-} // namespace UE::Nelaric
+} // namespace Nelaric

@@ -16,13 +16,13 @@ void UNelaricTransitionTransportSubsystem::Initialize(FSubsystemCollectionBase& 
 
 	UNelaricSessionTransitionSubsystem* Coordinator =
 	    GetGameInstance()->GetSubsystem<UNelaricSessionTransitionSubsystem>();
-	UE::Nelaric::FStartTransitionApproval Source = UE::Nelaric::FStartTransitionApproval::CreateUObject(
+	Nelaric::FStartTransitionApproval Source = Nelaric::FStartTransitionApproval::CreateUObject(
 	    this, &UNelaricTransitionTransportSubsystem::BeginSourceApproval);
-	UE::Nelaric::FStartTransitionApproval Target = UE::Nelaric::FStartTransitionApproval::CreateUObject(
+	Nelaric::FStartTransitionApproval Target = Nelaric::FStartTransitionApproval::CreateUObject(
 	    this, &UNelaricTransitionTransportSubsystem::BeginTargetApproval);
-	UE::Nelaric::FOnTransitionTerminated Terminated = UE::Nelaric::FOnTransitionTerminated::CreateUObject(
-	    this, &UNelaricTransitionTransportSubsystem::CleanupRequest);
-	Coordinator->InternalConfigureApprovalTransport(UE::Nelaric::FInternalAccess::Key(), Source, Target, Terminated);
+	Nelaric::FOnTransitionTerminated Terminated =
+	    Nelaric::FOnTransitionTerminated::CreateUObject(this, &UNelaricTransitionTransportSubsystem::CleanupRequest);
+	Coordinator->InternalConfigureApprovalTransport(Nelaric::FInternalAccess::Key(), Source, Target, Terminated);
 }
 
 void UNelaricTransitionTransportSubsystem::Deinitialize()
@@ -30,14 +30,14 @@ void UNelaricTransitionTransportSubsystem::Deinitialize()
 	if (UNelaricSessionTransitionSubsystem* Coordinator =
 	        GetGameInstance()->GetSubsystem<UNelaricSessionTransitionSubsystem>())
 	{
-		Coordinator->InternalClearApprovalTransport(UE::Nelaric::FInternalAccess::Key());
+		Coordinator->InternalClearApprovalTransport(Nelaric::FInternalAccess::Key());
 	}
 	CleanupRequest(0);
 	Super::Deinitialize();
 }
 
 bool UNelaricTransitionTransportSubsystem::BeginSourceApproval(uint64 RequestId,
-                                                               const UE::Nelaric::FTransitionDestination& Destination)
+                                                               const Nelaric::FTransitionDestination& Destination)
 {
 	ANelaricPlayerController* Controller =
 	    Cast<ANelaricPlayerController>(GetGameInstance()->GetFirstLocalPlayerController());
@@ -56,7 +56,7 @@ bool UNelaricTransitionTransportSubsystem::BeginSourceApproval(uint64 RequestId,
 }
 
 bool UNelaricTransitionTransportSubsystem::BeginTargetApproval(uint64 RequestId,
-                                                               const UE::Nelaric::FTransitionDestination& Destination)
+                                                               const Nelaric::FTransitionDestination& Destination)
 {
 	UWorld* World = GetGameInstance()->GetWorld();
 	ANelaricTransitionBeaconClient* Beacon = World ? World->SpawnActor<ANelaricTransitionBeaconClient>() : nullptr;
@@ -76,7 +76,7 @@ void UNelaricTransitionTransportSubsystem::ReceiveSourceDecision(uint64 RequestI
 	if (UNelaricSessionTransitionSubsystem* Coordinator =
 	        GetGameInstance()->GetSubsystem<UNelaricSessionTransitionSubsystem>())
 	{
-		Coordinator->InternalReportSourceApproval(UE::Nelaric::FInternalAccess::Key(), RequestId,
+		Coordinator->InternalReportSourceApproval(Nelaric::FInternalAccess::Key(), RequestId,
 		                                          bApproved && TargetAddress == PendingTargetAddress);
 	}
 }
@@ -89,11 +89,11 @@ void UNelaricTransitionTransportSubsystem::ReceiveTargetDecision(uint64 RequestI
 	{
 		if (bAuthorityReplied)
 		{
-			Coordinator->InternalReportTargetApproval(UE::Nelaric::FInternalAccess::Key(), RequestId, bApproved);
+			Coordinator->InternalReportTargetApproval(Nelaric::FInternalAccess::Key(), RequestId, bApproved);
 		}
 		else
 		{
-			Coordinator->InternalReportTargetUnavailable(UE::Nelaric::FInternalAccess::Key(), RequestId);
+			Coordinator->InternalReportTargetUnavailable(Nelaric::FInternalAccess::Key(), RequestId);
 		}
 	}
 }

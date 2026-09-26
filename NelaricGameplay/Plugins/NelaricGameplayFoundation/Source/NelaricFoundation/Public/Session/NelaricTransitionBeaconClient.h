@@ -40,7 +40,7 @@ public:
 	 * @param RequestId Nonzero identity of the pending transition.
 	 * @return True if a beacon connection attempt was started.
 	 */
-	NELARICFOUNDATION_API bool BeginTargetApproval(const UE::Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId);
+	NELARICFOUNDATION_API bool BeginTargetApproval(const Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId);
 
 	/** @brief Observes the destination server's decision or failure.
 	 *

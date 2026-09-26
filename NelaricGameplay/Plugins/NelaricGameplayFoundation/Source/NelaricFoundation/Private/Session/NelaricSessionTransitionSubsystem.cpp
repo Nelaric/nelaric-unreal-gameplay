@@ -13,7 +13,7 @@ namespace
 {
 constexpr double TransitionTimeoutSeconds = 30.0;
 
-FURL MakeEndpointURL(const UE::Nelaric::FNetworkEndpoint& Endpoint)
+FURL MakeEndpointURL(const Nelaric::FNetworkEndpoint& Endpoint)
 {
 	const FString AddressWithPort = FString::Printf(TEXT("%s:%d"), *Endpoint.Address, Endpoint.Port);
 	return FURL(nullptr, *AddressWithPort, TRAVEL_Absolute);
@@ -41,29 +41,29 @@ void UNelaricSessionTransitionSubsystem::Deinitialize()
 }
 
 void UNelaricSessionTransitionSubsystem::InternalConfigureApprovalTransport(
-    const UE::Nelaric::FInternalAccessKey&, const UE::Nelaric::FStartTransitionApproval& Source,
-    const UE::Nelaric::FStartTransitionApproval& Target, const UE::Nelaric::FOnTransitionTerminated& Terminated)
+    const Nelaric::FInternalAccessKey&, const Nelaric::FStartTransitionApproval& Source,
+    const Nelaric::FStartTransitionApproval& Target, const Nelaric::FOnTransitionTerminated& Terminated)
 {
 	StartSourceApproval = Source;
 	StartTargetApproval = Target;
 	OnTerminated = Terminated;
 }
 
-void UNelaricSessionTransitionSubsystem::InternalClearApprovalTransport(const UE::Nelaric::FInternalAccessKey&)
+void UNelaricSessionTransitionSubsystem::InternalClearApprovalTransport(const Nelaric::FInternalAccessKey&)
 {
 	if (Active)
 	{
-		Fail(UE::Nelaric::ETransitionError::AuthorityUnavailable);
+		Fail(Nelaric::ETransitionError::AuthorityUnavailable);
 	}
 	StartSourceApproval.Unbind();
 	StartTargetApproval.Unbind();
 	OnTerminated.Unbind();
 }
 
-UE::Nelaric::FTransitionHandle
+Nelaric::FTransitionHandle
 UNelaricSessionTransitionSubsystem::RequestTransition(ENetMode TargetMode,
-                                                      const UE::Nelaric::FTransitionDestination& Destination,
-                                                      const UE::Nelaric::FTransitionCallbacks& Callbacks)
+                                                      const Nelaric::FTransitionDestination& Destination,
+                                                      const Nelaric::FTransitionCallbacks& Callbacks)
 {
 	if (Active)
 	{
@@ -90,21 +90,21 @@ UNelaricSessionTransitionSubsystem::RequestTransition(ENetMode TargetMode,
 	Active->Destination = Destination;
 	Active->SourceWorld = World;
 	Active->DeadlineSeconds = FPlatformTime::Seconds() + TransitionTimeoutSeconds;
-	const UE::Nelaric::FTransitionHandle Handle = Active->Handle;
+	const Nelaric::FTransitionHandle Handle = Active->Handle;
 
 	if (!StartSourceApproval.Execute(Handle.Id, Destination))
 	{
-		Fail(UE::Nelaric::ETransitionError::AuthorityUnavailable);
+		Fail(Nelaric::ETransitionError::AuthorityUnavailable);
 		return Handle;
 	}
 	if (Active && !StartTargetApproval.Execute(Handle.Id, Destination))
 	{
-		Fail(UE::Nelaric::ETransitionError::AuthorityUnavailable);
+		Fail(Nelaric::ETransitionError::AuthorityUnavailable);
 	}
 	return Handle;
 }
 
-bool UNelaricSessionTransitionSubsystem::CancelTransition(UE::Nelaric::FTransitionHandle Handle)
+bool UNelaricSessionTransitionSubsystem::CancelTransition(Nelaric::FTransitionHandle Handle)
 {
 	if (!Active || Active->Handle.Id != Handle.Id || Active->bTravelStarted)
 	{
@@ -120,7 +120,7 @@ TOptional<ENetMode> UNelaricSessionTransitionSubsystem::GetNetMode() const
 	return World ? TOptional<ENetMode>(World->GetNetMode()) : TOptional<ENetMode>();
 }
 
-void UNelaricSessionTransitionSubsystem::InternalReportSourceApproval(const UE::Nelaric::FInternalAccessKey&,
+void UNelaricSessionTransitionSubsystem::InternalReportSourceApproval(const Nelaric::FInternalAccessKey&,
                                                                       uint64 RequestId, bool bApproved)
 {
 	if (!Active || Active->Handle.Id != RequestId || Active->bTravelStarted)
@@ -129,13 +129,13 @@ void UNelaricSessionTransitionSubsystem::InternalReportSourceApproval(const UE::
 	}
 	if (!bApproved)
 	{
-		Fail(UE::Nelaric::ETransitionError::AuthorityRejected);
+		Fail(Nelaric::ETransitionError::AuthorityRejected);
 		return;
 	}
 	Active->bSourceApproved = true;
 }
 
-void UNelaricSessionTransitionSubsystem::InternalReportTargetApproval(const UE::Nelaric::FInternalAccessKey&,
+void UNelaricSessionTransitionSubsystem::InternalReportTargetApproval(const Nelaric::FInternalAccessKey&,
                                                                       uint64 RequestId, bool bApproved)
 {
 	if (!Active || Active->Handle.Id != RequestId || Active->bTravelStarted)
@@ -144,18 +144,18 @@ void UNelaricSessionTransitionSubsystem::InternalReportTargetApproval(const UE::
 	}
 	if (!bApproved)
 	{
-		Fail(UE::Nelaric::ETransitionError::AuthorityRejected);
+		Fail(Nelaric::ETransitionError::AuthorityRejected);
 		return;
 	}
 	Active->bTargetApproved = true;
 }
 
-void UNelaricSessionTransitionSubsystem::InternalReportTargetUnavailable(const UE::Nelaric::FInternalAccessKey&,
+void UNelaricSessionTransitionSubsystem::InternalReportTargetUnavailable(const Nelaric::FInternalAccessKey&,
                                                                          uint64 RequestId)
 {
 	if (Active && Active->Handle.Id == RequestId && !Active->bTravelStarted)
 	{
-		Fail(UE::Nelaric::ETransitionError::AuthorityUnavailable);
+		Fail(Nelaric::ETransitionError::AuthorityUnavailable);
 	}
 }
 
@@ -174,7 +174,7 @@ void UNelaricSessionTransitionSubsystem::TryStartTravel()
 	    GetGameInstance() ? GetGameInstance()->GetFirstLocalPlayerController() : nullptr;
 	if (!PlayerController)
 	{
-		Fail(UE::Nelaric::ETransitionError::NoWorld);
+		Fail(Nelaric::ETransitionError::NoWorld);
 		return;
 	}
 	Active->bTravelStarted = true;
@@ -213,10 +213,10 @@ bool UNelaricSessionTransitionSubsystem::Tick(float DeltaTime)
 	return true;
 }
 
-void UNelaricSessionTransitionSubsystem::Fail(UE::Nelaric::ETransitionError Error)
+void UNelaricSessionTransitionSubsystem::Fail(Nelaric::ETransitionError Error)
 {
-	const UE::Nelaric::FTransitionHandle Handle = Active->Handle;
-	const UE::Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
+	const Nelaric::FTransitionHandle Handle = Active->Handle;
+	const Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
 	Active.Reset();
 	OnTerminated.ExecuteIfBound(Handle.Id);
 	Callbacks.OnFailed.ExecuteIfBound(Handle, Error);
@@ -224,8 +224,8 @@ void UNelaricSessionTransitionSubsystem::Fail(UE::Nelaric::ETransitionError Erro
 
 void UNelaricSessionTransitionSubsystem::FinishSucceeded(ENetMode Mode)
 {
-	const UE::Nelaric::FTransitionHandle Handle = Active->Handle;
-	const UE::Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
+	const Nelaric::FTransitionHandle Handle = Active->Handle;
+	const Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
 	Active.Reset();
 	OnTerminated.ExecuteIfBound(Handle.Id);
 	Callbacks.OnSucceeded.ExecuteIfBound(Handle, Mode);
@@ -233,8 +233,8 @@ void UNelaricSessionTransitionSubsystem::FinishSucceeded(ENetMode Mode)
 
 void UNelaricSessionTransitionSubsystem::FinishTimedOut()
 {
-	const UE::Nelaric::FTransitionHandle Handle = Active->Handle;
-	const UE::Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
+	const Nelaric::FTransitionHandle Handle = Active->Handle;
+	const Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
 	Active.Reset();
 	OnTerminated.ExecuteIfBound(Handle.Id);
 	Callbacks.OnTimedOut.ExecuteIfBound(Handle);
@@ -242,8 +242,8 @@ void UNelaricSessionTransitionSubsystem::FinishTimedOut()
 
 void UNelaricSessionTransitionSubsystem::FinishCancelled()
 {
-	const UE::Nelaric::FTransitionHandle Handle = Active->Handle;
-	const UE::Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
+	const Nelaric::FTransitionHandle Handle = Active->Handle;
+	const Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
 	Active.Reset();
 	OnTerminated.ExecuteIfBound(Handle.Id);
 	Callbacks.OnCancelled.ExecuteIfBound(Handle);

@@ -9,7 +9,7 @@
 #include "CoreTypes.h"
 #include "Containers/UnrealString.h"
 
-namespace UE::Nelaric
+namespace Nelaric
 {
 /** @brief Host address and transport port of one network endpoint.
  *
@@ -32,4 +32,4 @@ struct FNetworkEndpoint
 		return !Address.IsEmpty() && Port >= 1 && Port <= 65535;
 	}
 };
-} // namespace UE::Nelaric
+} // namespace Nelaric

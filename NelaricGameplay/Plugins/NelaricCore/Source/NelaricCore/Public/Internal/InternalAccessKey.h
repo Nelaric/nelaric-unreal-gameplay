@@ -6,7 +6,7 @@
 
 #pragma once
 
-namespace UE::Nelaric
+namespace Nelaric
 {
 class FInternalAccess;
 
@@ -29,4 +29,4 @@ private:
 
 	friend class FInternalAccess;
 };
-} // namespace UE::Nelaric
+} // namespace Nelaric

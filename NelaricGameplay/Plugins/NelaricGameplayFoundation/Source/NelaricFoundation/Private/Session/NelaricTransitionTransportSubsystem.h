@@ -20,8 +20,8 @@ public:
 	virtual void Deinitialize() override;
 
 private:
-	bool BeginSourceApproval(uint64 RequestId, const UE::Nelaric::FTransitionDestination& Destination);
-	bool BeginTargetApproval(uint64 RequestId, const UE::Nelaric::FTransitionDestination& Destination);
+	bool BeginSourceApproval(uint64 RequestId, const Nelaric::FTransitionDestination& Destination);
+	bool BeginTargetApproval(uint64 RequestId, const Nelaric::FTransitionDestination& Destination);
 	void ReceiveSourceDecision(uint64 RequestId, const FString& TargetAddress, bool bApproved);
 	void ReceiveTargetDecision(uint64 RequestId, bool bApproved, bool bAuthorityReplied);
 	void CleanupRequest(uint64 RequestId);

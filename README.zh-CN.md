@@ -14,7 +14,17 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用
 
 ## PuerTS 配置
 
-仓库已包含 PuerTS Unreal 插件源码。克隆后，在仓库根目录按操作系统运行**一个** Setup 脚本：
+仓库已包含来自 [Tencent/puerts](https://github.com/Tencent/puerts) 的 PuerTS Unreal 插件源码，版本为 [Unreal_v1.0.9](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9)。以下后端均已纳入仓库，适用于 Windows x64、Linux x86_64 和 macOS x64/arm64。每次构建只链接一种后端。
+
+| 后端 | 选择值 | 说明 |
+| --- | --- | --- |
+| V8 9.4.146.24 | `v8`（默认） | 已有后端，支持 V8 Inspector。 |
+| QuickJS | `quickjs` | 运行时较小；上游构建禁用 V8 Inspector。 |
+| Node.js 16.16.0 | `nodejs` | 提供 Node.js API；二进制文件通过 Git LFS 存储。 |
+
+启动 Unreal Editor 或 UnrealBuildTool **之前**，在环境变量 `PUERTS_BACKEND` 中设置 `quickjs` 或 `nodejs`；不设置或设置为 `v8` 即使用默认后端。例如，在 PowerShell 中执行 `$env:PUERTS_BACKEND = 'quickjs'`，或在 Unix shell 中执行 `export PUERTS_BACKEND=quickjs`，再从同一个 shell 启动编辑器或构建。切换后端后，重新编译项目并重启编辑器。目标平台必须有相应后端文件。
+
+克隆后，在仓库根目录按操作系统运行**一个** Setup 脚本，准备 TypeScript 编辑器工具：
 
 | 系统 | 命令 |
 | --- | --- |
@@ -22,9 +32,9 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用
 | Linux x86_64 | `sh ./Setup/Linux/Setup.sh` |
 | macOS x86_64 或 arm64 | `sh ./Setup/macOS/Setup.sh` |
 
-请先安装带 npm 的 Node.js。Setup 还需要网络连接、`curl` 和 `tar`；Linux 需要 `sha256sum`，macOS 需要 `shasum`。无需再单独运行 npm 或 PuerTS 配置命令。仓库已包含 V8 9.4 后端及其[许可证](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE)。Setup 会检查仓库内的后端、准备 TypeScript 编辑器工具，并确认共享的 `.uproject` 已启用 PuerTS。若后端目录缺失，Setup 会从官方 [PuerTS Unreal 1.0.9 发布页](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9)下载并校验 SHA-256。安装中断后可以重新运行。
+请先安装带 npm 的 Node.js。Setup 还需要网络连接、`curl` 和 `tar`；Linux 需要 `sha256sum`，macOS 需要 `shasum`。无需再单独运行 npm 或 PuerTS 配置命令。仓库已包含三种后端及其许可证。Setup 会检查仓库内默认使用的 V8 后端、准备 TypeScript 编辑器工具，并确认共享的 `.uproject` 已启用 PuerTS。若 V8 后端目录缺失，Setup 会从官方 PuerTS 发布页下载并校验 SHA-256。安装中断后可以重新运行。
 
-体积最大的 Windows 静态库通过 Git LFS 存储，其余后端文件直接纳入 Git。在 Windows 上克隆前请安装 Git LFS，以便检出完整的库文件；如果检出的是 LFS 指针，Windows Setup 会获取实际库文件。下载缓存仅保留在本机。正常克隆后，PuerTS 已启用且 V8 后端已在仓库内；需要编辑器 TypeScript 工具时，每次克隆运行一次 Setup。Linux CI 无需运行 Setup，就会使用仓库内的后端编译 PuerTS。插件源码随附 PuerTS 的[许可证](NelaricGameplay/Plugins/Puerts/LICENSE)。该配置支持编辑器内的 TypeScript 编译和脚本热重载；正式环境的内容交付与版本激活需另行实现。
+体积最大的 V8 Windows 静态库和 Node.js 运行时二进制文件通过 Git LFS 存储，其余后端文件直接纳入 Git。克隆前请安装 Git LFS，以便检出这些二进制文件。如果检出的是 V8 Windows 库的 LFS 指针，Windows Setup 会获取实际文件。下载缓存仅保留在本机。PuerTS 已启用；需要编辑器 TypeScript 工具时，每次克隆运行一次 Setup。Linux CI 无需运行 Setup，就会使用仓库内默认的 V8 后端编译 PuerTS。仓库保留了 [PuerTS](NelaricGameplay/Plugins/Puerts/LICENSE)、[V8](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE)、[QuickJS](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE) 和 [Node.js](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) 的许可证。该配置支持编辑器内的 TypeScript 编译和脚本热重载；正式环境的内容交付与版本激活需另行实现。
 
 模块职责和依赖见 [NelaricGameplayCore](Docs/Modules/Source/NelaricGameplayCore.zh-CN.md)、[NelaricCore](Docs/Modules/Plugins/NelaricCore/NelaricCore.zh-CN.md) 与 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
 

@@ -26,6 +26,10 @@ Apply this rule to every new project-authored file and to existing project-autho
 - Keep module dependencies minimal and classify them as public or private according to the headers that need them. Do not put vendor SDK dependencies in Foundation.
 - Target UE 5.6 and later. Engine compilation CI should cover both the minimum supported release and the latest supported release. CircleCI builds the Linux Game, Editor, and Server targets with UE 5.6.1 before merge; the latest supported release remains a coverage gap. See `Docs/DevelopmentWorkflow.md`.
 
+## Automation tests
+
+Each independent framework capability must have automated tests that exercise its observable behavior. Add or update those tests with the capability or a behavior change, including meaningful failure and boundary cases where they affect its contract. Name framework-authored Unreal automation tests under the `Nelaric.*` hierarchy so CI can select them. Group related scenarios into a small number of focused tests per capability. Do not create a separate test for every method, branch, or minor variation, or accumulate large numbers of overlapping tests in one module. Test count and line coverage are not targets; reviewers judge whether the behavior and important risks are covered.
+
 ## Local checks
 
 Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-tools.json`:
@@ -36,7 +40,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 4. `python Scripts/check_doxygen_style.py` checks the 25- and 75-character limits, single- and multi-line forms, a tag at the start of every multi-line paragraph, and consistent enum comment style and alignment.
 5. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
-Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux project build status before merge. CircleCI builds the submitted project commit, including for branches in this repository. Fork PRs that change CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle those changes in a source-repository branch. No clang-tidy or test coverage gate is required now.
+Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux project build status before merge. CircleCI builds the submitted project commit, including for branches in this repository. Fork PRs that change CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle those changes in a source-repository branch. No clang-tidy or numeric code coverage threshold is required now.
 
 ## Commit and branch names
 
@@ -68,4 +72,4 @@ Human-written Markdown and LICENSE, C++ source and headers, and UE C# build scri
 
 ## Review
 
-Review correctness, copyright notices, module boundaries, the accuracy of public API documentation, cancellation and failure behavior, ownership, performance, and security. CI checks mechanical Doxygen style; reviewers judge whether comments describe the actual contract. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate; tests may still be added for a concrete behavioral risk.
+Review correctness, copyright notices, module boundaries, the accuracy of public API documentation, cancellation and failure behavior, ownership, performance, security, and the automated tests for each independent framework capability. CI checks mechanical Doxygen style; reviewers judge whether comments describe the actual contract and whether tests cover meaningful behavior without unnecessary duplication. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate, but does not replace review of the required tests.

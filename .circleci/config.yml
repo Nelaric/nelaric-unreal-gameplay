@@ -43,6 +43,9 @@ commands:
     parameters:
       target:
         type: string
+      save_project_dir:
+        type: boolean
+        default: false
     steps:
       - run:
           name: Compile << parameters.target >> for Linux
@@ -50,6 +53,9 @@ commands:
           command: |
             set -euo pipefail
             project_dir="$(mktemp -d)"
+            if << parameters.save_project_dir >>; then
+              printf 'export NELARIC_CI_PROJECT_DIR=%q\n' "$project_dir" >> "$BASH_ENV"
+            fi
             cp -a NelaricGameplay "$project_dir/NelaricGameplay"
             chmod -R a+rwX "$project_dir"
             docker run --rm --network none \
@@ -59,6 +65,32 @@ commands:
               << parameters.target >> Linux Development \
               -Project=/workspace/NelaricGameplay/NelaricGameplay.uproject \
               -WaitMutex -NoHotReload
+  run_project_automation_tests:
+    steps:
+      - run:
+          name: Run Nelaric automation tests
+          no_output_timeout: 30m
+          command: |
+            set -euo pipefail
+            : "${NELARIC_CI_PROJECT_DIR:?Editor build directory is missing}"
+            if docker run --rm --network none \
+                --mount "type=bind,src=$NELARIC_CI_PROJECT_DIR,dst=/workspace" \
+                ghcr.io/epicgames/unreal-engine:dev-slim-5.6.1 \
+                /home/ue4/UnrealEngine/Engine/Binaries/Linux/UnrealEditor-Cmd \
+                /workspace/NelaricGameplay/NelaricGameplay.uproject \
+                -unattended -nopause -nosplash -NullRHI \
+                '-ExecCmds=Automation SetFilter All;RunTests StartsWith:Nelaric;Quit' \
+                '-TestExit=Automation Test Queue Empty' \
+                -ReportExportPath=/workspace/automation-report \
+                -AbsLog=/workspace/automation.log; then
+              editor_status=0
+            else
+              editor_status=$?
+            fi
+            python3 Scripts/check_automation_report.py \
+              "$NELARIC_CI_PROJECT_DIR/automation-report/index.json" \
+              "$NELARIC_CI_PROJECT_DIR/automation.log" \
+              "$editor_status"
 
 jobs:
   build_game_linux:
@@ -83,6 +115,8 @@ jobs:
       - pull_unreal_image
       - compile_target:
           target: NelaricGameplayEditor
+          save_project_dir: true
+      - run_project_automation_tests
   build_server_linux:
     machine:
       image: ubuntu-2404:current

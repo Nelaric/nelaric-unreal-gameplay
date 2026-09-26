@@ -18,6 +18,10 @@
 		{
 			"Name": "NelaricGameplayFoundation",
 			"Enabled": true
+		},
+		{
+			"Name": "Puerts",
+			"Enabled": true
 		}
 	]
 }

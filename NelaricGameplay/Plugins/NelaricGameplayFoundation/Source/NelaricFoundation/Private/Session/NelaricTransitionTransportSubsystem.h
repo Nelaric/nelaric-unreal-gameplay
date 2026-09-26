@@ -10,7 +10,7 @@
 class ANelaricPlayerController;
 class ANelaricTransitionBeaconClient;
 
-UCLASS()
+UCLASS(MinimalAPI)
 class UNelaricTransitionTransportSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()

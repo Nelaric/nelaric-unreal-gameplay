@@ -125,8 +125,8 @@ struct FTransitionCallbacks
  * game thread. The subsystem observes modes; it does not assign them.
  * A request is only an intent until both relevant authorities confirm it.
  */
-UCLASS()
-class NELARICFOUNDATION_API UNelaricSessionTransitionSubsystem : public UGameInstanceSubsystem
+UCLASS(MinimalAPI)
+class UNelaricSessionTransitionSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 
@@ -146,9 +146,9 @@ public:
 	 * @param Callbacks Optional terminal callbacks for this request.
 	 * @return Accepted request identity, or zero if locally rejected.
 	 */
-	UE::Nelaric::FTransitionHandle RequestTransition(ENetMode TargetMode,
-	                                                 const UE::Nelaric::FTransitionDestination& Destination,
-	                                                 const UE::Nelaric::FTransitionCallbacks& Callbacks);
+	NELARICFOUNDATION_API UE::Nelaric::FTransitionHandle
+	RequestTransition(ENetMode TargetMode, const UE::Nelaric::FTransitionDestination& Destination,
+	                  const UE::Nelaric::FTransitionCallbacks& Callbacks);
 
 	/** @brief Requests cancellation of an active transition.
 	 *
@@ -159,7 +159,7 @@ public:
 	 * @param Handle Identity returned by RequestTransition.
 	 * @return True if cancellation was requested for an active operation.
 	 */
-	bool CancelTransition(UE::Nelaric::FTransitionHandle Handle);
+	NELARICFOUNDATION_API bool CancelTransition(UE::Nelaric::FTransitionHandle Handle);
 
 	/** @brief Reads the current game world's observed network mode.
 	 *
@@ -168,7 +168,7 @@ public:
 	 *
 	 * @return Current mode, or an empty value if no game world exists.
 	 */
-	TOptional<ENetMode> GetNetMode() const;
+	NELARICFOUNDATION_API TOptional<ENetMode> GetNetMode() const;
 
 public:
 	/** @brief Binds Core's approval transport on the game thread.
@@ -177,42 +177,44 @@ public:
 	 * @param Target Begins approval by the target authority.
 	 * @param Terminated Releases transport state after a terminal result.
 	 */
-	void InternalConfigureApprovalTransport(const UE::Nelaric::FInternalAccessKey& Key,
-	                                        const UE::Nelaric::FStartTransitionApproval& Source,
-	                                        const UE::Nelaric::FStartTransitionApproval& Target,
-	                                        const UE::Nelaric::FOnTransitionTerminated& Terminated);
+	NELARICFOUNDATION_API void InternalConfigureApprovalTransport(
+	    const UE::Nelaric::FInternalAccessKey& Key, const UE::Nelaric::FStartTransitionApproval& Source,
+	    const UE::Nelaric::FStartTransitionApproval& Target, const UE::Nelaric::FOnTransitionTerminated& Terminated);
 
 	/** @brief Removes Core's approval transport on the game thread.
 	 * @param Key Access granted to the Core transport subsystem.
 	 */
-	void InternalClearApprovalTransport(const UE::Nelaric::FInternalAccessKey& Key);
+	NELARICFOUNDATION_API void InternalClearApprovalTransport(const UE::Nelaric::FInternalAccessKey& Key);
 
 	/** @brief Reports the source authority's decision.
 	 * @param Key Access granted to the Core transport subsystem.
 	 * @param RequestId Identity of the request being approved.
 	 * @param bApproved Whether the source authority approved departure.
 	 */
-	void InternalReportSourceApproval(const UE::Nelaric::FInternalAccessKey& Key, uint64 RequestId, bool bApproved);
+	NELARICFOUNDATION_API void InternalReportSourceApproval(const UE::Nelaric::FInternalAccessKey& Key,
+	                                                        uint64 RequestId, bool bApproved);
 
 	/** @brief Reports the target authority's decision.
 	 * @param Key Access granted to the Core transport subsystem.
 	 * @param RequestId Identity of the request being approved.
 	 * @param bApproved Whether the target authority approved arrival.
 	 */
-	void InternalReportTargetApproval(const UE::Nelaric::FInternalAccessKey& Key, uint64 RequestId, bool bApproved);
+	NELARICFOUNDATION_API void InternalReportTargetApproval(const UE::Nelaric::FInternalAccessKey& Key,
+	                                                        uint64 RequestId, bool bApproved);
 
 	/** @brief Reports that the target authority could not be reached.
 	 * @param Key Access granted to the Core transport subsystem.
 	 * @param RequestId Identity of the request awaiting approval.
 	 */
-	void InternalReportTargetUnavailable(const UE::Nelaric::FInternalAccessKey& Key, uint64 RequestId);
+	NELARICFOUNDATION_API void InternalReportTargetUnavailable(const UE::Nelaric::FInternalAccessKey& Key,
+	                                                           uint64 RequestId);
 
 protected:
 	/// Registers the coordinator's tick while its game instance lives.
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	NELARICFOUNDATION_API virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	/// Ends active work before the game instance subsystem is destroyed.
-	virtual void Deinitialize() override;
+	NELARICFOUNDATION_API virtual void Deinitialize() override;
 
 private:
 	struct FActiveTransition

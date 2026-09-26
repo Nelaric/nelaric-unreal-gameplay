@@ -73,3 +73,5 @@ Human-written Markdown and LICENSE, C++ source and headers, and UE C# build scri
 ## Review
 
 Review correctness, copyright notices, module boundaries, the accuracy of public API documentation, cancellation and failure behavior, ownership, performance, security, and the automated tests for each independent framework capability. CI checks mechanical Doxygen style; reviewers judge whether comments describe the actual contract and whether tests cover meaningful behavior without unnecessary duplication. A PR seeking an exception to a project guideline must name the rule, reason, affected code, and alternatives. A maintainer must approve the exception; it cannot override an Epic requirement or resolve a conflict between the standards. Report such conflicts in an issue. Current CI success is sufficient as an automated gate, but does not replace review of the required tests.
+
+Reviewers must verify that every project-authored `UCLASS` explicitly uses `MinimalAPI`, has no class-level `*_API` macro, and exports only the individual methods needed across modules, as required by [UCLASS exports](Cpp.md#uclass-exports).

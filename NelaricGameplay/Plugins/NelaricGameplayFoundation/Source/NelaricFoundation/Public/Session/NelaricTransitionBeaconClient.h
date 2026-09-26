@@ -26,8 +26,8 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(FNelaricTargetDecision, uint64, bool, boo
  * decision or failure. The destination server decides whether to admit
  * the request; a valid response is bound to the supplied request ID.
  */
-UCLASS(Transient, NotPlaceable)
-class NELARICFOUNDATION_API ANelaricTransitionBeaconClient : public AOnlineBeaconClient
+UCLASS(MinimalAPI, Transient, NotPlaceable)
+class ANelaricTransitionBeaconClient : public AOnlineBeaconClient
 {
 	GENERATED_BODY()
 
@@ -40,7 +40,7 @@ public:
 	 * @param RequestId Nonzero identity of the pending transition.
 	 * @return True if a beacon connection attempt was started.
 	 */
-	bool BeginTargetApproval(const UE::Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId);
+	NELARICFOUNDATION_API bool BeginTargetApproval(const UE::Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId);
 
 	/** @brief Observes the destination server's decision or failure.
 	 *
@@ -50,19 +50,24 @@ public:
 	 *
 	 * @return Delegate carrying identity, approval, and reply presence.
 	 */
-	FNelaricTargetDecision& OnTargetDecision();
+	NELARICFOUNDATION_API FNelaricTargetDecision& OnTargetDecision();
 
+public:
 	/** @brief Sends the approval request after beacon connection.
 	 *
 	 * @details Unreal calls this on the game thread.
 	 */
-	virtual void OnConnected() override;
+	NELARICFOUNDATION_API virtual void OnConnected() override;
 
 	/** @brief Reports a failed beacon connection.
 	 *
 	 * @details Unreal calls this on the game thread.
 	 */
-	virtual void OnFailure() override;
+	NELARICFOUNDATION_API virtual void OnFailure() override;
+
+	// Native subclasses in other modules need these virtual definitions.
+	NELARICFOUNDATION_API virtual void ServerRequestTargetApproval_Implementation(uint64 RequestId);
+	NELARICFOUNDATION_API virtual void ClientReceiveTargetDecision_Implementation(uint64 RequestId, bool bApproved);
 
 private:
 	UFUNCTION(Server, Reliable)

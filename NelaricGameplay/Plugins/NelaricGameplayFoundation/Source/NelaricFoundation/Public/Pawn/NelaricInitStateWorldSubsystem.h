@@ -11,7 +11,7 @@
 #include "Containers/Map.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "UObject/WeakObjectPtr.h"
-#include "World/NelaricInitStateTypes.h"
+#include "Pawn/NelaricInitStateTypes.h"
 
 #include "NelaricInitStateWorldSubsystem.generated.h"
 

@@ -8,7 +8,7 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "Test/NelaricInitStateTestTypes.h"
-#include "World/NelaricInitStateWorldSubsystem.h"
+#include "Pawn/NelaricInitStateWorldSubsystem.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNelaricInitStateContractTest, "Nelaric.Foundation.World.InitStateContract",
                                  EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
@@ -236,6 +236,55 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Second group member notifies after commits"), GroupB->NotificationCount, GroupBNotifications + 1);
 	Subsystem->UnregisterParticipant(GroupA);
 	Subsystem->UnregisterParticipant(GroupB);
+
+	UNelaricInitStateTestPawnComponent* LifecycleA = NewObject<UNelaricInitStateTestPawnComponent>(Pawn);
+	UNelaricInitStateTestPawnComponent* LifecycleB = NewObject<UNelaricInitStateTestPawnComponent>(Pawn);
+	LifecycleA->bAllowAdvance = true;
+	LifecycleB->bAllowAdvance = true;
+	LifecycleA->ObservedReadyPeer = LifecycleB;
+	LifecycleB->ObservedReadyPeer = LifecycleA;
+	TestTrue(TEXT("Cyclic lifecycle configuration is accepted"),
+	         Subsystem->ConfigureParticipants({{LifecycleA, TEXT("LifecycleA"), true, {LifecycleB}},
+	                                           {LifecycleB, TEXT("LifecycleB"), true, {LifecycleA}}}));
+	LifecycleA->RegisterComponent();
+	LifecycleB->RegisterComponent();
+	for (UNelaricInitStateTestPawnComponent* Member : {LifecycleA, LifecycleB})
+	{
+		TestEqual(TEXT("Registered event precedes preparation"), Member->EnteredStates[0],
+		          Nelaric::EInitState::Registered);
+		TestEqual(TEXT("DataAvailable event follows its state commit"), Member->EnteredStates[1],
+		          Nelaric::EInitState::DataAvailable);
+		TestEqual(TEXT("DataInitialized event follows its state commit"), Member->EnteredStates[2],
+		          Nelaric::EInitState::DataInitialized);
+		TestEqual(TEXT("Ready event waits for both members"), Member->EnteredStates.Num(), 3);
+	}
+	LifecycleA->bInternalReady = true;
+	Subsystem->RequestParticipantRefresh(LifecycleA);
+	TestEqual(TEXT("One ready member does not release the cycle"), LifecycleA->EnteredStates.Num(), 3);
+	LifecycleB->bInternalReady = true;
+	Subsystem->RequestParticipantRefresh(LifecycleB);
+	for (UNelaricInitStateTestPawnComponent* Member : {LifecycleA, LifecycleB})
+	{
+		TestEqual(TEXT("Ready event fires once"), Member->EnteredStates.Num(), 4);
+		TestEqual(TEXT("Ready event is the fourth stage"), Member->EnteredStates[3], Nelaric::EInitState::Ready);
+		TestTrue(TEXT("Ready event sees cyclic peer ready"), Member->bPeerReadyInReadyEvent);
+	}
+	LifecycleA->bAllowAdvance = false;
+	LifecycleB->bAllowAdvance = false;
+	LifecycleA->bInternalReady = false;
+	LifecycleB->bInternalReady = false;
+	const Nelaric::FInitGeneration LifecycleOldGeneration = LifecycleA->GetInitGeneration();
+	LifecycleA->InvalidateInitGeneration();
+	TestEqual(TEXT("Invalidation event fires once for first member"), LifecycleA->InvalidatedCount, 1);
+	TestEqual(TEXT("Invalidation records previous Ready state"), LifecycleA->LastInvalidated.State,
+	          Nelaric::EInitState::Ready);
+	TestTrue(TEXT("Invalidation records previous generation"),
+	         LifecycleA->LastInvalidated.Generation == LifecycleOldGeneration);
+	TestEqual(TEXT("New attempt enters Registered once"), LifecycleA->EnteredStates.Num(), 5);
+	TestEqual(TEXT("Cycle peer receives invalidation"), LifecycleB->InvalidatedCount, 1);
+	TestEqual(TEXT("Cycle peer starts new Registered attempt"), LifecycleB->EnteredStates.Num(), 5);
+	LifecycleA->UnregisterComponent();
+	LifecycleB->UnregisterComponent();
 	return true;
 }
 

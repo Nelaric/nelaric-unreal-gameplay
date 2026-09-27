@@ -7,7 +7,7 @@
 #pragma once
 
 #include "UObject/Interface.h"
-#include "World/NelaricInitStateTypes.h"
+#include "Pawn/NelaricInitStateTypes.h"
 
 #include "NelaricInitStateParticipantInterface.generated.h"
 

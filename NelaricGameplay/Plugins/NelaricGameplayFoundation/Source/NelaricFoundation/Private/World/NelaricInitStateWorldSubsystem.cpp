@@ -1,12 +1,12 @@
 ﻿// Copyright (c) 2026 Nelaric
 
-#include "World/NelaricInitStateWorldSubsystem.h"
+#include "Pawn/NelaricInitStateWorldSubsystem.h"
 
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "Misc/ScopeExit.h"
 #include "Pawn/NelaricPawnInitializationComponent.h"
-#include "World/NelaricInitStateParticipantInterface.h"
+#include "Pawn/NelaricInitStateParticipantInterface.h"
 
 void UNelaricInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 {

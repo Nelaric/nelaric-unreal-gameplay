@@ -6,8 +6,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Pawn/NelaricPawnInitializationConfig.h"
-#include "World/NelaricInitStateParticipantInterface.h"
-#include "World/NelaricInitStateWorldSubsystem.h"
+#include "Pawn/NelaricInitStateParticipantInterface.h"
+#include "Pawn/NelaricInitStateWorldSubsystem.h"
 
 UNelaricPawnInitializationComponent::UNelaricPawnInitializationComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)

@@ -3,7 +3,7 @@
 #include "Pawn/NelaricPawnInitStateComponent.h"
 
 #include "Engine/World.h"
-#include "World/NelaricInitStateWorldSubsystem.h"
+#include "Pawn/NelaricInitStateWorldSubsystem.h"
 
 UNelaricPawnInitStateComponent::UNelaricPawnInitStateComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -36,6 +36,26 @@ bool UNelaricPawnInitStateComponent::CanAdvanceInitState()
 	return false;
 }
 
+void UNelaricPawnInitStateComponent::OnInitRegistered()
+{
+}
+
+void UNelaricPawnInitStateComponent::OnInitDataAvailable()
+{
+}
+
+void UNelaricPawnInitStateComponent::OnInitDataInitialized()
+{
+}
+
+void UNelaricPawnInitStateComponent::OnInitReady()
+{
+}
+
+void UNelaricPawnInitStateComponent::OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot&)
+{
+}
+
 bool UNelaricPawnInitStateComponent::CanEnterReady() const
 {
 	return false;
@@ -61,11 +81,25 @@ void UNelaricPawnInitStateComponent::NotifyReadyCommitted(const Nelaric::FInitSt
 		return;
 	}
 	bReadyNotificationPending = false;
+	bCommittingInitState = true;
+	OnInitReady();
+	bCommittingInitState = false;
+	if (!(Previous.Generation == InitGeneration) || InitState != Nelaric::EInitState::Ready || bTerminalInitFailure)
+	{
+		FlushDeferredInitRefresh();
+		return;
+	}
 	NotifyInitChanged(Previous);
+	FlushDeferredInitRefresh();
 }
 
 void UNelaricPawnInitStateComponent::RequestInitRefresh()
 {
+	if (bCommittingInitState)
+	{
+		bRefreshRequestedDuringTransition = true;
+		return;
+	}
 	if (UWorld* World = GetWorld())
 	{
 		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
@@ -121,20 +155,37 @@ bool UNelaricPawnInitStateComponent::CommitInitState(Nelaric::EInitState NextSta
 	const Nelaric::FInitStateSnapshot Previous{InitGeneration, InitState, bTerminalInitFailure};
 	bCommittingInitState = true;
 	InitState = NextState;
+	if (NextState == Nelaric::EInitState::DataAvailable)
+	{
+		OnInitDataAvailable();
+	}
+	else
+	{
+		OnInitDataInitialized();
+	}
 	NotifyInitChanged(Previous);
 	bCommittingInitState = false;
+	FlushDeferredInitRefresh();
 	return true;
 }
 
 void UNelaricPawnInitStateComponent::InvalidateInitGeneration()
 {
 	const Nelaric::FInitStateSnapshot Previous{InitGeneration, InitState, bTerminalInitFailure};
+	bCommittingInitState = true;
 	++InitGeneration.Value;
+	OnInitGenerationInvalidated(Previous);
 	CancelInitGenerationWork();
 	InitState = Nelaric::EInitState::Registered;
 	bTerminalInitFailure = false;
 	bReadyNotificationPending = false;
+	if (IsRegistered() && !bLeavingWorld)
+	{
+		OnInitRegistered();
+	}
 	NotifyInitChanged(Previous);
+	bCommittingInitState = false;
+	FlushDeferredInitRefresh();
 }
 
 void UNelaricPawnInitStateComponent::MarkTerminalInitFailure()
@@ -164,10 +215,22 @@ void UNelaricPawnInitStateComponent::NotifyInitChanged(const Nelaric::FInitState
 	}
 }
 
+void UNelaricPawnInitStateComponent::FlushDeferredInitRefresh()
+{
+	if (bRefreshRequestedDuringTransition && !bCommittingInitState)
+	{
+		bRefreshRequestedDuringTransition = false;
+		RequestInitRefresh();
+	}
+}
+
 void UNelaricPawnInitStateComponent::OnRegister()
 {
 	Super::OnRegister();
 	bLeavingWorld = false;
+	bCommittingInitState = true;
+	OnInitRegistered();
+	bCommittingInitState = false;
 	if (UWorld* World = GetWorld())
 	{
 		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
@@ -175,6 +238,7 @@ void UNelaricPawnInitStateComponent::OnRegister()
 			Subsystem->RegisterParticipant(this);
 		}
 	}
+	FlushDeferredInitRefresh();
 }
 
 void UNelaricPawnInitStateComponent::OnUnregister()

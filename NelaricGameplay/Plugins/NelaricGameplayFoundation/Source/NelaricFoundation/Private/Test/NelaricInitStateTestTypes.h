@@ -5,7 +5,7 @@
 #include "Components/ActorComponent.h"
 #include "Engine/World.h"
 #include "Pawn/NelaricPawnInitStateComponent.h"
-#include "World/NelaricInitStateWorldSubsystem.h"
+#include "Pawn/NelaricInitStateWorldSubsystem.h"
 
 #include "NelaricInitStateTestTypes.generated.h"
 
@@ -19,6 +19,11 @@ public:
 	bool bInternalReady = false;
 	int32 CancelCount = 0;
 	Nelaric::FInitGeneration GenerationAtCancel;
+	TArray<Nelaric::EInitState> EnteredStates;
+	int32 InvalidatedCount = 0;
+	Nelaric::FInitStateSnapshot LastInvalidated;
+	TWeakObjectPtr<UActorComponent> ObservedReadyPeer;
+	bool bPeerReadyInReadyEvent = false;
 
 	virtual bool IsInitApplicable() const override
 	{
@@ -30,6 +35,37 @@ public:
 	}
 
 protected:
+	virtual void OnInitRegistered() override
+	{
+		EnteredStates.Add(Nelaric::EInitState::Registered);
+	}
+
+	virtual void OnInitDataAvailable() override
+	{
+		EnteredStates.Add(Nelaric::EInitState::DataAvailable);
+	}
+
+	virtual void OnInitDataInitialized() override
+	{
+		EnteredStates.Add(Nelaric::EInitState::DataInitialized);
+	}
+
+	virtual void OnInitReady() override
+	{
+		EnteredStates.Add(Nelaric::EInitState::Ready);
+		if (const INelaricInitStateParticipantInterface* Peer =
+		        Cast<INelaricInitStateParticipantInterface>(ObservedReadyPeer.Get()))
+		{
+			bPeerReadyInReadyEvent = Peer->GetInitState() == Nelaric::EInitState::Ready;
+		}
+	}
+
+	virtual void OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot& Previous) override
+	{
+		++InvalidatedCount;
+		LastInvalidated = Previous;
+	}
+
 	virtual bool CanAdvanceInitState() override
 	{
 		return bAllowAdvance;

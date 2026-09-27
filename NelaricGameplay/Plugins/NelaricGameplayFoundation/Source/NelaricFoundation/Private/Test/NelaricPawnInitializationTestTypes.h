@@ -20,6 +20,8 @@ public:
 	mutable int32 ReadinessChecks = 0;
 	int32 InitializationEvents = 0;
 	int32 RevocationEvents = 0;
+	TWeakObjectPtr<UActorComponent> ObservedManagedComponent;
+	bool bManagedRegisteredAtRevocation = false;
 	void SetConfig(UNelaricPawnInitializationConfig* Config)
 	{
 		SetInitializationConfig(Config);
@@ -40,6 +42,8 @@ public:
 		if (Component == this)
 		{
 			++RevocationEvents;
+			bManagedRegisteredAtRevocation =
+			    ObservedManagedComponent.IsValid() && ObservedManagedComponent->IsRegistered();
 		}
 	}
 

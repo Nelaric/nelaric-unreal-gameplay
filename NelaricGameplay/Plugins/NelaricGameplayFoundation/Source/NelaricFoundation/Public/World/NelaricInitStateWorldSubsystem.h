@@ -80,19 +80,24 @@ public:
 	 * component. Dependency references do not transfer ownership.
 	 * @param Component Component owned by the configured actor.
 	 * @param ComponentId Stable ID unique on that actor.
-	 * @param bRequiredForPawnReady Whether pawn readiness includes this member.
+	 * @param bRequiredForPawnReady Whether pawn readiness
+	 * includes this member.
 	 * @param Dependencies Components required to reach Ready.
+	 * @return Whether the
+	 * participant was accepted without an ID collision.
 	 */
-	NELARICFOUNDATION_API void ConfigureParticipant(UActorComponent* Component, FName ComponentId,
+	NELARICFOUNDATION_API bool ConfigureParticipant(UActorComponent* Component, FName ComponentId,
 	                                                bool bRequiredForPawnReady,
 	                                                const TArray<UActorComponent*>& Dependencies);
 
 	/** @brief Installs a resolved local dependency graph in one update.
 	 * @details Call on the game thread before registering its components.
 	 * Cycles form Ready commit groups; other dependencies order Ready.
-	 * @param Configurations Entries resolved against local actor components.
+	 * @param Configurations Entries resolved
+	 * against local actor components.
+	 * @return Whether the whole graph was accepted without an ID collision.
 	 */
-	NELARICFOUNDATION_API void
+	NELARICFOUNDATION_API bool
 	ConfigureParticipants(const TArray<Nelaric::FInitParticipantConfiguration>& Configurations);
 
 	/** @brief Checks the configured required participants of an actor.
@@ -109,17 +114,17 @@ public:
 	 */
 	NELARICFOUNDATION_API bool IsParticipantReady(UActorComponent* Component) const;
 
-	/** @brief Removes the manager's configuration for a component.
-	 * @param Component Component leaving its configured pawn.
-	 */
-	NELARICFOUNDATION_API void UnconfigureParticipant(UActorComponent* Component);
-
 public:
 	virtual void Deinitialize() override;
 
 private:
+	friend class UNelaricPawnInitializationComponent;
+	bool HasConfiguredId(const AActor* Owner, FName ComponentId) const;
+	void StopConfiguredParticipants(const TArray<UActorComponent*>& Components);
 	using FComponentPtr = TWeakObjectPtr<UActorComponent>;
 	TSet<FComponentPtr> RegisteredComponents;
+	TSet<FComponentPtr> StoppedComponents;
+	bool bShuttingDown = false;
 	struct FConfiguredParticipant
 	{
 		TWeakObjectPtr<AActor> Owner;

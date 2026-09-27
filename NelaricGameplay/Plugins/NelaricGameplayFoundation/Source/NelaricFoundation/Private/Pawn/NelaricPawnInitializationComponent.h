@@ -8,6 +8,7 @@
 
 #include "Pawn/NelaricPawnComponent.h"
 #include "Containers/Map.h"
+#include "Delegates/Delegate.h"
 
 #include "NelaricPawnInitializationComponent.generated.h"
 
@@ -101,6 +102,8 @@ public:
 
 public:
 	UNelaricPawnInitializationComponent(const FObjectInitializer& ObjectInitializer);
+	bool IsConfiguredInstance(FName ComponentId, const UActorComponent* Component) const;
+	bool HasConfiguredId(FName ComponentId) const;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -118,7 +121,11 @@ private:
 	TMap<FName, TObjectPtr<UActorComponent>> ConfiguredComponents;
 	TArray<FName> RequiredComponentIds;
 	bool bConfiguredComponentsCreated = false;
+	bool bInitializationEnded = false;
+	FDelegateHandle WorldBeginTearDownHandle;
 	void RevokePawnReady();
+	void ShutdownInitialization();
+	void HandleWorldBeginTearDown(UWorld* World);
 	void DestroyConfiguredComponents();
 	bool ValidateConfiguration() const;
 	void CreateConfiguredComponents();

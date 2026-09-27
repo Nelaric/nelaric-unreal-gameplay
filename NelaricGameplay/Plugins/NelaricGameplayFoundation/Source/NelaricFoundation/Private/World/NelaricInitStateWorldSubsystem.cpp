@@ -10,10 +10,30 @@
 
 void UNelaricInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 {
-	if (!IsValid(Component) || Component->GetWorld() != GetWorld() ||
+	if (bShuttingDown || !IsValid(Component) || StoppedComponents.Contains(Component) ||
+	    Component->GetWorld() != GetWorld() ||
 	    !Component->GetClass()->ImplementsInterface(UNelaricInitStateParticipantInterface::StaticClass()))
 	{
 		return;
+	}
+	static const FString ManagedPrefix(TEXT("NelaricInit_"));
+	const FString ComponentName = Component->GetName();
+	if (ComponentName.StartsWith(ManagedPrefix))
+	{
+		const FName ComponentId(*ComponentName.RightChop(ManagedPrefix.Len()));
+		if (AActor* Owner = Component->GetOwner())
+		{
+			TArray<UNelaricPawnInitializationComponent*> Managers;
+			Owner->GetComponents<UNelaricPawnInitializationComponent>(Managers);
+			for (const UNelaricPawnInitializationComponent* Manager : Managers)
+			{
+				if (IsValid(Manager) && Manager->HasConfiguredId(ComponentId) &&
+				    !Manager->IsConfiguredInstance(ComponentId, Component))
+				{
+					return;
+				}
+			}
+		}
 	}
 
 	RegisteredComponents.Add(Component);
@@ -24,6 +44,10 @@ void UNelaricInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Compo
 void UNelaricInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Component)
 {
 	RegisteredComponents.Remove(Component);
+	if (bShuttingDown || StoppedComponents.Contains(Component))
+	{
+		return;
+	}
 	if (IsValid(Component))
 	{
 		PendingOwners.Add(Component->GetOwner());
@@ -33,7 +57,7 @@ void UNelaricInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Com
 	ProcessParticipants();
 }
 
-void UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Component, FName ComponentId,
+bool UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Component, FName ComponentId,
                                                            bool bRequiredForPawnReady,
                                                            const TArray<UActorComponent*>& Dependencies)
 {
@@ -42,12 +66,54 @@ void UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Comp
 	Configuration.ComponentId = ComponentId;
 	Configuration.bRequiredForPawnReady = bRequiredForPawnReady;
 	Configuration.Dependencies = Dependencies;
-	ConfigureParticipants({Configuration});
+	return ConfigureParticipants({Configuration});
 }
 
-void UNelaricInitStateWorldSubsystem::ConfigureParticipants(
+bool UNelaricInitStateWorldSubsystem::ConfigureParticipants(
     const TArray<Nelaric::FInitParticipantConfiguration>& Configurations)
 {
+	if (bShuttingDown)
+	{
+		return false;
+	}
+	for (int32 Index = 0; Index < Configurations.Num(); ++Index)
+	{
+		const Nelaric::FInitParticipantConfiguration& Entry = Configurations[Index];
+		UActorComponent* Component = Entry.Component;
+		AActor* Owner = IsValid(Component) ? Component->GetOwner() : nullptr;
+		if (!Owner || Component->GetWorld() != GetWorld() || Entry.ComponentId.IsNone() ||
+		    StoppedComponents.Contains(Component) || ConfiguredComponents.Contains(Component))
+		{
+			return false;
+		}
+		for (int32 PreviousIndex = 0; PreviousIndex < Index; ++PreviousIndex)
+		{
+			const Nelaric::FInitParticipantConfiguration& Previous = Configurations[PreviousIndex];
+			if (Previous.Component == Component || (Previous.Component && Previous.Component->GetOwner() == Owner &&
+			                                        Previous.ComponentId == Entry.ComponentId))
+			{
+				return false;
+			}
+		}
+		for (const auto& Pair : ConfiguredComponents)
+		{
+			if (Pair.Value.Owner.Get() == Owner && Pair.Value.ComponentId == Entry.ComponentId &&
+			    Pair.Key.Get() != Component)
+			{
+				return false;
+			}
+		}
+		TArray<UNelaricPawnInitializationComponent*> Managers;
+		Owner->GetComponents<UNelaricPawnInitializationComponent>(Managers);
+		for (const UNelaricPawnInitializationComponent* Manager : Managers)
+		{
+			if (IsValid(Manager) && Manager->HasConfiguredId(Entry.ComponentId) &&
+			    !Manager->IsConfiguredInstance(Entry.ComponentId, Component))
+			{
+				return false;
+			}
+		}
+	}
 	bool bChanged = false;
 	for (const Nelaric::FInitParticipantConfiguration& Entry : Configurations)
 	{
@@ -74,20 +140,50 @@ void UNelaricInitStateWorldSubsystem::ConfigureParticipants(
 		QueueAllRegistered();
 		ProcessParticipants();
 	}
+	return true;
 }
 
-void UNelaricInitStateWorldSubsystem::UnconfigureParticipant(UActorComponent* Component)
+void UNelaricInitStateWorldSubsystem::StopConfiguredParticipants(const TArray<UActorComponent*>& Components)
 {
-	if (ConfiguredComponents.Remove(Component) > 0)
+	bool bChanged = false;
+	for (UActorComponent* Component : Components)
 	{
+		if (!Component)
+		{
+			continue;
+		}
+		StoppedComponents.Add(Component);
+		RegisteredComponents.Remove(Component);
+		QueuedComponents.Remove(Component);
+		bChanged |= ConfiguredComponents.Remove(Component) > 0;
 		if (IsValid(Component))
 		{
-			PendingOwners.Add(Component->GetOwner());
+			PendingOwners.Remove(Component->GetOwner());
 		}
+	}
+	if (!bProcessing)
+	{
+		PendingQueue.RemoveAll([this](const FComponentPtr& Component)
+		                       { return StoppedComponents.Contains(Component); });
+	}
+	if (bChanged && !bShuttingDown)
+	{
 		RebuildDependencyGraph();
 		QueueAllRegistered();
 		ProcessParticipants();
 	}
+}
+
+bool UNelaricInitStateWorldSubsystem::HasConfiguredId(const AActor* Owner, FName ComponentId) const
+{
+	for (const auto& Pair : ConfiguredComponents)
+	{
+		if (Pair.Value.Owner.Get() == Owner && Pair.Value.ComponentId == ComponentId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void UNelaricInitStateWorldSubsystem::RebuildDependencyGraph()
@@ -187,7 +283,8 @@ void UNelaricInitStateWorldSubsystem::RebuildDependencyGraph()
 
 void UNelaricInitStateWorldSubsystem::QueueParticipant(UActorComponent* Component)
 {
-	if (IsValid(Component) && RegisteredComponents.Contains(Component) && !QueuedComponents.Contains(Component))
+	if (!bShuttingDown && IsValid(Component) && !StoppedComponents.Contains(Component) &&
+	    RegisteredComponents.Contains(Component) && !QueuedComponents.Contains(Component))
 	{
 		QueuedComponents.Add(Component);
 		PendingQueue.Add(Component);
@@ -217,7 +314,7 @@ void UNelaricInitStateWorldSubsystem::QueueAllRegistered()
 
 bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor* Owner) const
 {
-	if (!Owner)
+	if (bShuttingDown || !Owner)
 	{
 		return false;
 	}
@@ -244,9 +341,9 @@ bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor*
 bool UNelaricInitStateWorldSubsystem::IsParticipantReady(UActorComponent* Component) const
 {
 	const INelaricInitStateParticipantInterface* Participant = Cast<INelaricInitStateParticipantInterface>(Component);
-	return IsValid(Component) && ConfiguredComponents.Contains(Component) && RegisteredComponents.Contains(Component) &&
-	       Participant && Participant->IsInitApplicable() && !Participant->HasTerminalInitFailure() &&
-	       Participant->GetInitState() == Nelaric::EInitState::Ready;
+	return !bShuttingDown && IsValid(Component) && ConfiguredComponents.Contains(Component) &&
+	       RegisteredComponents.Contains(Component) && Participant && Participant->IsInitApplicable() &&
+	       !Participant->HasTerminalInitFailure() && Participant->GetInitState() == Nelaric::EInitState::Ready;
 }
 
 void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorComponent* Component)
@@ -386,7 +483,7 @@ bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 void UNelaricInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* Component,
                                                                const Nelaric::FInitStateSnapshot& Previous)
 {
-	if (!RegisteredComponents.Contains(Component))
+	if (bShuttingDown || StoppedComponents.Contains(Component) || !RegisteredComponents.Contains(Component))
 	{
 		return;
 	}
@@ -419,7 +516,7 @@ void UNelaricInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* 
 
 void UNelaricInitStateWorldSubsystem::RequestParticipantRefresh(UActorComponent* Component)
 {
-	if (RegisteredComponents.Contains(Component))
+	if (!bShuttingDown && !StoppedComponents.Contains(Component) && RegisteredComponents.Contains(Component))
 	{
 		QueueParticipant(Component);
 		ProcessParticipants();
@@ -428,7 +525,7 @@ void UNelaricInitStateWorldSubsystem::RequestParticipantRefresh(UActorComponent*
 
 void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 {
-	if (bProcessing || bInvalidatingDependents)
+	if (bShuttingDown || bProcessing || bInvalidatingDependents)
 	{
 		return;
 	}
@@ -455,7 +552,7 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 				RegisteredComponents.Remove(ParticipantPtr);
 				continue;
 			}
-			if (!RegisteredComponents.Contains(ParticipantPtr))
+			if (StoppedComponents.Contains(ParticipantPtr) || !RegisteredComponents.Contains(ParticipantPtr))
 			{
 				continue;
 			}
@@ -525,7 +622,9 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 
 void UNelaricInitStateWorldSubsystem::Deinitialize()
 {
+	bShuttingDown = true;
 	RegisteredComponents.Empty();
+	StoppedComponents.Empty();
 	ConfiguredComponents.Empty();
 	ForwardDependencies.Empty();
 	ReverseDependencies.Empty();

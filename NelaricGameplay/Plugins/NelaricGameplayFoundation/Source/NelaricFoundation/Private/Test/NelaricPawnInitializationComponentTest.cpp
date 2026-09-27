@@ -298,6 +298,108 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	                 EAutomationExpectedErrorFlags::Contains, 1);
 	CollisionPawn->DispatchBeginPlay();
 	TestFalse(TEXT("External same-ID instance is not adopted"), CollisionManager->IsPawnInitialized());
+
+	UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>();
+	UNelaricConfiguredInitStateTestComponent* ExternalParticipant =
+	    NewObject<UNelaricConfiguredInitStateTestComponent>(ConfiguredPawn, TEXT("ExternalReplacement"));
+	ExternalParticipant->RegisterComponent();
+	TestFalse(TEXT("External ID claim is rejected"),
+	          Subsystem->ConfigureParticipant(ExternalParticipant, TEXT("Replacement"), true, {}));
+	TestFalse(TEXT("External participant cannot claim a managed ID"),
+	          Subsystem->IsParticipantReady(ExternalParticipant));
+	TestTrue(TEXT("Rejected external ID leaves the managed round Ready"), Manager->IsPawnInitialized());
+	UActorComponent* ManagedReplacement = FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Replacement"));
+	TestFalse(TEXT("External reconfiguration is rejected"),
+	          Subsystem->ConfigureParticipant(ManagedReplacement, TEXT("ExternalId"), false, {}));
+	TestTrue(TEXT("External reconfiguration cannot change a managed instance"),
+	         Subsystem->IsParticipantReady(ManagedReplacement));
+	TestTrue(TEXT("External reconfiguration leaves Pawn Ready"), Manager->IsPawnInitialized());
+	ANelaricPawn* PreclaimedPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricConfiguredInitStateTestComponent* Preclaimed =
+	    NewObject<UNelaricConfiguredInitStateTestComponent>(PreclaimedPawn, TEXT("ExternalFirst"));
+	Preclaimed->RegisterComponent();
+	Subsystem->ConfigureParticipant(Preclaimed, TEXT("First"), true, {});
+	UNelaricPawnInitializationTestComponent* PreclaimedManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(PreclaimedPawn);
+	UNelaricPawnInitializationConfig* PreclaimedConfig = NewObject<UNelaricPawnInitializationConfig>(PreclaimedManager);
+	PreclaimedConfig->Components = {PlainFirst};
+	PreclaimedManager->SetConfig(PreclaimedConfig);
+	PreclaimedManager->bReady = true;
+	PreclaimedManager->RegisterComponent();
+	AddExpectedError(TEXT("component ID is already configured"), EAutomationExpectedErrorFlags::Contains, 1);
+	PreclaimedPawn->DispatchBeginPlay();
+	TestFalse(TEXT("Preclaimed ID prevents a partial managed round"), PreclaimedManager->IsPawnInitialized());
+	TestNull(TEXT("Preclaimed ID creates no managed instance"),
+	         FindObject<UActorComponent>(PreclaimedPawn, TEXT("NelaricInit_First")));
+	ANelaricPawn* BypassPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricPawnInitializationTestComponent* BypassManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(BypassPawn);
+	UNelaricPawnInitializationConfig* BypassConfig = NewObject<UNelaricPawnInitializationConfig>(BypassManager);
+	BypassConfig->Components = {PlainFirst};
+	BypassManager->SetConfig(BypassConfig);
+	BypassManager->bReady = true;
+	BypassManager->RegisterComponent();
+	BypassPawn->DispatchBeginPlay();
+	UActorComponent* BypassManaged = FindObject<UActorComponent>(BypassPawn, TEXT("NelaricInit_First"));
+	TestTrue(TEXT("Bypass fixture starts Ready"), BypassManager->IsPawnInitialized());
+	if (!BypassManaged)
+	{
+		return false;
+	}
+	BypassManaged->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
+	BypassManaged->DestroyComponent();
+	UNelaricConfiguredInitStateTestComponent* BypassExternal =
+	    NewObject<UNelaricConfiguredInitStateTestComponent>(BypassPawn, TEXT("NelaricInit_First"));
+	BypassExternal->RegisterComponent();
+	TestFalse(TEXT("Direct same-ID creation cannot regain Pawn Ready"), BypassManager->IsPawnInitialized());
+	TestEqual(TEXT("Direct same-ID participant is not scheduled"), BypassExternal->GetInitState(),
+	          Nelaric::EInitState::Registered);
+
+	ANelaricPawn* TeardownPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricPawnInitializationTestComponent* TeardownManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(TeardownPawn);
+	UNelaricPawnInitializationConfig* TeardownConfig = NewObject<UNelaricPawnInitializationConfig>(TeardownManager);
+	TeardownConfig->Components = {PlainFirst};
+	TeardownManager->SetConfig(TeardownConfig);
+	TeardownManager->bReady = true;
+	TeardownManager->OnPawnInitializationRevoked.AddDynamic(TeardownManager,
+	                                                        &UNelaricPawnInitializationTestComponent::RecordRevocation);
+	TeardownManager->RegisterComponent();
+	TeardownPawn->DispatchBeginPlay();
+	UNelaricPawnInitStateComponent* TeardownInstance =
+	    Cast<UNelaricPawnInitStateComponent>(FindObject<UActorComponent>(TeardownPawn, TEXT("NelaricInit_First")));
+	TestTrue(TEXT("Teardown round begins Ready"), TeardownManager->IsPawnInitialized());
+	if (!TeardownInstance)
+	{
+		return false;
+	}
+	TeardownManager->ObservedManagedComponent = TeardownInstance;
+	const Nelaric::FInitGeneration TeardownGeneration = TeardownInstance->GetInitGeneration();
+	TeardownManager->EndPlay(EEndPlayReason::Destroyed);
+	TestEqual(TEXT("EndPlay announces revocation once"), TeardownManager->RevocationEvents, 1);
+	TestTrue(TEXT("EndPlay revokes before unregistering the instance"),
+	         TeardownManager->bManagedRegisteredAtRevocation);
+	TestFalse(TEXT("EndPlay removes the managed instance"),
+	          TeardownPawn->GetInstanceComponents().Contains(TeardownInstance));
+	TestFalse(TEXT("Stopped instance cannot remain registered for Ready"),
+	          Subsystem->IsParticipantReady(TeardownInstance));
+	TestNull(TEXT("Late async result cannot resolve the old generation"),
+	         UNelaricPawnInitStateComponent::ResolveInitResult(
+	             TWeakObjectPtr<UNelaricPawnInitStateComponent>(TeardownInstance), World, TeardownGeneration));
+	Subsystem->RequestParticipantRefresh(TeardownInstance);
+	TestFalse(TEXT("Late refresh cannot restart EndPlay round"), TeardownManager->TryInitializePawn());
+
+	const int32 RevocationsBeforeWorldTearDown = Manager->RevocationEvents;
+	FWorldDelegates::OnWorldBeginTearDown.Broadcast(World);
+	TestEqual(TEXT("World teardown announces revocation once"), Manager->RevocationEvents,
+	          RevocationsBeforeWorldTearDown + 1);
+	TestFalse(TEXT("World teardown clears Pawn Ready"), Manager->IsPawnInitialized());
+	TestNull(TEXT("World teardown removes configured instance"),
+	         FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Replacement")));
+	TestFalse(TEXT("World teardown cannot restart the old round"), Manager->TryInitializePawn());
+	Manager->EndPlay(EEndPlayReason::Destroyed);
+	TestEqual(TEXT("EndPlay after world teardown does not revoke twice"), Manager->RevocationEvents,
+	          RevocationsBeforeWorldTearDown + 1);
 	return true;
 }
 

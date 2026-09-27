@@ -88,9 +88,26 @@ bool UNelaricPawnInitializationComponent::CanInitializePawn_Implementation() con
 	return GetPawn() != nullptr;
 }
 
+bool UNelaricPawnInitializationComponent::IsConfiguredInstance(FName ComponentId,
+                                                               const UActorComponent* Component) const
+{
+	return ConfiguredComponents.FindRef(ComponentId).Get() == Component && Component != nullptr;
+}
+
+bool UNelaricPawnInitializationComponent::HasConfiguredId(FName ComponentId) const
+{
+	return ConfiguredComponents.Contains(ComponentId);
+}
+
 void UNelaricPawnInitializationComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (bInitializationEnded)
+	{
+		return;
+	}
+	WorldBeginTearDownHandle = FWorldDelegates::OnWorldBeginTearDown.AddUObject(
+	    this, &UNelaricPawnInitializationComponent::HandleWorldBeginTearDown);
 	ActiveConfig = InitializationConfig;
 	CreateConfiguredComponents();
 	bInitializationAllowed = true;
@@ -99,11 +116,30 @@ void UNelaricPawnInitializationComponent::BeginPlay()
 
 void UNelaricPawnInitializationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	FWorldDelegates::OnWorldBeginTearDown.Remove(WorldBeginTearDownHandle);
+	ShutdownInitialization();
+	Super::EndPlay(EndPlayReason);
+}
+
+void UNelaricPawnInitializationComponent::HandleWorldBeginTearDown(UWorld* World)
+{
+	if (World == GetWorld())
+	{
+		ShutdownInitialization();
+	}
+}
+
+void UNelaricPawnInitializationComponent::ShutdownInitialization()
+{
+	if (bInitializationEnded)
+	{
+		return;
+	}
+	bInitializationEnded = true;
 	bInitializationAllowed = false;
 	RevokePawnReady();
 	DestroyConfiguredComponents();
 	ActiveConfig = nullptr;
-	Super::EndPlay(EndPlayReason);
 }
 
 void UNelaricPawnInitializationComponent::RevokePawnReady()
@@ -122,24 +158,35 @@ void UNelaricPawnInitializationComponent::DestroyConfiguredComponents()
 	ConfiguredComponents.Empty();
 	RequiredComponentIds.Empty();
 	bConfiguredComponentsCreated = false;
-	if (UWorld* World = GetWorld())
-	{
-		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
-		{
-			for (const auto& Pair : OldComponents)
-			{
-				Subsystem->UnconfigureParticipant(Pair.Value.Get());
-			}
-		}
-	}
+	TArray<UActorComponent*> ToStop;
+	ToStop.Reserve(OldComponents.Num());
 	for (const auto& Pair : OldComponents)
 	{
 		if (UActorComponent* Component = Pair.Value.Get())
 		{
-			// Release the stable name so the next round can create a new instance.
-			Component->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
-			Component->DestroyComponent();
+			ToStop.Add(Component);
 		}
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
+		{
+			Subsystem->StopConfiguredParticipants(ToStop);
+		}
+	}
+	for (UActorComponent* Component : ToStop)
+	{
+		if (!IsValid(Component))
+		{
+			continue;
+		}
+		if (INelaricInitStateParticipantInterface* Participant = Cast<INelaricInitStateParticipantInterface>(Component))
+		{
+			Participant->InvalidateInitGeneration();
+		}
+		// Release the stable name so the next round can create a new instance.
+		Component->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
+		Component->DestroyComponent();
 	}
 }
 
@@ -241,6 +288,21 @@ bool UNelaricPawnInitializationComponent::ValidateConfiguration() const
 			       Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *InstanceName.ToString());
 			return false;
 		}
+		if (const UWorld* World = GetWorld())
+		{
+			if (const UNelaricInitStateWorldSubsystem* Subsystem =
+			        World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
+			{
+				if (Subsystem->HasConfiguredId(Owner, Entry.ComponentId))
+				{
+					UE_LOG(
+					    LogTemp, Error,
+					    TEXT("Invalid pawn initialization entry [%d] '%s' on %s: component ID is already configured."),
+					    Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner));
+					return false;
+				}
+			}
+		}
 	}
 	return true;
 }
@@ -317,7 +379,12 @@ void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 		}
 		LocalGraph.Add(MoveTemp(Configuration));
 	}
-	Subsystem->ConfigureParticipants(LocalGraph);
+	if (!Subsystem->ConfigureParticipants(LocalGraph))
+	{
+		bConfigValid = false;
+		DestroyConfiguredComponents();
+		return;
+	}
 	bConfiguredComponentsCreated = true;
 	for (UActorComponent* Component : ToRegister)
 	{

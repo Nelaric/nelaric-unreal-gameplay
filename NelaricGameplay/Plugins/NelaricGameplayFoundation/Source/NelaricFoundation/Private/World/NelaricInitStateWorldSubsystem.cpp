@@ -28,8 +28,8 @@ void UNelaricInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Com
 }
 
 void UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Component, FName ComponentId,
-	                                                           bool bRequiredForPawnReady,
-	                                                           const TArray<UActorComponent*>& Dependencies)
+                                                           bool bRequiredForPawnReady,
+                                                           const TArray<UActorComponent*>& Dependencies)
 {
 	if (IsValid(Component) && !ComponentId.IsNone())
 	{
@@ -70,8 +70,7 @@ bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor*
 		const INelaricInitStateParticipantInterface* Participant =
 		    Cast<INelaricInitStateParticipantInterface>(Component);
 		if (!RegisteredComponents.Contains(Component) || !Participant || !Participant->IsInitApplicable() ||
-		    Participant->HasTerminalInitFailure() ||
-		    Participant->GetInitState() != Nelaric::EInitState::Ready)
+		    Participant->HasTerminalInitFailure() || Participant->GetInitState() != Nelaric::EInitState::Ready)
 		{
 			return false;
 		}
@@ -139,8 +138,8 @@ bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 				const INelaricInitStateParticipantInterface* Required =
 				    Cast<INelaricInitStateParticipantInterface>(Dependency);
 				if (!IsValid(Dependency) || Dependency->GetOwner() != Component->GetOwner() || !Required ||
-				    !RegisteredComponents.Contains(Dependency) ||
-				    !Required->IsInitApplicable() || Required->HasTerminalInitFailure())
+				    !RegisteredComponents.Contains(Dependency) || !Required->IsInitApplicable() ||
+				    Required->HasTerminalInitFailure())
 				{
 					return false;
 				}

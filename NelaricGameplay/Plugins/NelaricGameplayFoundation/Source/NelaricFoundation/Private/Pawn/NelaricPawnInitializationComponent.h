@@ -24,8 +24,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNelaricPawnInitialized, UNelaricPaw
  * game-specific readiness. Assign InitializationConfig on a pawn or
  * character Blueprint to create components. It tries at BeginPlay; call
  * TryInitializePawn again when required context changes. Initialization is
- * local and is not replicated. The pawn owns the component. Operations and
- * notifications run on the game thread.
+ * local and is not replicated. Each side creates its own configured
+ * components, whose dynamic instances do not replicate. Replicate gameplay
+ * data through separate UE paths and retry locally when that data arrives.
+ * The pawn owns the component. Operations and notifications run on the game
+ * thread.
  */
 UCLASS(MinimalAPI, Blueprintable, ClassGroup = (Nelaric), meta = (BlueprintSpawnableComponent))
 class UNelaricPawnInitializationComponent : public UNelaricPawnComponent

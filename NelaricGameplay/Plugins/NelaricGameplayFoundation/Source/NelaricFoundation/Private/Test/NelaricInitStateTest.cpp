@@ -45,8 +45,7 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Own preparation proceeds without a ready dependency"), Dependent->GetInitState(),
 	          Nelaric::EInitState::DataInitialized);
 	TestFalse(TEXT("Missing dependency is recoverable"), Dependent->HasTerminalInitFailure());
-	TestEqual(TEXT("Unregistered dependency has not advanced"), First->GetInitState(),
-	          Nelaric::EInitState::Registered);
+	TestEqual(TEXT("Unregistered dependency has not advanced"), First->GetInitState(), Nelaric::EInitState::Registered);
 	TestTrue(TEXT("Internal gate is independent of unresolved dependencies"), Dependent->CanEnterReady());
 	First->RegisterComponent();
 	TestEqual(TEXT("Internal preparation blocks Ready"), First->GetInitState(), Nelaric::EInitState::DataInitialized);

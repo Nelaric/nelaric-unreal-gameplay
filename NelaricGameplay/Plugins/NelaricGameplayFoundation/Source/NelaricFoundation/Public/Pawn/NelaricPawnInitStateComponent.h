@@ -41,7 +41,10 @@ public:
 	 */
 	NELARICFOUNDATION_API virtual void NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous) override;
 
-	/// Requests another coordinator pass after a dependency reference changes.
+	/** @brief Requests another local coordinator pass after context changes.
+	 * @details Call from a replicated gameplay-data arrival event, such as
+	 * OnRep, after updating local data used by readiness checks.
+	 */
 	NELARICFOUNDATION_API void RequestInitRefresh();
 
 	/// Returns the state owned by this component.

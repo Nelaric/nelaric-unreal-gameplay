@@ -4,6 +4,7 @@
 
 #include "Pawn/NelaricPawnInitializationComponent.h"
 #include "Pawn/NelaricPawnInitializationConfig.h"
+#include "Pawn/NelaricPawn.h"
 #include "Test/NelaricInitStateTestTypes.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -57,9 +58,33 @@ public:
 protected:
 	virtual void OnRegister() override
 	{
-		const FName PeerName = GetFName() == TEXT("NelaricInit_First") ? TEXT("NelaricInit_Second")
-		                                                              : TEXT("NelaricInit_First");
+		const FName PeerName =
+		    GetFName() == TEXT("NelaricInit_First") ? TEXT("NelaricInit_Second") : TEXT("NelaricInit_First");
 		bPeerExistsOnRegister = FindObject<UActorComponent>(GetOwner(), *PeerName.ToString()) != nullptr;
 		Super::OnRegister();
+	}
+};
+
+UCLASS(MinimalAPI)
+class UNelaricReplicatingConfiguredInitStateTestComponent : public UNelaricConfiguredInitStateTestComponent
+{
+	GENERATED_BODY()
+
+public:
+	UNelaricReplicatingConfiguredInitStateTestComponent()
+	{
+		SetIsReplicatedByDefault(true);
+	}
+};
+
+UCLASS(MinimalAPI)
+class ANelaricClientRoleInitializationTestPawn : public ANelaricPawn
+{
+	GENERATED_BODY()
+
+public:
+	void SimulateClientRole()
+	{
+		SetRole(ROLE_SimulatedProxy);
 	}
 };

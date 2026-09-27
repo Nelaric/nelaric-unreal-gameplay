@@ -60,7 +60,7 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	UNelaricPawnInitializationConfig* Config = NewObject<UNelaricPawnInitializationConfig>(Manager);
 	FNelaricPawnInitializationEntry FirstEntry;
 	FirstEntry.ComponentId = TEXT("First");
-	FirstEntry.ComponentClass = UNelaricConfiguredInitStateTestComponent::StaticClass();
+	FirstEntry.ComponentClass = UNelaricReplicatingConfiguredInitStateTestComponent::StaticClass();
 	FirstEntry.DependencyIds.Add(TEXT("Second"));
 	Config->Components.Add(FirstEntry);
 	FNelaricPawnInitializationEntry SecondEntry = FirstEntry;
@@ -103,9 +103,41 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Created instances are actor-managed"),
 	         ConfiguredPawn->GetInstanceComponents().Contains(FirstCreated) &&
 	             ConfiguredPawn->GetInstanceComponents().Contains(SecondCreated));
+	TestTrue(TEXT("Test class defaults to replicated"),
+	         UNelaricReplicatingConfiguredInitStateTestComponent::StaticClass()
+	             ->GetDefaultObject<UActorComponent>()
+	             ->GetIsReplicated());
+	TestFalse(TEXT("Configured authority instance does not replicate"), FirstCreated->GetIsReplicated());
+	TestFalse(TEXT("Second configured authority instance does not replicate"), SecondCreated->GetIsReplicated());
+	ANelaricClientRoleInitializationTestPawn* ClientPawn =
+	    World->SpawnActor<ANelaricClientRoleInitializationTestPawn>();
+	ClientPawn->SimulateClientRole();
+	UNelaricPawnInitializationTestComponent* ClientManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(ClientPawn);
+	ClientManager->SetConfig(Config);
+	ClientManager->bReady = true;
+	ClientManager->RegisterComponent();
+	ClientPawn->DispatchBeginPlay();
+	UActorComponent* ClientFirst = FindObject<UActorComponent>(ClientPawn, TEXT("NelaricInit_First"));
+	UActorComponent* ClientSecond = FindObject<UActorComponent>(ClientPawn, TEXT("NelaricInit_Second"));
+	TestNotNull(TEXT("Client creates its own first instance"), ClientFirst);
+	TestNotNull(TEXT("Client creates its own second instance"), ClientSecond);
+	TestTrue(TEXT("Same ID has distinct local instances"), ClientFirst && ClientFirst != FirstCreated);
+	TestTrue(TEXT("Client instance is owned by client pawn"), ClientFirst && ClientFirst->GetOwner() == ClientPawn);
+	TestTrue(TEXT("Client selected client-only entry"),
+	         FindObject<UActorComponent>(ClientPawn, TEXT("NelaricInit_ClientOnly")) != nullptr);
+	TestTrue(TEXT("Client initialization reaches Ready"), ClientManager->IsPawnInitialized());
+	TestTrue(TEXT("Client configured instance does not replicate"), ClientFirst && !ClientFirst->GetIsReplicated());
+	TestTrue(TEXT("Client second instance does not replicate"), ClientSecond && !ClientSecond->GetIsReplicated());
+	if (!ClientFirst || !ClientSecond)
+	{
+		return false;
+	}
+	const Nelaric::FInitGeneration ClientGeneration =
+	    Cast<UNelaricConfiguredInitStateTestComponent>(ClientFirst)->GetInitGeneration();
 	TestTrue(TEXT("Repeated initialization keeps the first instance"), Manager->TryInitializePawn());
-	TestEqual(TEXT("Stable ID is not duplicated"), FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_First")),
-	          FirstCreated);
+	TestEqual(TEXT("Stable ID is not duplicated"),
+	          FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_First")), FirstCreated);
 	TestEqual(TEXT("First cycle member is Ready"),
 	          Cast<UNelaricConfiguredInitStateTestComponent>(FirstCreated)->GetInitState(), Nelaric::EInitState::Ready);
 	TestEqual(TEXT("Second cycle member is Ready"),
@@ -119,6 +151,9 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	              Nelaric::EInitState::Ready);
 	TestFalse(TEXT("Required invalidation blocks pawn readiness"), Manager->TryInitializePawn());
 	TestFalse(TEXT("Required invalidation clears pawn readiness"), Manager->IsPawnInitialized());
+	TestTrue(TEXT("Authority invalidation leaves client conclusion local"), ClientManager->IsPawnInitialized());
+	TestTrue(TEXT("Authority invalidation leaves client generation local"),
+	         ClientGeneration == Cast<UNelaricConfiguredInitStateTestComponent>(ClientFirst)->GetInitGeneration());
 
 	auto RejectConfig = [this, World](const TArray<FNelaricPawnInitializationEntry>& Entries,
 	                                  const TCHAR* ExpectedError, bool bAddConflictingInstance = false)
@@ -176,6 +211,21 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	ServerDependent.DependencyIds = {TEXT("Second")};
 	RejectConfig({ServerDependent, ClientOnly}, TEXT("dependency is not created on authority"));
 	RejectConfig({PlainFirst, PlainSecond}, TEXT("instance 'NelaricInit_Second' has a conflicting class"), true);
+	ANelaricPawn* CollisionPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricPawnInitializationTestComponent* CollisionManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(CollisionPawn);
+	UNelaricPawnInitializationConfig* CollisionConfig = NewObject<UNelaricPawnInitializationConfig>(CollisionManager);
+	CollisionConfig->Components = {PlainFirst};
+	CollisionManager->SetConfig(CollisionConfig);
+	CollisionManager->bReady = true;
+	CollisionManager->RegisterComponent();
+	UActorComponent* ExternalInstance =
+	    NewObject<UNelaricReplicatingConfiguredInitStateTestComponent>(CollisionPawn, TEXT("NelaricInit_First"));
+	CollisionPawn->AddInstanceComponent(ExternalInstance);
+	AddExpectedError(TEXT("already exists outside the initialization component"),
+	                 EAutomationExpectedErrorFlags::Contains, 1);
+	CollisionPawn->DispatchBeginPlay();
+	TestFalse(TEXT("External same-ID instance is not adopted"), CollisionManager->IsPawnInitialized());
 	return true;
 }
 

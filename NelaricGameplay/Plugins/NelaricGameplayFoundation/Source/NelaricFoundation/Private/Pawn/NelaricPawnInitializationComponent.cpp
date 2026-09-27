@@ -172,6 +172,11 @@ bool UNelaricPawnInitializationComponent::ValidateConfiguration() const
 				    Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *InstanceName.ToString());
 				return false;
 			}
+			UE_LOG(LogTemp, Error,
+			       TEXT("Invalid pawn initialization entry [%d] '%s' on %s: instance '%s' already exists outside the "
+			            "initialization component."),
+			       Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *InstanceName.ToString());
+			return false;
 		}
 	}
 	return true;
@@ -209,16 +214,10 @@ void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 			continue;
 		}
 		const FName InstanceName(*FString::Printf(TEXT("NelaricInit_%s"), *Entry.ComponentId.ToString()));
-		UActorComponent* Component = ConfiguredComponents.FindRef(Entry.ComponentId).Get();
-		if (!Component)
-		{
-			Component = FindObject<UActorComponent>(Owner, *InstanceName.ToString());
-		}
-		if (!Component)
-		{
-			Component = NewObject<UActorComponent>(Owner, Entry.ComponentClass, InstanceName);
-			Owner->AddInstanceComponent(Component);
-		}
+		UActorComponent* Component = NewObject<UActorComponent>(Owner, Entry.ComponentClass, InstanceName);
+		// The matching client entry creates its own instance; never replicate this dynamic instance.
+		Component->SetIsReplicated(false);
+		Owner->AddInstanceComponent(Component);
 		ConfiguredComponents.Add(Entry.ComponentId, Component);
 		if (!Component->IsRegistered())
 		{

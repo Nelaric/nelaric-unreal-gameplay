@@ -14,6 +14,10 @@
 /** @brief One component created and coordinated for a pawn.
  * @details IDs are unique within the asset and remain stable across edits.
  * Dependencies name other entries in this asset, including cyclic groups.
+ * Authority and clients independently create selected entries under the
+ * same ID. Configured dynamic instances, Init State, and Generation remain
+ * local; replicate gameplay data through separate UE paths. A component
+ * requiring dynamic instance replication needs a separate creation path.
  */
 USTRUCT(BlueprintType)
 struct FNelaricPawnInitializationEntry

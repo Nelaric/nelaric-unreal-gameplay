@@ -33,6 +33,8 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	            Nelaric::Pawn::FInitializationHelper::Get(Character));
 	UNelaricPawnInitializationTestComponent* Component = NewObject<UNelaricPawnInitializationTestComponent>(Pawn);
 	Component->OnPawnInitialized.AddDynamic(Component, &UNelaricPawnInitializationTestComponent::RecordInitialization);
+	Component->OnPawnInitializationRevoked.AddDynamic(Component,
+	                                                  &UNelaricPawnInitializationTestComponent::RecordRevocation);
 	Component->RegisterComponent();
 	TestFalse(TEXT("Initialization waits for BeginPlay"), Component->TryInitializePawn());
 	TestEqual(TEXT("No early readiness check"), Component->ReadinessChecks, 0);
@@ -47,8 +49,15 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Completed state is observable"), Component->IsPawnInitialized());
 	TestEqual(TEXT("Successful initialization broadcasts once"), Component->InitializationEvents, 1);
 	TestTrue(TEXT("Repeated calls remain successful"), Component->TryInitializePawn());
-	TestEqual(TEXT("Repeated calls do not recheck readiness"), Component->ReadinessChecks, 2);
+	TestEqual(TEXT("Repeated calls recheck current readiness"), Component->ReadinessChecks, 5);
 	TestEqual(TEXT("Repeated calls do not broadcast"), Component->InitializationEvents, 1);
+	Component->bReady = false;
+	TestFalse(TEXT("Changed pawn condition clears current conclusion"), Component->IsPawnInitialized());
+	TestFalse(TEXT("Retry revokes pawn Ready"), Component->TryInitializePawn());
+	TestEqual(TEXT("Revocation is announced once"), Component->RevocationEvents, 1);
+	Component->bReady = true;
+	TestTrue(TEXT("Pawn condition can recover"), Component->TryInitializePawn());
+	TestEqual(TEXT("Recovery announces Ready again"), Component->InitializationEvents, 2);
 
 	Component->EndPlay(EEndPlayReason::Destroyed);
 	TestFalse(TEXT("EndPlay clears initialized state"), Component->IsPawnInitialized());
@@ -79,6 +88,9 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	Config->Components.Add(ClientOnlyEntry);
 	Manager->SetConfig(Config);
 	Manager->bReady = true;
+	Manager->OnPawnInitialized.AddDynamic(Manager, &UNelaricPawnInitializationTestComponent::RecordInitialization);
+	Manager->OnPawnInitializationRevoked.AddDynamic(Manager,
+	                                                &UNelaricPawnInitializationTestComponent::RecordRevocation);
 	Manager->RegisterComponent();
 	ConfiguredPawn->DispatchBeginPlay();
 	UActorComponent* FirstCreated = FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_First"));
@@ -100,6 +112,14 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestTrue(TEXT("Configured cycle reaches Ready together"), Manager->TryInitializePawn());
+	UNelaricInitStateTestPawnComponent* Unlisted = NewObject<UNelaricInitStateTestPawnComponent>(ConfiguredPawn);
+	Unlisted->RegisterComponent();
+	TestTrue(TEXT("Unlisted participant does not block pawn Ready"), Manager->IsPawnInitialized());
+	UNelaricInitStateTestPawnComponent* OptionalState = Cast<UNelaricInitStateTestPawnComponent>(
+	    FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Optional")));
+	TestTrue(TEXT("Optional configured member remains unready"),
+	         OptionalState && OptionalState->GetInitState() != Nelaric::EInitState::Ready);
+	TestTrue(TEXT("Optional member does not block pawn Ready"), Manager->IsPawnInitialized());
 	TestTrue(TEXT("Created instances are actor-managed"),
 	         ConfiguredPawn->GetInstanceComponents().Contains(FirstCreated) &&
 	             ConfiguredPawn->GetInstanceComponents().Contains(SecondCreated));
@@ -151,9 +171,61 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	              Nelaric::EInitState::Ready);
 	TestFalse(TEXT("Required invalidation blocks pawn readiness"), Manager->TryInitializePawn());
 	TestFalse(TEXT("Required invalidation clears pawn readiness"), Manager->IsPawnInitialized());
+	TestEqual(TEXT("Required invalidation announces revocation"), Manager->RevocationEvents, 1);
+	FirstState->bInternalReady = true;
+	FirstState->RequestInitRefresh();
+	TestTrue(TEXT("Required cycle can recover"), Manager->IsPawnInitialized());
+	TestEqual(TEXT("Recovery announces another Ready transition"), Manager->InitializationEvents, 2);
+	FirstState->MarkTerminalInitFailure();
+	TestFalse(TEXT("Required terminal failure revokes pawn Ready"), Manager->IsPawnInitialized());
+	TestEqual(TEXT("Terminal failure announces revocation"), Manager->RevocationEvents, 2);
+	FirstState->InvalidateInitGeneration();
+	FirstState->RequestInitRefresh();
+	TestTrue(TEXT("Required failure can recover in a new generation"), Manager->IsPawnInitialized());
+	TestEqual(TEXT("Failure recovery announces Ready"), Manager->InitializationEvents, 3);
+
+	UNelaricPawnInitializationConfig* Replacement = NewObject<UNelaricPawnInitializationConfig>(Manager);
+	FNelaricPawnInitializationEntry ReplacementEntry = FirstEntry;
+	ReplacementEntry.ComponentId = TEXT("Replacement");
+	ReplacementEntry.DependencyIds.Empty();
+	Replacement->Components = {ReplacementEntry};
+	Manager->SetConfig(Replacement);
+	TestTrue(TEXT("New configuration creates a complete round immediately"), Manager->IsPawnInitialized());
+	TestFalse(TEXT("Old instance leaves actor ownership"),
+	          ConfiguredPawn->GetInstanceComponents().Contains(FirstCreated));
+	TestNotNull(TEXT("Replacement instance uses configured ID"),
+	            FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Replacement")));
+	TestEqual(TEXT("Configuration replacement announces revocation"), Manager->RevocationEvents, 3);
+	TestEqual(TEXT("Configuration replacement announces Ready"), Manager->InitializationEvents, 4);
+	UNelaricPawnInitializationConfig* InvalidReplacement = NewObject<UNelaricPawnInitializationConfig>(Manager);
+	FNelaricPawnInitializationEntry InvalidReplacementEntry = ReplacementEntry;
+	InvalidReplacementEntry.ComponentId = NAME_None;
+	InvalidReplacement->Components = {ReplacementEntry, InvalidReplacementEntry};
+	AddExpectedError(TEXT("empty component ID"), EAutomationExpectedErrorFlags::Contains, 1);
+	Manager->SetConfig(InvalidReplacement);
+	TestFalse(TEXT("Invalid replacement cannot enter Ready"), Manager->TryInitializePawn());
+	TestNull(TEXT("Invalid replacement creates no partial round"),
+	         FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Replacement")));
+	TestEqual(TEXT("Invalid replacement revokes old Ready"), Manager->RevocationEvents, 4);
+	Manager->SetConfig(Replacement);
+	TestTrue(TEXT("Valid replacement recovers after invalid round"), Manager->TryInitializePawn());
+	TestEqual(TEXT("Recovered replacement announces Ready"), Manager->InitializationEvents, 5);
 	TestTrue(TEXT("Authority invalidation leaves client conclusion local"), ClientManager->IsPawnInitialized());
 	TestTrue(TEXT("Authority invalidation leaves client generation local"),
 	         ClientGeneration == Cast<UNelaricConfiguredInitStateTestComponent>(ClientFirst)->GetInitGeneration());
+	ANelaricPawn* OptionalOnlyPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricPawnInitializationTestComponent* OptionalOnlyManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(OptionalOnlyPawn);
+	UNelaricPawnInitializationConfig* OptionalOnlyConfig =
+	    NewObject<UNelaricPawnInitializationConfig>(OptionalOnlyManager);
+	OptionalOnlyConfig->Components = {OptionalEntry};
+	OptionalOnlyManager->SetConfig(OptionalOnlyConfig);
+	OptionalOnlyManager->bReady = true;
+	OptionalOnlyManager->RegisterComponent();
+	OptionalOnlyPawn->DispatchBeginPlay();
+	TestNotNull(TEXT("Optional-only configuration still creates its instance"),
+	            FindObject<UActorComponent>(OptionalOnlyPawn, TEXT("NelaricInit_Optional")));
+	TestTrue(TEXT("No required entries allow pawn Ready"), OptionalOnlyManager->IsPawnInitialized());
 
 	auto RejectConfig = [this, World](const TArray<FNelaricPawnInitializationEntry>& Entries,
 	                                  const TCHAR* ExpectedError, bool bAddConflictingInstance = false)

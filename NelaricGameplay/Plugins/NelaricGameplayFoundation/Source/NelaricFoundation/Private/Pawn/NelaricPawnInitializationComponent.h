@@ -1,7 +1,7 @@
 ﻿// Copyright (c) 2026 Nelaric
 
 /** @file NelaricPawnInitializationComponent.h
- * Declares a one-time initialization gate for pawn gameplay components.
+ * Declares a reversible readiness gate for pawn gameplay components.
  */
 
 #pragma once
@@ -15,10 +15,14 @@ class UNelaricPawnInitializationComponent;
 class UNelaricPawnInitializationConfig;
 class UActorComponent;
 
-/// Announces that a pawn has passed its initialization gate.
+/// Announces a transition into pawn Ready.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNelaricPawnInitialized, UNelaricPawnInitializationComponent*, Component);
 
-/** @brief Coordinates one-time initialization for an owning pawn.
+/// Announces a transition out of pawn Ready.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNelaricPawnInitializationRevoked, UNelaricPawnInitializationComponent*,
+                                            Component);
+
+/** @brief Coordinates local, reversible readiness for an owning pawn.
  *
  * @details Add this component to a pawn and override CanInitializePawn for
  * game-specific readiness. Assign InitializationConfig on a pawn or
@@ -40,13 +44,13 @@ public:
 	 *
 	 * @details Call on the game thread when readiness may have changed. A
 	 * missing pawn, an ended component, or a failed readiness check leaves
-	 * initialization pending. Successful initialization broadcasts once.
-	 * @return Whether initialization has completed, including earlier calls.
+	 * readiness pending. Each transition into Ready broadcasts.
+	 * @return Whether the pawn is currently Ready.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Nelaric|Pawn|Initialization")
 	bool TryInitializePawn();
 
-	/** @brief Reports whether this component initialized its pawn.
+	/** @brief Reports whether this pawn is currently Ready.
 	 *
 	 * @details Call on the game thread. Returns false before BeginPlay and
 	 * after EndPlay. This state is not replicated.
@@ -64,13 +68,29 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category = "Nelaric|Pawn|Initialization")
 	bool CanInitializePawn() const;
 
-	/** @brief Broadcasts once when initialization succeeds on this machine.
+	/** @brief Replaces the local component configuration as one new round.
+	 * @details Call on the game thread. During play, this revokes current Ready,
+	 * destroys managed instances, validates the new asset, and tries readiness.
+	 * A null asset creates no components and uses only CanInitializePawn.
+	 * @param NewConfig Asset to use for the next local initialization round.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Nelaric|Pawn|Initialization")
+	void SetInitializationConfig(UNelaricPawnInitializationConfig* NewConfig);
+
+	/** @brief Broadcasts on each transition into Ready on this machine.
 	 *
 	 * @details Bind before BeginPlay to observe immediate initialization.
 	 * Late listeners can query IsPawnInitialized(). Runs on the game thread.
 	 */
 	UPROPERTY(BlueprintAssignable, Category = "Nelaric|Pawn|Initialization")
 	FNelaricPawnInitialized OnPawnInitialized;
+
+	/** @brief Broadcasts when current pawn Ready is revoked.
+	 * @details Required participant invalidation, configuration replacement,
+	 * and EndPlay revoke Ready on the game thread.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Nelaric|Pawn|Initialization")
+	FNelaricPawnInitializationRevoked OnPawnInitializationRevoked;
 
 	/** @brief Asset that controls local component creation and readiness.
 	 * @details Set on a Pawn or Character derived Blueprint. IDs, dependencies,
@@ -93,8 +113,13 @@ private:
 	bool bInitializationAllowed = false;
 	bool bConfigValid = true;
 	UPROPERTY(Transient)
+	TObjectPtr<UNelaricPawnInitializationConfig> ActiveConfig;
+	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UActorComponent>> ConfiguredComponents;
+	TArray<FName> RequiredComponentIds;
 	bool bConfiguredComponentsCreated = false;
+	void RevokePawnReady();
+	void DestroyConfiguredComponents();
 	bool ValidateConfiguration() const;
 	void CreateConfiguredComponents();
 	bool AreRequiredComponentsReady() const;

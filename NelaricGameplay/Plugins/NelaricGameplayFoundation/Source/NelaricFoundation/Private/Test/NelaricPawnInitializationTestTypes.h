@@ -19,9 +19,10 @@ public:
 	bool bReady = false;
 	mutable int32 ReadinessChecks = 0;
 	int32 InitializationEvents = 0;
+	int32 RevocationEvents = 0;
 	void SetConfig(UNelaricPawnInitializationConfig* Config)
 	{
-		InitializationConfig = Config;
+		SetInitializationConfig(Config);
 	}
 
 	UFUNCTION()
@@ -30,6 +31,15 @@ public:
 		if (Component == this)
 		{
 			++InitializationEvents;
+		}
+	}
+
+	UFUNCTION()
+	void RecordRevocation(UNelaricPawnInitializationComponent* Component)
+	{
+		if (Component == this)
+		{
+			++RevocationEvents;
 		}
 	}
 

@@ -241,6 +241,14 @@ bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor*
 	return true;
 }
 
+bool UNelaricInitStateWorldSubsystem::IsParticipantReady(UActorComponent* Component) const
+{
+	const INelaricInitStateParticipantInterface* Participant = Cast<INelaricInitStateParticipantInterface>(Component);
+	return IsValid(Component) && ConfiguredComponents.Contains(Component) && RegisteredComponents.Contains(Component) &&
+	       Participant && Participant->IsInitApplicable() && !Participant->HasTerminalInitFailure() &&
+	       Participant->GetInitState() == Nelaric::EInitState::Ready;
+}
+
 void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorComponent* Component)
 {
 	if (!IsValid(Component) || bInvalidatingDependents)
@@ -500,10 +508,14 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 		{
 			if (AActor* Owner = OwnerPtr.Get())
 			{
-				if (UNelaricPawnInitializationComponent* Manager =
-				        Owner->FindComponentByClass<UNelaricPawnInitializationComponent>())
+				TArray<UNelaricPawnInitializationComponent*> Managers;
+				Owner->GetComponents<UNelaricPawnInitializationComponent>(Managers);
+				for (UNelaricPawnInitializationComponent* Manager : Managers)
 				{
-					Manager->TryInitializePawn();
+					if (IsValid(Manager))
+					{
+						Manager->TryInitializePawn();
+					}
 				}
 			}
 		}

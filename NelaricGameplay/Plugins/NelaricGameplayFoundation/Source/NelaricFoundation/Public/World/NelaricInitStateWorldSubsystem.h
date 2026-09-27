@@ -103,6 +103,12 @@ public:
 	 */
 	NELARICFOUNDATION_API bool AreRequiredParticipantsReady(const AActor* Owner) const;
 
+	/** @brief Checks a configured participant's current Ready state.
+	 * @param Component Component supplied by its owning initialization manager.
+	 * @return Whether the participant is registered, applicable, and Ready.
+	 */
+	NELARICFOUNDATION_API bool IsParticipantReady(UActorComponent* Component) const;
+
 	/** @brief Removes the manager's configuration for a component.
 	 * @param Component Component leaving its configured pawn.
 	 */

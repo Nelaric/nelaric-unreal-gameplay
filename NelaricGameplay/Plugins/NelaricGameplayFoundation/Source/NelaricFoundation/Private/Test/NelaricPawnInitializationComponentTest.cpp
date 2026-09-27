@@ -108,20 +108,62 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Required invalidation blocks pawn readiness"), Manager->TryInitializePawn());
 	TestFalse(TEXT("Required invalidation clears pawn readiness"), Manager->IsPawnInitialized());
 
-	ANelaricPawn* InvalidPawn = World->SpawnActor<ANelaricPawn>();
-	UNelaricPawnInitializationTestComponent* InvalidManager =
-	    NewObject<UNelaricPawnInitializationTestComponent>(InvalidPawn);
-	UNelaricPawnInitializationConfig* InvalidConfig = NewObject<UNelaricPawnInitializationConfig>(InvalidManager);
-	InvalidConfig->Components.Add(FirstEntry);
-	InvalidConfig->Components.Add(FirstEntry);
-	InvalidManager->SetConfig(InvalidConfig);
-	InvalidManager->bReady = true;
-	InvalidManager->RegisterComponent();
-	AddExpectedError(TEXT("Invalid pawn initialization entry 'First'"), EAutomationExpectedErrorFlags::Contains, 1);
-	InvalidPawn->DispatchBeginPlay();
-	TestFalse(TEXT("Duplicate IDs reject the configuration"), InvalidManager->TryInitializePawn());
-	TestNull(TEXT("Invalid configuration creates no components"),
-	         FindObject<UActorComponent>(InvalidPawn, TEXT("NelaricInit_First")));
+	auto RejectConfig = [this, World](const TArray<FNelaricPawnInitializationEntry>& Entries,
+	                                  const TCHAR* ExpectedError, bool bAddConflictingInstance = false)
+	{
+		ANelaricPawn* InvalidPawn = World->SpawnActor<ANelaricPawn>();
+		UNelaricPawnInitializationTestComponent* InvalidManager =
+		    NewObject<UNelaricPawnInitializationTestComponent>(InvalidPawn);
+		UNelaricPawnInitializationConfig* InvalidConfig = NewObject<UNelaricPawnInitializationConfig>(InvalidManager);
+		InvalidConfig->Components = Entries;
+		InvalidManager->SetConfig(InvalidConfig);
+		InvalidManager->bReady = true;
+		InvalidManager->RegisterComponent();
+		if (bAddConflictingInstance)
+		{
+			UActorComponent* Existing =
+			    NewObject<UNelaricPawnInitializationComponent>(InvalidPawn, TEXT("NelaricInit_Second"));
+			InvalidPawn->AddInstanceComponent(Existing);
+		}
+		AddExpectedError(ExpectedError, EAutomationExpectedErrorFlags::Contains, 1);
+		InvalidPawn->DispatchBeginPlay();
+		TestFalse(TEXT("Invalid configuration remains pending"), InvalidManager->TryInitializePawn());
+		TestFalse(TEXT("Invalid configuration is not Ready"), InvalidManager->IsPawnInitialized());
+		TestNull(TEXT("Validation creates no earlier component"),
+		         FindObject<UActorComponent>(InvalidPawn, TEXT("NelaricInit_First")));
+	};
+
+	FNelaricPawnInitializationEntry PlainFirst = FirstEntry;
+	PlainFirst.DependencyIds.Empty();
+	FNelaricPawnInitializationEntry PlainSecond = PlainFirst;
+	PlainSecond.ComponentId = TEXT("Second");
+	RejectConfig({PlainFirst, PlainFirst}, TEXT("duplicate component ID"));
+	FNelaricPawnInitializationEntry EmptyId = PlainSecond;
+	EmptyId.ComponentId = NAME_None;
+	RejectConfig({PlainFirst, EmptyId}, TEXT("empty component ID"));
+	FNelaricPawnInitializationEntry MissingClass = PlainSecond;
+	MissingClass.ComponentClass = nullptr;
+	RejectConfig({PlainFirst, MissingClass}, TEXT("missing component class"));
+	FNelaricPawnInitializationEntry WrongClass = PlainSecond;
+	WrongClass.ComponentClass = UNelaricPawnInitializationComponent::StaticClass();
+	RejectConfig({PlainFirst, WrongClass}, TEXT("does not implement the init-state participant interface"));
+	FNelaricPawnInitializationEntry DuplicateDependency = PlainSecond;
+	DuplicateDependency.DependencyIds = {TEXT("First"), TEXT("First")};
+	RejectConfig({PlainFirst, DuplicateDependency}, TEXT("duplicate dependency declaration"));
+	FNelaricPawnInitializationEntry MissingDependency = PlainSecond;
+	MissingDependency.DependencyIds = {TEXT("Absent")};
+	RejectConfig({PlainFirst, MissingDependency}, TEXT("dependency ID does not exist"));
+	FNelaricPawnInitializationEntry ServerOnly = PlainSecond;
+	ServerOnly.bCreateOnClient = false;
+	FNelaricPawnInitializationEntry ClientDependent = PlainFirst;
+	ClientDependent.DependencyIds = {TEXT("Second")};
+	RejectConfig({ClientDependent, ServerOnly}, TEXT("dependency is not created on clients"));
+	FNelaricPawnInitializationEntry ClientOnly = PlainSecond;
+	ClientOnly.bCreateOnAuthority = false;
+	FNelaricPawnInitializationEntry ServerDependent = PlainFirst;
+	ServerDependent.DependencyIds = {TEXT("Second")};
+	RejectConfig({ServerDependent, ClientOnly}, TEXT("dependency is not created on authority"));
+	RejectConfig({PlainFirst, PlainSecond}, TEXT("instance 'NelaricInit_Second' has a conflicting class"), true);
 	return true;
 }
 

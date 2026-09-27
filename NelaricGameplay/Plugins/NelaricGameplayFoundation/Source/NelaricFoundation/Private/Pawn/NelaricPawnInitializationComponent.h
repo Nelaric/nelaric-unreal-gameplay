@@ -91,6 +91,7 @@ private:
 	bool bInitializationAllowed = false;
 	bool bConfigValid = true;
 	TMap<FName, TWeakObjectPtr<UActorComponent>> ConfiguredComponents;
+	bool ValidateConfiguration() const;
 	void CreateConfiguredComponents();
 	bool AreRequiredComponentsReady() const;
 };

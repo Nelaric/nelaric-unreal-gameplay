@@ -3,7 +3,9 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
+#include "Engine/World.h"
 #include "Pawn/NelaricPawnInitStateComponent.h"
+#include "World/NelaricInitStateWorldSubsystem.h"
 
 #include "NelaricInitStateTestTypes.generated.h"
 
@@ -34,40 +36,22 @@ public:
 			OutDependencies.Add({FName(TEXT("RuntimeComponent")), Dependency});
 		}
 	}
-	virtual bool TryChangeInitState() override
-	{
-		if (!bAllowAdvance || GetInitState() >= Nelaric::EInitState::DataInitialized)
-		{
-			return false;
-		}
-		return CommitInitState(static_cast<Nelaric::EInitState>(static_cast<uint8>(GetInitState()) + 1));
-	}
 	virtual bool CanEnterReady() const override
 	{
-		if (!bInternalReady || GetInitState() != Nelaric::EInitState::DataInitialized)
-		{
-			return false;
-		}
-		if (!bDeclareDependency)
-		{
-			return true;
-		}
-		const INelaricInitStateParticipantInterface* Required =
-		    Cast<INelaricInitStateParticipantInterface>(Dependency.Get());
-		return Required && !Required->HasTerminalInitFailure() &&
-		       Required->GetInitState() == Nelaric::EInitState::Ready;
+		return bInternalReady && GetInitState() == Nelaric::EInitState::DataInitialized;
 	}
 	void SetDependency(UActorComponent* Component)
 	{
 		Dependency = Component;
 		RequestInitRefresh();
 	}
-	bool TestCommit(Nelaric::EInitState NextState)
-	{
-		return CommitInitState(NextState);
-	}
 
 protected:
+	virtual bool CanAdvanceInitState() override
+	{
+		return bAllowAdvance;
+	}
+
 	virtual void CancelInitGenerationWork() override
 	{
 		++CancelCount;
@@ -80,6 +64,12 @@ class UNelaricInitStateTestDirectComponent : public UActorComponent, public INel
 	GENERATED_BODY()
 
 public:
+	bool bAllowAdvance = false;
+	bool bInternalReady = false;
+	int32 NotificationCount = 0;
+	int32 CancelCount = 0;
+	Nelaric::FInitGeneration GenerationAtCancel;
+
 	virtual bool IsInitApplicable() const override
 	{
 		return true;
@@ -93,15 +83,38 @@ public:
 	}
 	virtual bool TryChangeInitState() override
 	{
-		return false;
+		if (!bAllowAdvance || bFailed || State >= Nelaric::EInitState::DataInitialized)
+		{
+			return false;
+		}
+		const Nelaric::FInitStateSnapshot Previous{Generation, State, bFailed};
+		State = static_cast<Nelaric::EInitState>(static_cast<uint8>(State) + 1);
+		NotifyChanged(Previous);
+		return true;
 	}
 	virtual bool CanEnterReady() const override
 	{
-		return false;
+		return bInternalReady && !bFailed && State == Nelaric::EInitState::DataInitialized;
 	}
-	virtual bool EnterReady() override
+	virtual bool CommitReadyWithoutNotification() override
 	{
-		return false;
+		if (bFailed || bReadyNotificationPending || State != Nelaric::EInitState::DataInitialized)
+		{
+			return false;
+		}
+		State = Nelaric::EInitState::Ready;
+		bReadyNotificationPending = true;
+		return true;
+	}
+	virtual void NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous) override
+	{
+		if (!bReadyNotificationPending || bFailed || State != Nelaric::EInitState::Ready ||
+		    !(Previous.Generation == Generation) || Previous.State != Nelaric::EInitState::DataInitialized)
+		{
+			return;
+		}
+		bReadyNotificationPending = false;
+		NotifyChanged(Previous);
 	}
 	virtual Nelaric::EInitState GetInitState() const override
 	{
@@ -117,17 +130,40 @@ public:
 	}
 	virtual void InvalidateInitGeneration() override
 	{
+		const Nelaric::FInitStateSnapshot Previous{Generation, State, bFailed};
 		++Generation.Value;
+		GenerationAtCancel = Generation;
+		++CancelCount;
 		State = Nelaric::EInitState::Registered;
 		bFailed = false;
+		bReadyNotificationPending = false;
+		NotifyChanged(Previous);
 	}
 	virtual void MarkTerminalInitFailure() override
 	{
+		if (bFailed)
+		{
+			return;
+		}
+		const Nelaric::FInitStateSnapshot Previous{Generation, State, bFailed};
 		bFailed = true;
+		NotifyChanged(Previous);
 	}
 
 private:
+	void NotifyChanged(const Nelaric::FInitStateSnapshot& Previous)
+	{
+		++NotificationCount;
+		if (UWorld* World = GetWorld())
+		{
+			if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
+			{
+				Subsystem->NotifyParticipantChanged(this, Previous);
+			}
+		}
+	}
 	Nelaric::EInitState State = Nelaric::EInitState::Registered;
 	Nelaric::FInitGeneration Generation{1};
 	bool bFailed = false;
+	bool bReadyNotificationPending = false;
 };

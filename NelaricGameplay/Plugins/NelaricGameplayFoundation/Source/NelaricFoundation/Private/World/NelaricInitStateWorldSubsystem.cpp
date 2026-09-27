@@ -129,7 +129,12 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 				if (bCanEnterReady && Generation == Participant->GetInitGeneration() &&
 				    PreviousState == Participant->GetInitState() && !Participant->HasTerminalInitFailure())
 				{
-					bAdvanced = Participant->EnterReady();
+					const Nelaric::FInitStateSnapshot BeforeReady{Generation, PreviousState, false};
+					bAdvanced = Participant->CommitReadyWithoutNotification();
+					if (bAdvanced)
+					{
+						Participant->NotifyReadyCommitted(BeforeReady);
+					}
 				}
 			}
 			else

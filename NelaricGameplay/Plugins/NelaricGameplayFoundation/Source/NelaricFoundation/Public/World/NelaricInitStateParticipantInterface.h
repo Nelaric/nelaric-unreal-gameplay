@@ -47,23 +47,33 @@ public:
 	/** @brief Attempts one adjacent transition through DataInitialized.
 	 * @details Check only this component's data and context. This method must
 	 * never enter Ready or rely on dependency gameplay behavior.
-	 * @return True only if this call committed one state transition.
+	 * @return True only if this call committed exactly one adjacent transition.
 	 */
 	virtual bool TryChangeInitState() = 0;
 
-	/** @brief Checks internal preparation and runtime dependency readiness.
-	 * @details Called at DataInitialized. Dependencies outside the current
-	 * readiness group must be Ready. This query must not mutate state, start
+	/** @brief Checks this component's internal preparation for Ready.
+	 * @details Called at DataInitialized after the coordinator checks external
+	 * dependencies. This query must not mutate state, start
 	 * gameplay, or broadcast events. Component gameplay requires Ready; work
 	 * requiring the complete pawn must additionally wait for pawn Ready.
 	 * @return Whether this component may enter Ready now.
 	 */
 	virtual bool CanEnterReady() const = 0;
 
-	/** @brief Commits the final transition after CanEnterReady succeeds.
-	 * @return True only if this call committed DataInitialized to Ready.
+	/** @brief Writes Ready without callbacks after group checks pass.
+	 * @details The coordinator calls this once per member, then notifies every
+	 * member after all commits. Implementations must not recheck dependencies or
+	 * broadcast, invoke delegates, or request coordinator progress here.
+	 * @return True only if DataInitialized changed to Ready in this call.
 	 */
-	virtual bool EnterReady() = 0;
+	virtual bool CommitReadyWithoutNotification() = 0;
+
+	/** @brief Announces an already committed Ready transition.
+	 * @details Called after the entire readiness group is Ready. Notify the
+	 * world coordinator and any component observers only in this phase.
+	 * @param Previous Snapshot captured before the Ready commit.
+	 */
+	virtual void NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous) = 0;
 
 	/// Current component-owned state of this attempt.
 	virtual Nelaric::EInitState GetInitState() const = 0;

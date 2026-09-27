@@ -26,6 +26,21 @@ void UNelaricPawnInitStateComponent::GatherInitDependencies(TArray<Nelaric::FIni
 
 bool UNelaricPawnInitStateComponent::TryChangeInitState()
 {
+	if (bCommittingInitState || bTerminalInitFailure || InitState >= Nelaric::EInitState::DataInitialized)
+	{
+		return false;
+	}
+	const Nelaric::FInitGeneration Generation = InitGeneration;
+	const Nelaric::EInitState PreviousState = InitState;
+	if (!CanAdvanceInitState() || !(Generation == InitGeneration) || PreviousState != InitState || bTerminalInitFailure)
+	{
+		return false;
+	}
+	return CommitInitState(static_cast<Nelaric::EInitState>(static_cast<uint8>(PreviousState) + 1));
+}
+
+bool UNelaricPawnInitStateComponent::CanAdvanceInitState()
+{
 	return false;
 }
 
@@ -34,16 +49,27 @@ bool UNelaricPawnInitStateComponent::CanEnterReady() const
 	return false;
 }
 
-bool UNelaricPawnInitStateComponent::EnterReady()
+bool UNelaricPawnInitStateComponent::CommitReadyWithoutNotification()
 {
-	if (InitState != Nelaric::EInitState::DataInitialized || !CanEnterReady())
+	if (bCommittingInitState || bTerminalInitFailure || bReadyNotificationPending ||
+	    InitState != Nelaric::EInitState::DataInitialized)
 	{
 		return false;
 	}
-	bEnteringReady = true;
-	const bool bEnteredReady = CommitInitState(Nelaric::EInitState::Ready);
-	bEnteringReady = false;
-	return bEnteredReady;
+	InitState = Nelaric::EInitState::Ready;
+	bReadyNotificationPending = true;
+	return true;
+}
+
+void UNelaricPawnInitStateComponent::NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous)
+{
+	if (!bReadyNotificationPending || bTerminalInitFailure || InitState != Nelaric::EInitState::Ready ||
+	    !(Previous.Generation == InitGeneration) || Previous.State != Nelaric::EInitState::DataInitialized)
+	{
+		return;
+	}
+	bReadyNotificationPending = false;
+	NotifyInitChanged(Previous);
 }
 
 void UNelaricPawnInitStateComponent::RequestInitRefresh()
@@ -79,11 +105,23 @@ bool UNelaricPawnInitStateComponent::CanApplyInitResult(const UWorld* ExpectedWo
 	       InitGeneration == ExpectedGeneration && !bTerminalInitFailure;
 }
 
+UNelaricPawnInitStateComponent*
+UNelaricPawnInitStateComponent::ResolveInitResult(const TWeakObjectPtr<UNelaricPawnInitStateComponent>& WeakComponent,
+                                                  const UWorld* ExpectedWorld,
+                                                  Nelaric::FInitGeneration ExpectedGeneration)
+{
+	if (!IsInGameThread())
+	{
+		return nullptr;
+	}
+	UNelaricPawnInitStateComponent* Component = WeakComponent.Get();
+	return Component && Component->CanApplyInitResult(ExpectedWorld, ExpectedGeneration) ? Component : nullptr;
+}
+
 bool UNelaricPawnInitStateComponent::CommitInitState(Nelaric::EInitState NextState)
 {
 	if (bCommittingInitState || bTerminalInitFailure || InitState == Nelaric::EInitState::Ready ||
-	    (NextState == Nelaric::EInitState::Ready && !bEnteringReady) ||
-	    static_cast<uint8>(NextState) != static_cast<uint8>(InitState) + 1)
+	    NextState == Nelaric::EInitState::Ready || static_cast<uint8>(NextState) != static_cast<uint8>(InitState) + 1)
 	{
 		return false;
 	}
@@ -103,6 +141,7 @@ void UNelaricPawnInitStateComponent::InvalidateInitGeneration()
 	CancelInitGenerationWork();
 	InitState = Nelaric::EInitState::Registered;
 	bTerminalInitFailure = false;
+	bReadyNotificationPending = false;
 	NotifyInitChanged(Previous);
 }
 

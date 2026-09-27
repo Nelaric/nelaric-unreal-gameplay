@@ -36,14 +36,19 @@ public:
 	NELARICFOUNDATION_API virtual void
 	GatherInitDependencies(TArray<Nelaric::FInitDependency>& OutDependencies) const override;
 
-	/// Returns false until a derived component commits one adjacent step.
-	NELARICFOUNDATION_API virtual bool TryChangeInitState() override;
+	/// Commits at most one adjacent preparation step when the derived gate passes.
+	NELARICFOUNDATION_API virtual bool TryChangeInitState() final override;
 
-	/// Returns false until internal preparation and dependencies are ready.
+	/// Returns false until internal preparation is ready.
 	NELARICFOUNDATION_API virtual bool CanEnterReady() const override;
 
-	/// Commits Ready only after the readiness check succeeds.
-	NELARICFOUNDATION_API virtual bool EnterReady() override;
+	/// Writes Ready without callbacks after the coordinator checks the group.
+	NELARICFOUNDATION_API virtual bool CommitReadyWithoutNotification() override;
+
+	/** @brief Announces a committed Ready transition after the group commits.
+	 * @param Previous Snapshot captured before the Ready commit.
+	 */
+	NELARICFOUNDATION_API virtual void NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous) override;
 
 	/// Requests another coordinator pass after a dependency reference changes.
 	NELARICFOUNDATION_API void RequestInitRefresh();
@@ -68,6 +73,16 @@ public:
 	NELARICFOUNDATION_API bool CanApplyInitResult(const UWorld* ExpectedWorld,
 	                                              Nelaric::FInitGeneration ExpectedGeneration) const;
 
+	/** @brief Resolves a game-thread asynchronous completion for a live attempt.
+	 * @param WeakComponent Component captured weakly when work began.
+	 * @param ExpectedWorld World captured when work began.
+	 * @param ExpectedGeneration Generation captured when work began.
+	 * @return Live component, or null after removal, travel, or invalidation.
+	 */
+	NELARICFOUNDATION_API static UNelaricPawnInitStateComponent*
+	ResolveInitResult(const TWeakObjectPtr<UNelaricPawnInitStateComponent>& WeakComponent, const UWorld* ExpectedWorld,
+	                  Nelaric::FInitGeneration ExpectedGeneration);
+
 	/// Invalidates old work, resets state, and announces the new attempt.
 	NELARICFOUNDATION_API virtual void InvalidateInitGeneration() override;
 
@@ -80,11 +95,13 @@ public:
 	NELARICFOUNDATION_API virtual void OnUnregister() override;
 
 protected:
-	/** @brief Commits one adjacent forward step and notifies the world.
-	 * @param NextState State immediately after the current state.
-	 * @return Whether exactly one step was committed.
+	/** @brief Checks whether the next preparation step can be committed.
+	 * @details Derived implementations can start asynchronous work here, then
+	 * request a refresh when it completes. Return true only when the next step
+	 * is ready to commit. This method must not change the initialization state.
+	 * @return Whether one adjacent preparation step can be committed now.
 	 */
-	NELARICFOUNDATION_API bool CommitInitState(Nelaric::EInitState NextState);
+	NELARICFOUNDATION_API virtual bool CanAdvanceInitState();
 
 	/** @brief Cancels work and removes listeners for an invalidated attempt.
 	 * @details Called after the generation changes and before state resets.
@@ -92,10 +109,11 @@ protected:
 	NELARICFOUNDATION_API virtual void CancelInitGenerationWork();
 
 private:
+	bool CommitInitState(Nelaric::EInitState NextState);
 	Nelaric::EInitState InitState = Nelaric::EInitState::Registered;
 	Nelaric::FInitGeneration InitGeneration{1};
 	bool bTerminalInitFailure = false;
 	bool bCommittingInitState = false;
-	bool bEnteringReady = false;
+	bool bReadyNotificationPending = false;
 	void NotifyInitChanged(const Nelaric::FInitStateSnapshot& Previous);
 };

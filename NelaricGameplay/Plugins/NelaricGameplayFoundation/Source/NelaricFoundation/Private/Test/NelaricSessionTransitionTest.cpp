@@ -7,7 +7,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
-#include "Internal/InternalAccess.h"
+#include "Internal/FoundationInternalAccess.h"
 #include "Misc/AutomationTest.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FNelaricSessionTransitionTest, "Nelaric.Foundation.Session.ClientToClientApproval",
@@ -26,7 +26,7 @@ bool FNelaricSessionTransitionTest::RunTest(const FString& Parameters)
 	GameInstance->GetWorldContext()->SetCurrentWorld(ClientWorld);
 
 	UNelaricSessionTransitionSubsystem* Coordinator = GameInstance->GetSubsystem<UNelaricSessionTransitionSubsystem>();
-	const Nelaric::FInternalAccessKey& Key = Nelaric::FInternalAccess::Key();
+	const Nelaric::FFoundationInternalAccessKey& Key = Nelaric::FFoundationInternalAccess::Key();
 	int32 SourceStarts = 0;
 	int32 TargetStarts = 0;
 	int32 Terminations = 0;

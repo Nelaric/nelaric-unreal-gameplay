@@ -16,4 +16,4 @@
 
 本项目的玩法 World Settings 类必须继承 `ANelaricWorldSettings`。项目配置将这一空基类设为默认 World Settings 类；玩法地图需要附加设置时，应使用它的子类。世界启动配置通过软引用在地图加载前选择地图，地图不通过 World Settings 选择启动策略。独立接入插件的其他项目可以自行选择 World Settings 类。
 
-模块公开依赖 Unreal 的 `Core`、`CoreUObject`、`Engine` 和 `OnlineSubsystemUtils`。框架内部集成方法使用 `NelaricCore` 提供的统一 Passkey，因此它也是公开依赖。项目配置使用 `/Script/NelaricFoundation` 类路径，并为原 `/Script/NelaricGameplayCore` 类名配置重定向，以便已有资产引用仍可解析。
+模块公开依赖 Unreal 的 `Core`、`CoreUObject`、`Engine` 和 `OnlineSubsystemUtils`。模块的内部集成 Passkey 位于 `Private/Internal/`。公开头文件仅在 C++ 内部集成方法签名需要时前置声明 Key；玩法模块无法通过插件公开 API 包含或构造它。项目配置使用 `/Script/NelaricFoundation` 类路径，并为原 `/Script/NelaricGameplayCore` 类名配置重定向，以便已有资产引用仍可解析。

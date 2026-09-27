@@ -11,7 +11,6 @@
 #include "Core/NetWork/NelaricNetworkEndpoint.h"
 #include "Delegates/Delegate.h"
 #include "Engine/EngineBaseTypes.h"
-#include "Internal/InternalAccessKey.h"
 #include "Misc/Optional.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Templates/UniquePtr.h"
@@ -23,6 +22,8 @@ class UWorld;
 
 namespace Nelaric
 {
+class FFoundationInternalAccessKey;
+
 /** @brief Game and approval endpoints of one destination server.
  *
  * @details The caller supplies both endpoints for the same selected
@@ -171,43 +172,43 @@ public:
 	NELARICFOUNDATION_API TOptional<ENetMode> GetNetMode() const;
 
 public:
-	/** @brief Binds Core's approval transport on the game thread.
-	 * @param Key Access granted to the Core transport subsystem.
+	/** @brief Binds the internal approval transport on the game thread.
+	 * @param Key Internal access for the transport subsystem.
 	 * @param Source Begins approval by the source authority.
 	 * @param Target Begins approval by the target authority.
 	 * @param Terminated Releases transport state after a terminal result.
 	 */
-	NELARICFOUNDATION_API void InternalConfigureApprovalTransport(const Nelaric::FInternalAccessKey& Key,
+	NELARICFOUNDATION_API void InternalConfigureApprovalTransport(const Nelaric::FFoundationInternalAccessKey& Key,
 	                                                              const Nelaric::FStartTransitionApproval& Source,
 	                                                              const Nelaric::FStartTransitionApproval& Target,
 	                                                              const Nelaric::FOnTransitionTerminated& Terminated);
 
-	/** @brief Removes Core's approval transport on the game thread.
-	 * @param Key Access granted to the Core transport subsystem.
+	/** @brief Removes the internal approval transport on the game thread.
+	 * @param Key Internal access for the transport subsystem.
 	 */
-	NELARICFOUNDATION_API void InternalClearApprovalTransport(const Nelaric::FInternalAccessKey& Key);
+	NELARICFOUNDATION_API void InternalClearApprovalTransport(const Nelaric::FFoundationInternalAccessKey& Key);
 
 	/** @brief Reports the source authority's decision.
-	 * @param Key Access granted to the Core transport subsystem.
+	 * @param Key Internal access for the transport subsystem.
 	 * @param RequestId Identity of the request being approved.
 	 * @param bApproved Whether the source authority approved departure.
 	 */
-	NELARICFOUNDATION_API void InternalReportSourceApproval(const Nelaric::FInternalAccessKey& Key, uint64 RequestId,
-	                                                        bool bApproved);
+	NELARICFOUNDATION_API void InternalReportSourceApproval(const Nelaric::FFoundationInternalAccessKey& Key,
+	                                                        uint64 RequestId, bool bApproved);
 
 	/** @brief Reports the target authority's decision.
-	 * @param Key Access granted to the Core transport subsystem.
+	 * @param Key Internal access for the transport subsystem.
 	 * @param RequestId Identity of the request being approved.
 	 * @param bApproved Whether the target authority approved arrival.
 	 */
-	NELARICFOUNDATION_API void InternalReportTargetApproval(const Nelaric::FInternalAccessKey& Key, uint64 RequestId,
-	                                                        bool bApproved);
+	NELARICFOUNDATION_API void InternalReportTargetApproval(const Nelaric::FFoundationInternalAccessKey& Key,
+	                                                        uint64 RequestId, bool bApproved);
 
 	/** @brief Reports that the target authority could not be reached.
-	 * @param Key Access granted to the Core transport subsystem.
+	 * @param Key Internal access for the transport subsystem.
 	 * @param RequestId Identity of the request awaiting approval.
 	 */
-	NELARICFOUNDATION_API void InternalReportTargetUnavailable(const Nelaric::FInternalAccessKey& Key,
+	NELARICFOUNDATION_API void InternalReportTargetUnavailable(const Nelaric::FFoundationInternalAccessKey& Key,
 	                                                           uint64 RequestId);
 
 protected:

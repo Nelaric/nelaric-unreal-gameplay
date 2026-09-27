@@ -4,7 +4,7 @@
 
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
-#include "Internal/InternalAccess.h"
+#include "Internal/FoundationInternalAccess.h"
 #include "Player/NelaricPlayerController.h"
 #include "Session/NelaricSessionTransitionSubsystem.h"
 #include "Session/NelaricTransitionBeaconClient.h"
@@ -22,7 +22,8 @@ void UNelaricTransitionTransportSubsystem::Initialize(FSubsystemCollectionBase& 
 	    this, &UNelaricTransitionTransportSubsystem::BeginTargetApproval);
 	Nelaric::FOnTransitionTerminated Terminated =
 	    Nelaric::FOnTransitionTerminated::CreateUObject(this, &UNelaricTransitionTransportSubsystem::CleanupRequest);
-	Coordinator->InternalConfigureApprovalTransport(Nelaric::FInternalAccess::Key(), Source, Target, Terminated);
+	Coordinator->InternalConfigureApprovalTransport(Nelaric::FFoundationInternalAccess::Key(), Source, Target,
+	                                                Terminated);
 }
 
 void UNelaricTransitionTransportSubsystem::Deinitialize()
@@ -30,7 +31,7 @@ void UNelaricTransitionTransportSubsystem::Deinitialize()
 	if (UNelaricSessionTransitionSubsystem* Coordinator =
 	        GetGameInstance()->GetSubsystem<UNelaricSessionTransitionSubsystem>())
 	{
-		Coordinator->InternalClearApprovalTransport(Nelaric::FInternalAccess::Key());
+		Coordinator->InternalClearApprovalTransport(Nelaric::FFoundationInternalAccess::Key());
 	}
 	CleanupRequest(0);
 	Super::Deinitialize();
@@ -76,7 +77,7 @@ void UNelaricTransitionTransportSubsystem::ReceiveSourceDecision(uint64 RequestI
 	if (UNelaricSessionTransitionSubsystem* Coordinator =
 	        GetGameInstance()->GetSubsystem<UNelaricSessionTransitionSubsystem>())
 	{
-		Coordinator->InternalReportSourceApproval(Nelaric::FInternalAccess::Key(), RequestId,
+		Coordinator->InternalReportSourceApproval(Nelaric::FFoundationInternalAccess::Key(), RequestId,
 		                                          bApproved && TargetAddress == PendingTargetAddress);
 	}
 }
@@ -89,11 +90,11 @@ void UNelaricTransitionTransportSubsystem::ReceiveTargetDecision(uint64 RequestI
 	{
 		if (bAuthorityReplied)
 		{
-			Coordinator->InternalReportTargetApproval(Nelaric::FInternalAccess::Key(), RequestId, bApproved);
+			Coordinator->InternalReportTargetApproval(Nelaric::FFoundationInternalAccess::Key(), RequestId, bApproved);
 		}
 		else
 		{
-			Coordinator->InternalReportTargetUnavailable(Nelaric::FInternalAccess::Key(), RequestId);
+			Coordinator->InternalReportTargetUnavailable(Nelaric::FFoundationInternalAccess::Key(), RequestId);
 		}
 	}
 }

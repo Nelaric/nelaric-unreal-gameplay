@@ -41,7 +41,7 @@ void UNelaricSessionTransitionSubsystem::Deinitialize()
 }
 
 void UNelaricSessionTransitionSubsystem::InternalConfigureApprovalTransport(
-    const Nelaric::FInternalAccessKey&, const Nelaric::FStartTransitionApproval& Source,
+    const Nelaric::FFoundationInternalAccessKey&, const Nelaric::FStartTransitionApproval& Source,
     const Nelaric::FStartTransitionApproval& Target, const Nelaric::FOnTransitionTerminated& Terminated)
 {
 	StartSourceApproval = Source;
@@ -49,7 +49,7 @@ void UNelaricSessionTransitionSubsystem::InternalConfigureApprovalTransport(
 	OnTerminated = Terminated;
 }
 
-void UNelaricSessionTransitionSubsystem::InternalClearApprovalTransport(const Nelaric::FInternalAccessKey&)
+void UNelaricSessionTransitionSubsystem::InternalClearApprovalTransport(const Nelaric::FFoundationInternalAccessKey&)
 {
 	if (Active)
 	{
@@ -120,7 +120,7 @@ TOptional<ENetMode> UNelaricSessionTransitionSubsystem::GetNetMode() const
 	return World ? TOptional<ENetMode>(World->GetNetMode()) : TOptional<ENetMode>();
 }
 
-void UNelaricSessionTransitionSubsystem::InternalReportSourceApproval(const Nelaric::FInternalAccessKey&,
+void UNelaricSessionTransitionSubsystem::InternalReportSourceApproval(const Nelaric::FFoundationInternalAccessKey&,
                                                                       uint64 RequestId, bool bApproved)
 {
 	if (!Active || Active->Handle.Id != RequestId || Active->bTravelStarted)
@@ -135,7 +135,7 @@ void UNelaricSessionTransitionSubsystem::InternalReportSourceApproval(const Nela
 	Active->bSourceApproved = true;
 }
 
-void UNelaricSessionTransitionSubsystem::InternalReportTargetApproval(const Nelaric::FInternalAccessKey&,
+void UNelaricSessionTransitionSubsystem::InternalReportTargetApproval(const Nelaric::FFoundationInternalAccessKey&,
                                                                       uint64 RequestId, bool bApproved)
 {
 	if (!Active || Active->Handle.Id != RequestId || Active->bTravelStarted)
@@ -150,7 +150,7 @@ void UNelaricSessionTransitionSubsystem::InternalReportTargetApproval(const Nela
 	Active->bTargetApproved = true;
 }
 
-void UNelaricSessionTransitionSubsystem::InternalReportTargetUnavailable(const Nelaric::FInternalAccessKey&,
+void UNelaricSessionTransitionSubsystem::InternalReportTargetUnavailable(const Nelaric::FFoundationInternalAccessKey&,
                                                                          uint64 RequestId)
 {
 	if (Active && Active->Handle.Id == RequestId && !Active->bTravelStarted)

@@ -13,8 +13,8 @@
 
 /** @brief Optional pawn base implementing the initialization contract.
  *
- * @details Derived classes implement one-step readiness in
- * TryChangeInitState and use CommitInitState for a successful step. They may
+ * @details Derived classes implement preparation through DataInitialized in
+ * TryChangeInitState and a pure CanEnterReady check. They may
  * also implement the interface directly on another UActorComponent. The
  * component owns its state and is called only on the game thread.
  */
@@ -38,6 +38,15 @@ public:
 
 	/// Returns false until a derived component commits one adjacent step.
 	NELARICFOUNDATION_API virtual bool TryChangeInitState() override;
+
+	/// Returns false until internal preparation and dependencies are ready.
+	NELARICFOUNDATION_API virtual bool CanEnterReady() const override;
+
+	/// Commits Ready only after the readiness check succeeds.
+	NELARICFOUNDATION_API virtual bool EnterReady() override;
+
+	/// Requests another coordinator pass after a dependency reference changes.
+	NELARICFOUNDATION_API void RequestInitRefresh();
 
 	/// Returns the state owned by this component.
 	NELARICFOUNDATION_API virtual Nelaric::EInitState GetInitState() const override;
@@ -87,5 +96,6 @@ private:
 	Nelaric::FInitGeneration InitGeneration{1};
 	bool bTerminalInitFailure = false;
 	bool bCommittingInitState = false;
+	bool bEnteringReady = false;
 	void NotifyInitChanged(const Nelaric::FInitStateSnapshot& Previous);
 };

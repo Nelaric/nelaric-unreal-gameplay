@@ -14,6 +14,8 @@ class UNelaricInitStateTestPawnComponent : public UNelaricPawnInitStateComponent
 
 public:
 	bool bAllowAdvance = false;
+	bool bInternalReady = false;
+	bool bDeclareDependency = false;
 	TWeakObjectPtr<UActorComponent> Dependency;
 	int32 CancelCount = 0;
 
@@ -27,18 +29,38 @@ public:
 	}
 	virtual void GatherInitDependencies(TArray<Nelaric::FInitDependency>& OutDependencies) const override
 	{
-		if (Dependency.IsValid())
+		if (bDeclareDependency)
 		{
-			OutDependencies.Add({Dependency, Nelaric::EInitState::Ready});
+			OutDependencies.Add({FName(TEXT("RuntimeComponent")), Dependency});
 		}
 	}
 	virtual bool TryChangeInitState() override
 	{
-		if (!bAllowAdvance)
+		if (!bAllowAdvance || GetInitState() >= Nelaric::EInitState::DataInitialized)
 		{
 			return false;
 		}
 		return CommitInitState(static_cast<Nelaric::EInitState>(static_cast<uint8>(GetInitState()) + 1));
+	}
+	virtual bool CanEnterReady() const override
+	{
+		if (!bInternalReady || GetInitState() != Nelaric::EInitState::DataInitialized)
+		{
+			return false;
+		}
+		if (!bDeclareDependency)
+		{
+			return true;
+		}
+		const INelaricInitStateParticipantInterface* Required =
+		    Cast<INelaricInitStateParticipantInterface>(Dependency.Get());
+		return Required && !Required->HasTerminalInitFailure() &&
+		       Required->GetInitState() == Nelaric::EInitState::Ready;
+	}
+	void SetDependency(UActorComponent* Component)
+	{
+		Dependency = Component;
+		RequestInitRefresh();
 	}
 	bool TestCommit(Nelaric::EInitState NextState)
 	{
@@ -70,6 +92,14 @@ public:
 	{
 	}
 	virtual bool TryChangeInitState() override
+	{
+		return false;
+	}
+	virtual bool CanEnterReady() const override
+	{
+		return false;
+	}
+	virtual bool EnterReady() override
 	{
 		return false;
 	}

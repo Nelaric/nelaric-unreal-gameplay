@@ -44,6 +44,12 @@ public:
 	NELARICFOUNDATION_API void NotifyParticipantChanged(UActorComponent* Component,
 	                                                    const Nelaric::FInitStateSnapshot& Previous);
 
+	/** @brief Rechecks a registered participant after its context changes.
+	 * @details Call when a declared dependency reference becomes available.
+	 * @param Component Registered component requesting another progress pass.
+	 */
+	NELARICFOUNDATION_API void RequestParticipantRefresh(UActorComponent* Component);
+
 public:
 	virtual void Deinitialize() override;
 

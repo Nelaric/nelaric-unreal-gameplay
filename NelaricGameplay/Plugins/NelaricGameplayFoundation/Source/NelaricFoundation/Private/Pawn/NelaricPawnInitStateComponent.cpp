@@ -29,6 +29,34 @@ bool UNelaricPawnInitStateComponent::TryChangeInitState()
 	return false;
 }
 
+bool UNelaricPawnInitStateComponent::CanEnterReady() const
+{
+	return false;
+}
+
+bool UNelaricPawnInitStateComponent::EnterReady()
+{
+	if (InitState != Nelaric::EInitState::DataInitialized || !CanEnterReady())
+	{
+		return false;
+	}
+	bEnteringReady = true;
+	const bool bEnteredReady = CommitInitState(Nelaric::EInitState::Ready);
+	bEnteringReady = false;
+	return bEnteredReady;
+}
+
+void UNelaricPawnInitStateComponent::RequestInitRefresh()
+{
+	if (UWorld* World = GetWorld())
+	{
+		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
+		{
+			Subsystem->RequestParticipantRefresh(this);
+		}
+	}
+}
+
 Nelaric::EInitState UNelaricPawnInitStateComponent::GetInitState() const
 {
 	return InitState;
@@ -54,6 +82,7 @@ bool UNelaricPawnInitStateComponent::CanApplyInitResult(const UWorld* ExpectedWo
 bool UNelaricPawnInitStateComponent::CommitInitState(Nelaric::EInitState NextState)
 {
 	if (bCommittingInitState || bTerminalInitFailure || InitState == Nelaric::EInitState::Ready ||
+	    (NextState == Nelaric::EInitState::Ready && !bEnteringReady) ||
 	    static_cast<uint8>(NextState) != static_cast<uint8>(InitState) + 1)
 	{
 		return false;

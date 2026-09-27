@@ -47,6 +47,14 @@ void UNelaricInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* 
 	}
 }
 
+void UNelaricInitStateWorldSubsystem::RequestParticipantRefresh(UActorComponent* Component)
+{
+	if (RegisteredComponents.Contains(Component))
+	{
+		ProcessParticipants();
+	}
+}
+
 void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 {
 	if (bProcessing)
@@ -88,44 +96,60 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 				continue;
 			}
 
-			TArray<Nelaric::FInitDependency> Dependencies;
-			Participant->GatherInitDependencies(Dependencies);
-			bool bDependenciesReady = true;
-			for (const Nelaric::FInitDependency& Dependency : Dependencies)
-			{
-				UActorComponent* RequiredComponent = Dependency.Component.Get();
-				const INelaricInitStateParticipantInterface* Required =
-				    Cast<INelaricInitStateParticipantInterface>(RequiredComponent);
-				if (!Required || !RegisteredComponents.Contains(RequiredComponent) ||
-				    Required->HasTerminalInitFailure() || !Required->IsInitApplicable() ||
-				    Required->GetInitState() < Dependency.RequiredState)
-				{
-					bDependenciesReady = false;
-					break;
-				}
-			}
-			if (!bDependenciesReady)
-			{
-				continue;
-			}
-
 			const Nelaric::FInitGeneration Generation = Participant->GetInitGeneration();
 			const Nelaric::EInitState PreviousState = Participant->GetInitState();
-			const bool bAdvanced = Participant->TryChangeInitState();
+			bool bAdvanced = false;
+			if (PreviousState == Nelaric::EInitState::DataInitialized)
+			{
+				TArray<Nelaric::FInitDependency> Dependencies;
+				Participant->GatherInitDependencies(Dependencies);
+				bool bDependenciesReady = true;
+				for (const Nelaric::FInitDependency& Dependency : Dependencies)
+				{
+					UActorComponent* RequiredComponent = Dependency.Component.Get();
+					const INelaricInitStateParticipantInterface* Required =
+					    Cast<INelaricInitStateParticipantInterface>(RequiredComponent);
+					if (Dependency.Identity.IsNone() || !Required ||
+					    !RegisteredComponents.Contains(RequiredComponent) || Required->HasTerminalInitFailure() ||
+					    !Required->IsInitApplicable() || Required->GetInitState() != Nelaric::EInitState::Ready)
+					{
+						bDependenciesReady = false;
+						break;
+					}
+				}
+				if (!bDependenciesReady)
+				{
+					continue;
+				}
+
+				const bool bCanEnterReady = Participant->CanEnterReady();
+				ensureMsgf(Generation == Participant->GetInitGeneration() &&
+				               PreviousState == Participant->GetInitState() && !Participant->HasTerminalInitFailure(),
+				           TEXT("CanEnterReady must not change state, generation, or failure."));
+				if (bCanEnterReady && Generation == Participant->GetInitGeneration() &&
+				    PreviousState == Participant->GetInitState() && !Participant->HasTerminalInitFailure())
+				{
+					bAdvanced = Participant->EnterReady();
+				}
+			}
+			else
+			{
+				bAdvanced = Participant->TryChangeInitState();
+			}
 			const bool bExactlyOneStep =
 			    Generation == Participant->GetInitGeneration() &&
 			    static_cast<uint8>(Participant->GetInitState()) == static_cast<uint8>(PreviousState) + 1;
 			if (bAdvanced)
 			{
 				ensureMsgf(bExactlyOneStep,
-				           TEXT("TryChangeInitState must commit exactly one step in the same generation."));
+				           TEXT("Initialization transition must commit exactly one step in the same generation."));
 				bProcessRequested |= bExactlyOneStep;
 			}
 			else
 			{
 				ensureMsgf(Generation == Participant->GetInitGeneration() &&
 				               PreviousState == Participant->GetInitState(),
-				           TEXT("TryChangeInitState returned false after changing state or generation."));
+				           TEXT("Initialization transition returned false after changing state or generation."));
 			}
 		}
 	} while (bProcessRequested && --RemainingPasses > 0);

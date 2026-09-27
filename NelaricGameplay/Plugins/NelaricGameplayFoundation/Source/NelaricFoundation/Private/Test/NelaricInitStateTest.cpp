@@ -31,19 +31,34 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("TryChange commits one adjacent step"), Standalone->TryChangeInitState());
 	TestEqual(TEXT("One call advances one stage"), Standalone->GetInitState(), Nelaric::EInitState::DataAvailable);
 	TestFalse(TEXT("Skipped state is rejected"), Standalone->TestCommit(Nelaric::EInitState::Ready));
+	TestTrue(TEXT("Preparation advances to DataInitialized"), Standalone->TryChangeInitState());
+	TestFalse(TEXT("TryChange never enters Ready"), Standalone->TryChangeInitState());
+	TestFalse(TEXT("Internal preparation gates Ready"), Standalone->CanEnterReady());
+	TestFalse(TEXT("Direct Ready commit respects the gate"), Standalone->TestCommit(Nelaric::EInitState::Ready));
 	UNelaricInitStateTestPawnComponent* First = NewObject<UNelaricInitStateTestPawnComponent>(Pawn);
 	UNelaricInitStateTestPawnComponent* Dependent = NewObject<UNelaricInitStateTestPawnComponent>(Pawn);
-	Dependent->Dependency = First;
-	First->RegisterComponent();
-	Dependent->RegisterComponent();
-	TestEqual(TEXT("Blocked component stays registered"), Dependent->GetInitState(), Nelaric::EInitState::Registered);
-	TestFalse(TEXT("No readiness means no progress"), First->TryChangeInitState());
-
 	First->bAllowAdvance = true;
 	Dependent->bAllowAdvance = true;
-	Subsystem->RegisterParticipant(First);
+	Dependent->bInternalReady = true;
+	Dependent->bDeclareDependency = true;
+	First->RegisterComponent();
+	Dependent->RegisterComponent();
+	TestEqual(TEXT("Own preparation proceeds without a ready dependency"), Dependent->GetInitState(),
+	          Nelaric::EInitState::DataInitialized);
+	TestEqual(TEXT("Internal preparation blocks Ready"), First->GetInitState(), Nelaric::EInitState::DataInitialized);
+	TestFalse(TEXT("Unresolved dependency fails the pure gate"), Dependent->CanEnterReady());
+	Dependent->SetDependency(First);
+	TestEqual(TEXT("Referenced dependency still waits for Ready"), Dependent->GetInitState(),
+	          Nelaric::EInitState::DataInitialized);
+	Dependent->SetDependency(nullptr);
+
+	First->bInternalReady = true;
+	First->RequestInitRefresh();
 	TestEqual(TEXT("Dependency reaches ready"), First->GetInitState(), Nelaric::EInitState::Ready);
-	TestEqual(TEXT("Dependent advances after dependency"), Dependent->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Missing reference remains blocked"), Dependent->GetInitState(),
+	          Nelaric::EInitState::DataInitialized);
+	Dependent->SetDependency(First);
+	TestEqual(TEXT("Reference refresh unlocks Ready"), Dependent->GetInitState(), Nelaric::EInitState::Ready);
 	TestFalse(TEXT("Ready cannot advance"), First->TryChangeInitState());
 
 	First->MarkTerminalInitFailure();

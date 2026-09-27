@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreTypes.h"
+#include "UObject/NameTypes.h"
 #include "UObject/WeakObjectPtr.h"
 
 class UActorComponent;
@@ -22,10 +23,10 @@ enum class EInitState : uint8
 	/// Required data is available.
 	DataAvailable,
 
-	/// Required data has been initialized.
+	/// Required data has been initialized; gameplay cannot run yet.
 	DataInitialized,
 
-	/// Initialization is complete.
+	/// Initialization is complete and component gameplay may run.
 	Ready,
 };
 
@@ -52,13 +53,13 @@ struct FInitStateSnapshot
 	bool bTerminallyFailed = false;
 };
 
-/// One component and the initialization stage it must reach.
+/// Identity and current reference of a runtime component dependency.
 struct FInitDependency
 {
-	/// Component whose state is required; does not keep it alive.
-	TWeakObjectPtr<UActorComponent> Component;
+	/// Stable identity supplied even while the component reference is null.
+	FName Identity;
 
-	/// Stage required from the component.
-	EInitState RequiredState = EInitState::Registered;
+	/// Component that must reach Ready; does not keep it alive.
+	TWeakObjectPtr<UActorComponent> Component;
 };
 } // namespace Nelaric

@@ -37,14 +37,33 @@ public:
 	virtual bool IsRequiredForPawnReady() const = 0;
 
 	/** @brief Appends dependencies for the current attempt.
-	 * @param OutDependencies Receives component and required stage pairs.
+	 * @details Declare each runtime dependency by stable identity even when
+	 * its component reference is temporarily null. Request a refresh when a
+	 * missing reference becomes available.
+	 * @param OutDependencies Receives runtime component dependencies.
 	 */
 	virtual void GatherInitDependencies(TArray<Nelaric::FInitDependency>& OutDependencies) const = 0;
 
-	/** @brief Attempts exactly one adjacent forward transition.
+	/** @brief Attempts one adjacent transition through DataInitialized.
+	 * @details Check only this component's data and context. This method must
+	 * never enter Ready or rely on dependency gameplay behavior.
 	 * @return True only if this call committed one state transition.
 	 */
 	virtual bool TryChangeInitState() = 0;
+
+	/** @brief Checks internal preparation and runtime dependency readiness.
+	 * @details Called at DataInitialized. Dependencies outside the current
+	 * readiness group must be Ready. This query must not mutate state, start
+	 * gameplay, or broadcast events. Component gameplay requires Ready; work
+	 * requiring the complete pawn must additionally wait for pawn Ready.
+	 * @return Whether this component may enter Ready now.
+	 */
+	virtual bool CanEnterReady() const = 0;
+
+	/** @brief Commits the final transition after CanEnterReady succeeds.
+	 * @return True only if this call committed DataInitialized to Ready.
+	 */
+	virtual bool EnterReady() = 0;
 
 	/// Current component-owned state of this attempt.
 	virtual Nelaric::EInitState GetInitState() const = 0;

@@ -53,6 +53,75 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	Component->EndPlay(EEndPlayReason::Destroyed);
 	TestFalse(TEXT("EndPlay clears initialized state"), Component->IsPawnInitialized());
 	TestFalse(TEXT("Ended component cannot initialize again"), Component->TryInitializePawn());
+
+	ANelaricPawn* ConfiguredPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricPawnInitializationTestComponent* Manager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(ConfiguredPawn);
+	UNelaricPawnInitializationConfig* Config = NewObject<UNelaricPawnInitializationConfig>(Manager);
+	FNelaricPawnInitializationEntry FirstEntry;
+	FirstEntry.ComponentId = TEXT("First");
+	FirstEntry.ComponentClass = UNelaricConfiguredInitStateTestComponent::StaticClass();
+	FirstEntry.DependencyIds.Add(TEXT("Second"));
+	Config->Components.Add(FirstEntry);
+	FNelaricPawnInitializationEntry SecondEntry = FirstEntry;
+	SecondEntry.ComponentId = TEXT("Second");
+	SecondEntry.DependencyIds = {TEXT("First")};
+	Config->Components.Add(SecondEntry);
+	FNelaricPawnInitializationEntry OptionalEntry;
+	OptionalEntry.ComponentId = TEXT("Optional");
+	OptionalEntry.ComponentClass = UNelaricInitStateTestPawnComponent::StaticClass();
+	OptionalEntry.bRequiredForPawnReady = false;
+	Config->Components.Add(OptionalEntry);
+	FNelaricPawnInitializationEntry ClientOnlyEntry = FirstEntry;
+	ClientOnlyEntry.ComponentId = TEXT("ClientOnly");
+	ClientOnlyEntry.DependencyIds.Empty();
+	ClientOnlyEntry.bCreateOnAuthority = false;
+	Config->Components.Add(ClientOnlyEntry);
+	Manager->SetConfig(Config);
+	Manager->bReady = true;
+	Manager->RegisterComponent();
+	ConfiguredPawn->DispatchBeginPlay();
+	UActorComponent* FirstCreated = FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_First"));
+	UActorComponent* SecondCreated = FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Second"));
+	TestNotNull(TEXT("Stable ID names first instance"), FirstCreated);
+	TestNotNull(TEXT("Stable ID names second instance"), SecondCreated);
+	TestNotNull(TEXT("Optional component is created"),
+	            FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Optional")));
+	TestNull(TEXT("Client-only component is absent on authority"),
+	         FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_ClientOnly")));
+	if (!FirstCreated || !SecondCreated)
+	{
+		return false;
+	}
+	TestTrue(TEXT("Configured cycle reaches Ready together"), Manager->TryInitializePawn());
+	TestEqual(TEXT("First cycle member is Ready"),
+	          Cast<UNelaricConfiguredInitStateTestComponent>(FirstCreated)->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Second cycle member is Ready"),
+	          Cast<UNelaricConfiguredInitStateTestComponent>(SecondCreated)->GetInitState(),
+	          Nelaric::EInitState::Ready);
+	UNelaricConfiguredInitStateTestComponent* FirstState = Cast<UNelaricConfiguredInitStateTestComponent>(FirstCreated);
+	FirstState->bInternalReady = false;
+	FirstState->InvalidateInitGeneration();
+	TestFalse(TEXT("Cycle partner invalidates with its dependency"),
+	          Cast<UNelaricConfiguredInitStateTestComponent>(SecondCreated)->GetInitState() ==
+	              Nelaric::EInitState::Ready);
+	TestFalse(TEXT("Required invalidation blocks pawn readiness"), Manager->TryInitializePawn());
+	TestFalse(TEXT("Required invalidation clears pawn readiness"), Manager->IsPawnInitialized());
+
+	ANelaricPawn* InvalidPawn = World->SpawnActor<ANelaricPawn>();
+	UNelaricPawnInitializationTestComponent* InvalidManager =
+	    NewObject<UNelaricPawnInitializationTestComponent>(InvalidPawn);
+	UNelaricPawnInitializationConfig* InvalidConfig = NewObject<UNelaricPawnInitializationConfig>(InvalidManager);
+	InvalidConfig->Components.Add(FirstEntry);
+	InvalidConfig->Components.Add(FirstEntry);
+	InvalidManager->SetConfig(InvalidConfig);
+	InvalidManager->bReady = true;
+	InvalidManager->RegisterComponent();
+	AddExpectedError(TEXT("Invalid pawn initialization entry 'First'"), EAutomationExpectedErrorFlags::Contains, 1);
+	InvalidPawn->DispatchBeginPlay();
+	TestFalse(TEXT("Duplicate IDs reject the configuration"), InvalidManager->TryInitializePawn());
+	TestNull(TEXT("Invalid configuration creates no components"),
+	         FindObject<UActorComponent>(InvalidPawn, TEXT("NelaricInit_First")));
 	return true;
 }
 

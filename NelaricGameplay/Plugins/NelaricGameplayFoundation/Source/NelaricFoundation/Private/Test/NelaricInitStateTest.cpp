@@ -39,7 +39,7 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	First->bAllowAdvance = true;
 	Dependent->bAllowAdvance = true;
 	Dependent->bInternalReady = true;
-	Dependent->bDeclareDependency = true;
+	Subsystem->ConfigureParticipant(Dependent, TEXT("Dependent"), {TEXT("First")});
 	First->RegisterComponent();
 	Dependent->RegisterComponent();
 	TestEqual(TEXT("Own preparation proceeds without a ready dependency"), Dependent->GetInitState(),
@@ -47,23 +47,20 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Missing dependency is recoverable"), Dependent->HasTerminalInitFailure());
 	TestEqual(TEXT("Internal preparation blocks Ready"), First->GetInitState(), Nelaric::EInitState::DataInitialized);
 	TestTrue(TEXT("Internal gate is independent of unresolved dependencies"), Dependent->CanEnterReady());
-	Dependent->SetDependency(First);
-	TestEqual(TEXT("Referenced dependency still waits for Ready"), Dependent->GetInitState(),
-	          Nelaric::EInitState::DataInitialized);
-	Dependent->SetDependency(nullptr);
-
 	First->bInternalReady = true;
 	First->RequestInitRefresh();
 	TestEqual(TEXT("Dependency reaches ready"), First->GetInitState(), Nelaric::EInitState::Ready);
 	TestEqual(TEXT("Missing reference remains blocked"), Dependent->GetInitState(),
 	          Nelaric::EInitState::DataInitialized);
 	TestFalse(TEXT("Missing reference does not fail the attempt"), Dependent->HasTerminalInitFailure());
-	Dependent->SetDependency(First);
-	TestEqual(TEXT("Reference refresh unlocks Ready"), Dependent->GetInitState(), Nelaric::EInitState::Ready);
+	Subsystem->ConfigureParticipant(First, TEXT("First"), {});
+	TestEqual(TEXT("Configured ID unlocks Ready"), Dependent->GetInitState(), Nelaric::EInitState::Ready);
 	TestFalse(TEXT("Ready cannot advance"), First->TryChangeInitState());
 
 	First->MarkTerminalInitFailure();
 	TestTrue(TEXT("Failure flag is component-owned"), First->HasTerminalInitFailure());
+	TestFalse(TEXT("Dependency failure invalidates a ready dependent"),
+	          Dependent->GetInitState() == Nelaric::EInitState::Ready);
 	const Nelaric::FInitGeneration OldGeneration = First->GetInitGeneration();
 	TestFalse(TEXT("Failed attempt rejects asynchronous result"), First->CanApplyInitResult(World, OldGeneration));
 	TestNull(TEXT("Weak completion rejects failed attempt"),

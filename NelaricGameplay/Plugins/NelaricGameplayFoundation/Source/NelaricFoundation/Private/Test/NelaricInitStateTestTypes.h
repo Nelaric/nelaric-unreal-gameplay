@@ -17,33 +17,15 @@ class UNelaricInitStateTestPawnComponent : public UNelaricPawnInitStateComponent
 public:
 	bool bAllowAdvance = false;
 	bool bInternalReady = false;
-	bool bDeclareDependency = false;
-	TWeakObjectPtr<UActorComponent> Dependency;
 	int32 CancelCount = 0;
 
 	virtual bool IsInitApplicable() const override
 	{
 		return true;
 	}
-	virtual bool IsRequiredForPawnReady() const override
-	{
-		return true;
-	}
-	virtual void GatherInitDependencies(TArray<Nelaric::FInitDependency>& OutDependencies) const override
-	{
-		if (bDeclareDependency)
-		{
-			OutDependencies.Add({FName(TEXT("RuntimeComponent")), Dependency});
-		}
-	}
 	virtual bool CanEnterReady() const override
 	{
 		return bInternalReady && GetInitState() == Nelaric::EInitState::DataInitialized;
-	}
-	void SetDependency(UActorComponent* Component)
-	{
-		Dependency = Component;
-		RequestInitRefresh();
 	}
 
 protected:
@@ -73,13 +55,6 @@ public:
 	virtual bool IsInitApplicable() const override
 	{
 		return true;
-	}
-	virtual bool IsRequiredForPawnReady() const override
-	{
-		return false;
-	}
-	virtual void GatherInitDependencies(TArray<Nelaric::FInitDependency>&) const override
-	{
 	}
 	virtual bool TryChangeInitState() override
 	{

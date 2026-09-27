@@ -7,12 +7,52 @@
 #pragma once
 
 #include "Engine/DataAsset.h"
+#include "Components/ActorComponent.h"
 
 #include "NelaricPawnInitializationConfig.generated.h"
 
-/// Empty asset reserved for pawn initialization component settings.
+/** @brief One component created and coordinated for a pawn.
+ * @details IDs are unique within the asset and remain stable across edits.
+ * Dependencies name other entries in this asset, including cyclic groups.
+ */
+USTRUCT(BlueprintType)
+struct FNelaricPawnInitializationEntry
+{
+	GENERATED_BODY()
+
+	/// Stable identity used for dependency references and instance naming.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	FName ComponentId;
+
+	/// Concrete component class created for the pawn.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	TSubclassOf<UActorComponent> ComponentClass;
+
+	/// Create this component on authority, including standalone play.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	bool bCreateOnAuthority = true;
+
+	/// Create this component on non-authority peers.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	bool bCreateOnClient = true;
+
+	/// Include this component in the local pawn readiness aggregate.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	bool bRequiredForPawnReady = true;
+
+	/// IDs of components that must reach Ready before this entry enters Ready.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	TArray<FName> DependencyIds;
+};
+
+/// Authored component creation and readiness contract for a pawn.
 UCLASS(MinimalAPI, BlueprintType)
 class UNelaricPawnInitializationConfig : public UDataAsset
 {
 	GENERATED_BODY()
+
+public:
+	/// Components managed by the pawn initialization component.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
+	TArray<FNelaricPawnInitializationEntry> Components;
 };

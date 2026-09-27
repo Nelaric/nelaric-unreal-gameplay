@@ -3,7 +3,9 @@
 #include "World/NelaricInitStateWorldSubsystem.h"
 
 #include "Components/ActorComponent.h"
+#include "GameFramework/Actor.h"
 #include "Misc/ScopeExit.h"
+#include "Pawn/NelaricPawnInitializationComponent.h"
 #include "World/NelaricInitStateParticipantInterface.h"
 
 void UNelaricInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
@@ -21,7 +23,158 @@ void UNelaricInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Compo
 void UNelaricInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Component)
 {
 	RegisteredComponents.Remove(Component);
+	InvalidateConfiguredDependents(Component);
 	ProcessParticipants();
+}
+
+void UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Component, FName ComponentId,
+                                                           const TArray<FName>& DependencyIds)
+{
+	if (IsValid(Component) && !ComponentId.IsNone())
+	{
+		ConfiguredComponents.Add(Component, {ComponentId, DependencyIds});
+		if (RegisteredComponents.Contains(Component))
+		{
+			ProcessParticipants();
+		}
+	}
+}
+
+void UNelaricInitStateWorldSubsystem::UnconfigureParticipant(UActorComponent* Component)
+{
+	ConfiguredComponents.Remove(Component);
+	ProcessParticipants();
+}
+
+UActorComponent* UNelaricInitStateWorldSubsystem::FindConfiguredComponent(const AActor* Owner, FName ComponentId) const
+{
+	for (const auto& Pair : ConfiguredComponents)
+	{
+		UActorComponent* Candidate = Pair.Key.Get();
+		if (IsValid(Candidate) && Candidate->GetOwner() == Owner && Pair.Value.ComponentId == ComponentId)
+		{
+			return Candidate;
+		}
+	}
+	return nullptr;
+}
+
+void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorComponent* Component)
+{
+	if (!IsValid(Component))
+	{
+		return;
+	}
+	const FConfiguredParticipant* Changed = ConfiguredComponents.Find(Component);
+	if (!Changed)
+	{
+		return;
+	}
+	const FName ChangedId = Changed->ComponentId;
+	const AActor* Owner = Component->GetOwner();
+	for (const auto& Pair : ConfiguredComponents)
+	{
+		UActorComponent* DependentComponent = Pair.Key.Get();
+		if (!IsValid(DependentComponent) || DependentComponent->GetOwner() != Owner ||
+		    !Pair.Value.DependencyIds.Contains(ChangedId))
+		{
+			continue;
+		}
+		INelaricInitStateParticipantInterface* Dependent =
+		    Cast<INelaricInitStateParticipantInterface>(DependentComponent);
+		if (Dependent && Dependent->GetInitState() == Nelaric::EInitState::Ready)
+		{
+			Dependent->InvalidateInitGeneration();
+		}
+	}
+}
+
+bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
+{
+	TArray<UActorComponent*> Pending{Root};
+	TSet<FComponentPtr> Seen;
+	TSet<FComponentPtr> Queued;
+	Queued.Add(Root);
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	{
+		UActorComponent* Component = Pending[Index];
+		if (!IsValid(Component) || !RegisteredComponents.Contains(Component))
+		{
+			return false;
+		}
+		if (Seen.Contains(Component))
+		{
+			continue;
+		}
+		Seen.Add(Component);
+		const INelaricInitStateParticipantInterface* Participant =
+		    Cast<INelaricInitStateParticipantInterface>(Component);
+		if (!Participant || !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
+		    Participant->GetInitState() != Nelaric::EInitState::DataInitialized)
+		{
+			return false;
+		}
+		if (const FConfiguredParticipant* Configuration = ConfiguredComponents.Find(Component))
+		{
+			for (FName Id : Configuration->DependencyIds)
+			{
+				UActorComponent* Dependency = FindConfiguredComponent(Component->GetOwner(), Id);
+				const INelaricInitStateParticipantInterface* Required =
+				    Cast<INelaricInitStateParticipantInterface>(Dependency);
+				if (Id.IsNone() || !Required || !RegisteredComponents.Contains(Dependency) ||
+				    !Required->IsInitApplicable() || Required->HasTerminalInitFailure())
+				{
+					return false;
+				}
+				if (Required->GetInitState() != Nelaric::EInitState::Ready && !Queued.Contains(Dependency))
+				{
+					Pending.Add(Dependency);
+					Queued.Add(Dependency);
+				}
+			}
+		}
+	}
+
+	TArray<Nelaric::FInitStateSnapshot> BeforeReady;
+	BeforeReady.Reserve(Seen.Num());
+	for (UActorComponent* Component : Pending)
+	{
+		const INelaricInitStateParticipantInterface* Participant =
+		    Cast<INelaricInitStateParticipantInterface>(Component);
+		const Nelaric::FInitStateSnapshot Before{Participant->GetInitGeneration(), Participant->GetInitState(),
+		                                         Participant->HasTerminalInitFailure()};
+		if (!Participant->CanEnterReady() || !(Before.Generation == Participant->GetInitGeneration()) ||
+		    Before.State != Participant->GetInitState() || Participant->HasTerminalInitFailure())
+		{
+			return false;
+		}
+		BeforeReady.Add(Before);
+	}
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	{
+		const INelaricInitStateParticipantInterface* Participant =
+		    Cast<INelaricInitStateParticipantInterface>(Pending[Index]);
+		if (!(BeforeReady[Index].Generation == Participant->GetInitGeneration()) ||
+		    BeforeReady[Index].State != Participant->GetInitState() || Participant->HasTerminalInitFailure())
+		{
+			return false;
+		}
+	}
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	{
+		INelaricInitStateParticipantInterface* Participant =
+		    Cast<INelaricInitStateParticipantInterface>(Pending[Index]);
+		if (!ensureMsgf(Participant->CommitReadyWithoutNotification(),
+		                TEXT("Ready group member failed its silent commit.")))
+		{
+			return false;
+		}
+	}
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	{
+		Cast<INelaricInitStateParticipantInterface>(Pending[Index])->NotifyReadyCommitted(BeforeReady[Index]);
+	}
+	return true;
 }
 
 void UNelaricInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* Component,
@@ -43,6 +196,12 @@ void UNelaricInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* 
 	                      Previous.bTerminallyFailed != Participant->HasTerminalInitFailure();
 	if (bChanged)
 	{
+		if (Previous.State == Nelaric::EInitState::Ready &&
+		    (Participant->GetInitState() != Nelaric::EInitState::Ready || Participant->HasTerminalInitFailure() ||
+		     !(Previous.Generation == Participant->GetInitGeneration())))
+		{
+			InvalidateConfiguredDependents(Component);
+		}
 		ProcessParticipants();
 	}
 }
@@ -101,41 +260,7 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 			bool bAdvanced = false;
 			if (PreviousState == Nelaric::EInitState::DataInitialized)
 			{
-				TArray<Nelaric::FInitDependency> Dependencies;
-				Participant->GatherInitDependencies(Dependencies);
-				bool bDependenciesReady = true;
-				for (const Nelaric::FInitDependency& Dependency : Dependencies)
-				{
-					UActorComponent* RequiredComponent = Dependency.Component.Get();
-					const INelaricInitStateParticipantInterface* Required =
-					    Cast<INelaricInitStateParticipantInterface>(RequiredComponent);
-					if (Dependency.Identity.IsNone() || !Required ||
-					    !RegisteredComponents.Contains(RequiredComponent) || Required->HasTerminalInitFailure() ||
-					    !Required->IsInitApplicable() || Required->GetInitState() != Nelaric::EInitState::Ready)
-					{
-						bDependenciesReady = false;
-						break;
-					}
-				}
-				if (!bDependenciesReady)
-				{
-					continue;
-				}
-
-				const bool bCanEnterReady = Participant->CanEnterReady();
-				ensureMsgf(Generation == Participant->GetInitGeneration() &&
-				               PreviousState == Participant->GetInitState() && !Participant->HasTerminalInitFailure(),
-				           TEXT("CanEnterReady must not change state, generation, or failure."));
-				if (bCanEnterReady && Generation == Participant->GetInitGeneration() &&
-				    PreviousState == Participant->GetInitState() && !Participant->HasTerminalInitFailure())
-				{
-					const Nelaric::FInitStateSnapshot BeforeReady{Generation, PreviousState, false};
-					bAdvanced = Participant->CommitReadyWithoutNotification();
-					if (bAdvanced)
-					{
-						Participant->NotifyReadyCommitted(BeforeReady);
-					}
-				}
+				bAdvanced = TryCommitReadyGroup(Component);
 			}
 			else
 			{
@@ -159,10 +284,25 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 		}
 	} while (bProcessRequested && --RemainingPasses > 0);
 	ensureMsgf(!bProcessRequested, TEXT("Initialization participants requested too many progress passes."));
+	for (const FComponentPtr& ParticipantPtr : RegisteredComponents)
+	{
+		if (UActorComponent* Component = ParticipantPtr.Get())
+		{
+			if (AActor* Owner = Component->GetOwner())
+			{
+				if (UNelaricPawnInitializationComponent* Manager =
+				        Owner->FindComponentByClass<UNelaricPawnInitializationComponent>())
+				{
+					Manager->TryInitializePawn();
+				}
+			}
+		}
+	}
 }
 
 void UNelaricInitStateWorldSubsystem::Deinitialize()
 {
 	RegisteredComponents.Empty();
+	ConfiguredComponents.Empty();
 	Super::Deinitialize();
 }

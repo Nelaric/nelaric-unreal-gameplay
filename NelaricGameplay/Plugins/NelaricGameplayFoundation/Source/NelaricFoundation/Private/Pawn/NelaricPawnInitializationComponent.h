@@ -7,10 +7,14 @@
 #pragma once
 
 #include "Pawn/NelaricPawnComponent.h"
+#include "Containers/Map.h"
+#include "UObject/WeakObjectPtr.h"
 
 #include "NelaricPawnInitializationComponent.generated.h"
 
 class UNelaricPawnInitializationComponent;
+class UNelaricPawnInitializationConfig;
+class UActorComponent;
 
 /// Announces that a pawn has passed its initialization gate.
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNelaricPawnInitialized, UNelaricPawnInitializationComponent*, Component);
@@ -18,10 +22,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNelaricPawnInitialized, UNelaricPaw
 /** @brief Coordinates one-time initialization for an owning pawn.
  *
  * @details Add this component to a pawn and override CanInitializePawn for
- * game-specific readiness. The component tries once at BeginPlay; call
- * TryInitializePawn again when a required dependency becomes available.
- * Initialization is local to this component and is not replicated. The pawn
- * owns the component. Operations and notifications run on the game thread.
+ * game-specific readiness. Assign InitializationConfig on a pawn or
+ * character Blueprint to create components. It tries at BeginPlay; call
+ * TryInitializePawn again when required context changes. Initialization is
+ * local and is not replicated. The pawn owns the component. Operations and
+ * notifications run on the game thread.
  */
 UCLASS(MinimalAPI, Blueprintable, ClassGroup = (Nelaric), meta = (BlueprintSpawnableComponent))
 class UNelaricPawnInitializationComponent : public UNelaricPawnComponent
@@ -65,6 +70,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Nelaric|Pawn|Initialization")
 	FNelaricPawnInitialized OnPawnInitialized;
 
+	/** @brief Asset that controls local component creation and readiness.
+	 * @details Set on a Pawn or Character derived Blueprint. IDs, dependencies,
+	 * creation sides, and required flags come only from this asset.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Nelaric|Pawn|Initialization")
+	TObjectPtr<UNelaricPawnInitializationConfig> InitializationConfig;
+
 public:
 	UNelaricPawnInitializationComponent(const FObjectInitializer& ObjectInitializer);
 	virtual void BeginPlay() override;
@@ -77,4 +89,8 @@ private:
 	bool bPawnInitialized = false;
 	bool bInitializationInProgress = false;
 	bool bInitializationAllowed = false;
+	bool bConfigValid = true;
+	TMap<FName, TWeakObjectPtr<UActorComponent>> ConfiguredComponents;
+	void CreateConfiguredComponents();
+	bool AreRequiredComponentsReady() const;
 };

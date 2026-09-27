@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "Containers/Array.h"
 #include "UObject/Interface.h"
 #include "World/NelaricInitStateTypes.h"
 
@@ -32,17 +31,6 @@ class INelaricInitStateParticipantInterface
 public:
 	/// Whether this component participates in its current context.
 	virtual bool IsInitApplicable() const = 0;
-
-	/// Whether pawn readiness requires this component to reach Ready.
-	virtual bool IsRequiredForPawnReady() const = 0;
-
-	/** @brief Appends dependencies for the current attempt.
-	 * @details Declare each runtime dependency by stable identity even when
-	 * its component reference is temporarily null. Request a refresh when a
-	 * missing reference becomes available.
-	 * @param OutDependencies Receives runtime component dependencies.
-	 */
-	virtual void GatherInitDependencies(TArray<Nelaric::FInitDependency>& OutDependencies) const = 0;
 
 	/** @brief Attempts one adjacent transition through DataInitialized.
 	 * @details Check only this component's data and context. This method must

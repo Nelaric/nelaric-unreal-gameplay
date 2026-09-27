@@ -27,15 +27,6 @@ public:
 	/// Defaults to false until a derived component opts in.
 	NELARICFOUNDATION_API virtual bool IsInitApplicable() const override;
 
-	/// Defaults to false until a derived component requires pawn readiness.
-	NELARICFOUNDATION_API virtual bool IsRequiredForPawnReady() const override;
-
-	/** @brief Adds no dependencies by default.
-	 * @param OutDependencies Array to which dependencies are appended.
-	 */
-	NELARICFOUNDATION_API virtual void
-	GatherInitDependencies(TArray<Nelaric::FInitDependency>& OutDependencies) const override;
-
 	/// Commits at most one adjacent preparation step when the derived gate passes.
 	NELARICFOUNDATION_API virtual bool TryChangeInitState() final override;
 

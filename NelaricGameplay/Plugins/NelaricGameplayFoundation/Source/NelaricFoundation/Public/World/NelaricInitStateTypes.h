@@ -7,10 +7,6 @@
 #pragma once
 
 #include "CoreTypes.h"
-#include "UObject/NameTypes.h"
-#include "UObject/WeakObjectPtr.h"
-
-class UActorComponent;
 
 namespace Nelaric
 {
@@ -53,13 +49,4 @@ struct FInitStateSnapshot
 	bool bTerminallyFailed = false;
 };
 
-/// Identity and current reference of a runtime component dependency.
-struct FInitDependency
-{
-	/// Stable identity supplied even while the component reference is null.
-	FName Identity;
-
-	/// Component that must reach Ready; does not keep it alive.
-	TWeakObjectPtr<UActorComponent> Component;
-};
 } // namespace Nelaric

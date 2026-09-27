@@ -15,15 +15,6 @@ bool UNelaricPawnInitStateComponent::IsInitApplicable() const
 	return false;
 }
 
-bool UNelaricPawnInitStateComponent::IsRequiredForPawnReady() const
-{
-	return false;
-}
-
-void UNelaricPawnInitStateComponent::GatherInitDependencies(TArray<Nelaric::FInitDependency>&) const
-{
-}
-
 bool UNelaricPawnInitStateComponent::TryChangeInitState()
 {
 	if (bCommittingInitState || bTerminalInitFailure || InitState >= Nelaric::EInitState::DataInitialized)

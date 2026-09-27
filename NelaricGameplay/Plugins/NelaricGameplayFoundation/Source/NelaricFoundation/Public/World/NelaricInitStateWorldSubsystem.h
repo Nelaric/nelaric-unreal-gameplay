@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Containers/Set.h"
+#include "Containers/Map.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "UObject/WeakObjectPtr.h"
 #include "World/NelaricInitStateTypes.h"
@@ -14,6 +15,7 @@
 #include "NelaricInitStateWorldSubsystem.generated.h"
 
 class UActorComponent;
+class AActor;
 
 /** @brief Coordinates registered initialization participants in one world.
  *
@@ -50,13 +52,37 @@ public:
 	 */
 	NELARICFOUNDATION_API void RequestParticipantRefresh(UActorComponent* Component);
 
+	/** @brief Installs the manager's immutable configuration for a component.
+	 * @details Call on the game thread before registering the component. IDs
+	 * are resolved only among configured components of the same actor.
+	 * @param Component Component owned by the configured actor.
+	 * @param ComponentId Stable ID unique on that actor.
+	 * @param DependencyIds IDs required to reach Ready.
+	 */
+	NELARICFOUNDATION_API void ConfigureParticipant(UActorComponent* Component, FName ComponentId,
+	                                                const TArray<FName>& DependencyIds);
+
+	/** @brief Removes the manager's configuration for a component.
+	 * @param Component Component leaving its configured pawn.
+	 */
+	NELARICFOUNDATION_API void UnconfigureParticipant(UActorComponent* Component);
+
 public:
 	virtual void Deinitialize() override;
 
 private:
 	using FComponentPtr = TWeakObjectPtr<UActorComponent>;
 	TSet<FComponentPtr> RegisteredComponents;
+	struct FConfiguredParticipant
+	{
+		FName ComponentId;
+		TArray<FName> DependencyIds;
+	};
+	TMap<FComponentPtr, FConfiguredParticipant> ConfiguredComponents;
 	bool bProcessing = false;
 	bool bProcessRequested = false;
 	void ProcessParticipants();
+	bool TryCommitReadyGroup(UActorComponent* Root);
+	UActorComponent* FindConfiguredComponent(const AActor* Owner, FName ComponentId) const;
+	void InvalidateConfiguredDependents(UActorComponent* Component);
 };

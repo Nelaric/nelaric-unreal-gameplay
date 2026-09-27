@@ -109,5 +109,6 @@ private:
 	bool bTerminalInitFailure = false;
 	bool bCommittingInitState = false;
 	bool bReadyNotificationPending = false;
+	bool bLeavingWorld = false;
 	void NotifyInitChanged(const Nelaric::FInitStateSnapshot& Previous);
 };

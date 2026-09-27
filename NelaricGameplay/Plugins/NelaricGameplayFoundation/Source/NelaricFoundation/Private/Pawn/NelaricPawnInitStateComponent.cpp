@@ -17,7 +17,8 @@ bool UNelaricPawnInitStateComponent::IsInitApplicable() const
 
 bool UNelaricPawnInitStateComponent::TryChangeInitState()
 {
-	if (bCommittingInitState || bTerminalInitFailure || InitState >= Nelaric::EInitState::DataInitialized)
+	if (bLeavingWorld || bCommittingInitState || bTerminalInitFailure ||
+	    InitState >= Nelaric::EInitState::DataInitialized)
 	{
 		return false;
 	}
@@ -42,7 +43,7 @@ bool UNelaricPawnInitStateComponent::CanEnterReady() const
 
 bool UNelaricPawnInitStateComponent::CommitReadyWithoutNotification()
 {
-	if (bCommittingInitState || bTerminalInitFailure || bReadyNotificationPending ||
+	if (bLeavingWorld || bCommittingInitState || bTerminalInitFailure || bReadyNotificationPending ||
 	    InitState != Nelaric::EInitState::DataInitialized)
 	{
 		return false;
@@ -92,7 +93,7 @@ bool UNelaricPawnInitStateComponent::HasTerminalInitFailure() const
 bool UNelaricPawnInitStateComponent::CanApplyInitResult(const UWorld* ExpectedWorld,
                                                         Nelaric::FInitGeneration ExpectedGeneration) const
 {
-	return IsInGameThread() && IsValid(this) && IsRegistered() && GetWorld() == ExpectedWorld &&
+	return IsInGameThread() && IsValid(this) && IsRegistered() && !bLeavingWorld && GetWorld() == ExpectedWorld &&
 	       InitGeneration == ExpectedGeneration && !bTerminalInitFailure;
 }
 
@@ -166,6 +167,7 @@ void UNelaricPawnInitStateComponent::NotifyInitChanged(const Nelaric::FInitState
 void UNelaricPawnInitStateComponent::OnRegister()
 {
 	Super::OnRegister();
+	bLeavingWorld = false;
 	if (UWorld* World = GetWorld())
 	{
 		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
@@ -177,6 +179,8 @@ void UNelaricPawnInitStateComponent::OnRegister()
 
 void UNelaricPawnInitStateComponent::OnUnregister()
 {
+	bLeavingWorld = true;
+	InvalidateInitGeneration();
 	if (UWorld* World = GetWorld())
 	{
 		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())
@@ -184,6 +188,5 @@ void UNelaricPawnInitStateComponent::OnUnregister()
 			Subsystem->UnregisterParticipant(this);
 		}
 	}
-	InvalidateInitGeneration();
 	Super::OnUnregister();
 }

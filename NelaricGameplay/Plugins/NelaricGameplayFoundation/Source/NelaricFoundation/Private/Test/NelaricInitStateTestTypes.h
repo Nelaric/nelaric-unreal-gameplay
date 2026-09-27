@@ -18,6 +18,7 @@ public:
 	bool bAllowAdvance = false;
 	bool bInternalReady = false;
 	int32 CancelCount = 0;
+	Nelaric::FInitGeneration GenerationAtCancel;
 
 	virtual bool IsInitApplicable() const override
 	{
@@ -36,6 +37,7 @@ protected:
 
 	virtual void CancelInitGenerationWork() override
 	{
+		GenerationAtCancel = GetInitGeneration();
 		++CancelCount;
 	}
 };
@@ -51,6 +53,9 @@ public:
 	int32 NotificationCount = 0;
 	int32 CancelCount = 0;
 	Nelaric::FInitGeneration GenerationAtCancel;
+	TWeakObjectPtr<UActorComponent> ObservedDependency;
+	bool bDependencyReadyAtNotification = false;
+	int32 DependencyNotificationsAtReady = 0;
 
 	virtual bool IsInitApplicable() const override
 	{
@@ -129,6 +134,17 @@ private:
 	void NotifyChanged(const Nelaric::FInitStateSnapshot& Previous)
 	{
 		++NotificationCount;
+		if (State == Nelaric::EInitState::Ready && ObservedDependency.IsValid())
+		{
+			const INelaricInitStateParticipantInterface* Dependency =
+			    Cast<INelaricInitStateParticipantInterface>(ObservedDependency.Get());
+			bDependencyReadyAtNotification = Dependency && Dependency->GetInitState() == Nelaric::EInitState::Ready;
+			if (const UNelaricInitStateTestDirectComponent* DirectDependency =
+			        Cast<UNelaricInitStateTestDirectComponent>(ObservedDependency.Get()))
+			{
+				DependencyNotificationsAtReady = DirectDependency->NotificationCount;
+			}
+		}
 		if (UWorld* World = GetWorld())
 		{
 			if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())

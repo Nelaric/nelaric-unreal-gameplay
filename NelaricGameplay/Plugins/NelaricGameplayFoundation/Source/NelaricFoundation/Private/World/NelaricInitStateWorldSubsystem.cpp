@@ -17,13 +17,19 @@ void UNelaricInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Compo
 	}
 
 	RegisteredComponents.Add(Component);
+	QueueParticipantAndDependents(Component);
 	ProcessParticipants();
 }
 
 void UNelaricInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Component)
 {
 	RegisteredComponents.Remove(Component);
+	if (IsValid(Component))
+	{
+		PendingOwners.Add(Component->GetOwner());
+	}
 	InvalidateConfiguredDependents(Component);
+	QueueParticipantAndDependents(Component);
 	ProcessParticipants();
 }
 
@@ -31,27 +37,182 @@ void UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Comp
                                                            bool bRequiredForPawnReady,
                                                            const TArray<UActorComponent*>& Dependencies)
 {
-	if (IsValid(Component) && !ComponentId.IsNone())
+	Nelaric::FInitParticipantConfiguration Configuration;
+	Configuration.Component = Component;
+	Configuration.ComponentId = ComponentId;
+	Configuration.bRequiredForPawnReady = bRequiredForPawnReady;
+	Configuration.Dependencies = Dependencies;
+	ConfigureParticipants({Configuration});
+}
+
+void UNelaricInitStateWorldSubsystem::ConfigureParticipants(
+    const TArray<Nelaric::FInitParticipantConfiguration>& Configurations)
+{
+	bool bChanged = false;
+	for (const Nelaric::FInitParticipantConfiguration& Entry : Configurations)
 	{
+		UActorComponent* Component = Entry.Component;
+		if (!IsValid(Component) || Entry.ComponentId.IsNone())
+		{
+			continue;
+		}
 		FConfiguredParticipant Configuration;
-		Configuration.ComponentId = ComponentId;
-		Configuration.bRequiredForPawnReady = bRequiredForPawnReady;
-		for (UActorComponent* Dependency : Dependencies)
+		Configuration.Owner = Component->GetOwner();
+		Configuration.ComponentId = Entry.ComponentId;
+		Configuration.bRequiredForPawnReady = Entry.bRequiredForPawnReady;
+		for (UActorComponent* Dependency : Entry.Dependencies)
 		{
 			Configuration.Dependencies.Add(Dependency);
 		}
 		ConfiguredComponents.Add(Component, MoveTemp(Configuration));
-		if (RegisteredComponents.Contains(Component))
-		{
-			ProcessParticipants();
-		}
+		PendingOwners.Add(Component->GetOwner());
+		bChanged = true;
+	}
+	if (bChanged)
+	{
+		RebuildDependencyGraph();
+		QueueAllRegistered();
+		ProcessParticipants();
 	}
 }
 
 void UNelaricInitStateWorldSubsystem::UnconfigureParticipant(UActorComponent* Component)
 {
-	ConfiguredComponents.Remove(Component);
-	ProcessParticipants();
+	if (ConfiguredComponents.Remove(Component) > 0)
+	{
+		if (IsValid(Component))
+		{
+			PendingOwners.Add(Component->GetOwner());
+		}
+		RebuildDependencyGraph();
+		QueueAllRegistered();
+		ProcessParticipants();
+	}
+}
+
+void UNelaricInitStateWorldSubsystem::RebuildDependencyGraph()
+{
+	++GraphVersion;
+	ForwardDependencies.Empty();
+	ReverseDependencies.Empty();
+	RequiredByOwner.Empty();
+	ReadyGroupByComponent.Empty();
+	ReadyGroups.Empty();
+	GraphEdgeCount = 0;
+	for (const auto& Pair : ConfiguredComponents)
+	{
+		if (Pair.Value.bRequiredForPawnReady)
+		{
+			RequiredByOwner.FindOrAdd(Pair.Value.Owner).Add(Pair.Key);
+		}
+		if (!IsValid(Pair.Key.Get()))
+		{
+			continue;
+		}
+		TArray<FComponentPtr>& Forward = ForwardDependencies.FindOrAdd(Pair.Key);
+		for (const FComponentPtr& Dependency : Pair.Value.Dependencies)
+		{
+			Forward.AddUnique(Dependency);
+			if (IsValid(Dependency.Get()))
+			{
+				ReverseDependencies.FindOrAdd(Dependency).AddUnique(Pair.Key);
+			}
+		}
+		GraphEdgeCount += Forward.Num();
+	}
+
+	struct FTraversalFrame
+	{
+		FComponentPtr Component;
+		int32 NextDependency = 0;
+	};
+	TSet<FComponentPtr> Visited;
+	TArray<FComponentPtr> FinishOrder;
+	for (const auto& Pair : ForwardDependencies)
+	{
+		if (Visited.Contains(Pair.Key))
+		{
+			continue;
+		}
+		Visited.Add(Pair.Key);
+		TArray<FTraversalFrame> Stack{{Pair.Key, 0}};
+		while (!Stack.IsEmpty())
+		{
+			FTraversalFrame& Frame = Stack.Last();
+			const TArray<FComponentPtr>& Dependencies = ForwardDependencies.FindChecked(Frame.Component);
+			if (Frame.NextDependency < Dependencies.Num())
+			{
+				const FComponentPtr Dependency = Dependencies[Frame.NextDependency++];
+				if (ForwardDependencies.Contains(Dependency) && !Visited.Contains(Dependency))
+				{
+					Visited.Add(Dependency);
+					Stack.Add({Dependency, 0});
+				}
+			}
+			else
+			{
+				FinishOrder.Add(Frame.Component);
+				Stack.Pop();
+			}
+		}
+	}
+	for (int32 Index = FinishOrder.Num() - 1; Index >= 0; --Index)
+	{
+		const FComponentPtr Start = FinishOrder[Index];
+		if (ReadyGroupByComponent.Contains(Start))
+		{
+			continue;
+		}
+		const int32 GroupIndex = ReadyGroups.AddDefaulted();
+		TArray<FComponentPtr> Stack{Start};
+		ReadyGroupByComponent.Add(Start, GroupIndex);
+		while (!Stack.IsEmpty())
+		{
+			const FComponentPtr Current = Stack.Pop();
+			ReadyGroups[GroupIndex].Add(Current);
+			if (const TArray<FComponentPtr>* Dependents = ReverseDependencies.Find(Current))
+			{
+				for (const FComponentPtr& Dependent : *Dependents)
+				{
+					if (ForwardDependencies.Contains(Dependent) && !ReadyGroupByComponent.Contains(Dependent))
+					{
+						ReadyGroupByComponent.Add(Dependent, GroupIndex);
+						Stack.Add(Dependent);
+					}
+				}
+			}
+		}
+	}
+}
+
+void UNelaricInitStateWorldSubsystem::QueueParticipant(UActorComponent* Component)
+{
+	if (IsValid(Component) && RegisteredComponents.Contains(Component) && !QueuedComponents.Contains(Component))
+	{
+		QueuedComponents.Add(Component);
+		PendingQueue.Add(Component);
+		PendingOwners.Add(Component->GetOwner());
+	}
+}
+
+void UNelaricInitStateWorldSubsystem::QueueParticipantAndDependents(UActorComponent* Component)
+{
+	QueueParticipant(Component);
+	if (const TArray<FComponentPtr>* Dependents = ReverseDependencies.Find(Component))
+	{
+		for (const FComponentPtr& Dependent : *Dependents)
+		{
+			QueueParticipant(Dependent.Get());
+		}
+	}
+}
+
+void UNelaricInitStateWorldSubsystem::QueueAllRegistered()
+{
+	for (const FComponentPtr& Component : RegisteredComponents)
+	{
+		QueueParticipant(Component.Get());
+	}
 }
 
 bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor* Owner) const
@@ -60,17 +221,19 @@ bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor*
 	{
 		return false;
 	}
-	for (const auto& Pair : ConfiguredComponents)
+	const TArray<FComponentPtr>* RequiredComponents = RequiredByOwner.Find(Owner);
+	if (!RequiredComponents)
 	{
-		UActorComponent* Component = Pair.Key.Get();
-		if (!IsValid(Component) || Component->GetOwner() != Owner || !Pair.Value.bRequiredForPawnReady)
-		{
-			continue;
-		}
+		return true;
+	}
+	for (const FComponentPtr& ComponentPtr : *RequiredComponents)
+	{
+		UActorComponent* Component = ComponentPtr.Get();
 		const INelaricInitStateParticipantInterface* Participant =
 		    Cast<INelaricInitStateParticipantInterface>(Component);
-		if (!RegisteredComponents.Contains(Component) || !Participant || !Participant->IsInitApplicable() ||
-		    Participant->HasTerminalInitFailure() || Participant->GetInitState() != Nelaric::EInitState::Ready)
+		if (!IsValid(Component) || !RegisteredComponents.Contains(Component) || !Participant ||
+		    !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
+		    Participant->GetInitState() != Nelaric::EInitState::Ready)
 		{
 			return false;
 		}
@@ -80,27 +243,38 @@ bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor*
 
 void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorComponent* Component)
 {
-	if (!IsValid(Component))
+	if (!IsValid(Component) || bInvalidatingDependents)
 	{
 		return;
 	}
-	const FConfiguredParticipant* Changed = ConfiguredComponents.Find(Component);
-	if (!Changed)
+	bInvalidatingDependents = true;
+	ON_SCOPE_EXIT
 	{
-		return;
-	}
-	for (const auto& Pair : ConfiguredComponents)
+		bInvalidatingDependents = false;
+	};
+	TSet<FComponentPtr> Visited{Component};
+	TArray<FComponentPtr> Pending{Component};
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
 	{
-		UActorComponent* DependentComponent = Pair.Key.Get();
-		if (!IsValid(DependentComponent) || !Pair.Value.Dependencies.Contains(FComponentPtr(Component)))
+		const TArray<FComponentPtr>* Dependents = ReverseDependencies.Find(Pending[Index]);
+		if (!Dependents)
 		{
 			continue;
 		}
-		INelaricInitStateParticipantInterface* Dependent =
-		    Cast<INelaricInitStateParticipantInterface>(DependentComponent);
-		if (Dependent && Dependent->GetInitState() == Nelaric::EInitState::Ready)
+		for (const FComponentPtr& DependentPtr : *Dependents)
 		{
-			Dependent->InvalidateInitGeneration();
+			if (Visited.Contains(DependentPtr))
+			{
+				continue;
+			}
+			Visited.Add(DependentPtr);
+			Pending.Add(DependentPtr);
+			INelaricInitStateParticipantInterface* Dependent =
+			    Cast<INelaricInitStateParticipantInterface>(DependentPtr.Get());
+			if (Dependent && Dependent->GetInitState() == Nelaric::EInitState::Ready)
+			{
+				Dependent->InvalidateInitGeneration();
+			}
 		}
 	}
 }
@@ -108,60 +282,66 @@ void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorCompo
 bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 {
 	TArray<UActorComponent*> Pending{Root};
-	TSet<FComponentPtr> Seen;
-	TSet<FComponentPtr> Queued;
-	Queued.Add(Root);
-	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	const int32* FoundGroupIndex = ReadyGroupByComponent.Find(Root);
+	const int32 RootGroupIndex = FoundGroupIndex ? *FoundGroupIndex : INDEX_NONE;
+	if (RootGroupIndex != INDEX_NONE)
 	{
-		UActorComponent* Component = Pending[Index];
-		if (!IsValid(Component) || !RegisteredComponents.Contains(Component))
+		Pending.Empty();
+		for (const FComponentPtr& Member : ReadyGroups[RootGroupIndex])
+		{
+			Pending.Add(Member.Get());
+		}
+	}
+	const uint64 ExpectedGraphVersion = GraphVersion;
+	for (UActorComponent* Component : Pending)
+	{
+		if (GraphVersion != ExpectedGraphVersion || !IsValid(Component) || Component->GetWorld() != GetWorld() ||
+		    !RegisteredComponents.Contains(Component))
 		{
 			return false;
 		}
-		if (Seen.Contains(Component))
-		{
-			continue;
-		}
-		Seen.Add(Component);
 		const INelaricInitStateParticipantInterface* Participant =
 		    Cast<INelaricInitStateParticipantInterface>(Component);
 		if (!Participant || !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
-		    Participant->GetInitState() != Nelaric::EInitState::DataInitialized)
+		    Participant->GetInitState() != Nelaric::EInitState::DataInitialized || GraphVersion != ExpectedGraphVersion)
 		{
 			return false;
 		}
-		if (const FConfiguredParticipant* Configuration = ConfiguredComponents.Find(Component))
+		if (const TArray<FComponentPtr>* Dependencies = ForwardDependencies.Find(Component))
 		{
-			for (const FComponentPtr& DependencyPtr : Configuration->Dependencies)
+			for (const FComponentPtr& DependencyPtr : *Dependencies)
 			{
 				UActorComponent* Dependency = DependencyPtr.Get();
 				const INelaricInitStateParticipantInterface* Required =
 				    Cast<INelaricInitStateParticipantInterface>(Dependency);
 				if (!IsValid(Dependency) || Dependency->GetOwner() != Component->GetOwner() || !Required ||
 				    !RegisteredComponents.Contains(Dependency) || !Required->IsInitApplicable() ||
-				    Required->HasTerminalInitFailure())
+				    Required->HasTerminalInitFailure() || GraphVersion != ExpectedGraphVersion)
 				{
 					return false;
 				}
-				if (Required->GetInitState() != Nelaric::EInitState::Ready && !Queued.Contains(Dependency))
+				const int32* DependencyGroupIndex = ReadyGroupByComponent.Find(Dependency);
+				const bool bInGroup =
+				    RootGroupIndex != INDEX_NONE && DependencyGroupIndex && RootGroupIndex == *DependencyGroupIndex;
+				if (!bInGroup && Required->GetInitState() != Nelaric::EInitState::Ready)
 				{
-					Pending.Add(Dependency);
-					Queued.Add(Dependency);
+					return false;
 				}
 			}
 		}
 	}
 
 	TArray<Nelaric::FInitStateSnapshot> BeforeReady;
-	BeforeReady.Reserve(Seen.Num());
+	BeforeReady.Reserve(Pending.Num());
 	for (UActorComponent* Component : Pending)
 	{
 		const INelaricInitStateParticipantInterface* Participant =
 		    Cast<INelaricInitStateParticipantInterface>(Component);
 		const Nelaric::FInitStateSnapshot Before{Participant->GetInitGeneration(), Participant->GetInitState(),
 		                                         Participant->HasTerminalInitFailure()};
-		if (!Participant->CanEnterReady() || !(Before.Generation == Participant->GetInitGeneration()) ||
-		    Before.State != Participant->GetInitState() || Participant->HasTerminalInitFailure())
+		if (!Participant->CanEnterReady() || GraphVersion != ExpectedGraphVersion ||
+		    !(Before.Generation == Participant->GetInitGeneration()) || Before.State != Participant->GetInitState() ||
+		    Participant->HasTerminalInitFailure())
 		{
 			return false;
 		}
@@ -171,7 +351,8 @@ bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 	{
 		const INelaricInitStateParticipantInterface* Participant =
 		    Cast<INelaricInitStateParticipantInterface>(Pending[Index]);
-		if (!(BeforeReady[Index].Generation == Participant->GetInitGeneration()) ||
+		if (GraphVersion != ExpectedGraphVersion || !RegisteredComponents.Contains(Pending[Index]) ||
+		    !(BeforeReady[Index].Generation == Participant->GetInitGeneration()) ||
 		    BeforeReady[Index].State != Participant->GetInitState() || Participant->HasTerminalInitFailure())
 		{
 			return false;
@@ -219,6 +400,11 @@ void UNelaricInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* 
 		{
 			InvalidateConfiguredDependents(Component);
 		}
+		QueueParticipant(Component);
+		if (Previous.State == Nelaric::EInitState::Ready || Participant->GetInitState() == Nelaric::EInitState::Ready)
+		{
+			QueueParticipantAndDependents(Component);
+		}
 		ProcessParticipants();
 	}
 }
@@ -227,15 +413,15 @@ void UNelaricInitStateWorldSubsystem::RequestParticipantRefresh(UActorComponent*
 {
 	if (RegisteredComponents.Contains(Component))
 	{
+		QueueParticipant(Component);
 		ProcessParticipants();
 	}
 }
 
 void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 {
-	if (bProcessing)
+	if (bProcessing || bInvalidatingDependents)
 	{
-		bProcessRequested = true;
 		return;
 	}
 
@@ -245,15 +431,16 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 		bProcessing = false;
 	};
 
-	// A successful step is bounded by four states. Revisit participants only
-	// when a change can unlock another component.
-	int32 RemainingPasses = RegisteredComponents.Num() * 3 + 1;
-	do
+	const int32 MaxSteps = FMath::Max(64, (RegisteredComponents.Num() + GraphEdgeCount) * 8 + PendingQueue.Num() * 4);
+	int32 Steps = 0;
+	while ((!PendingQueue.IsEmpty() || !PendingOwners.IsEmpty()) && Steps < MaxSteps)
 	{
-		bProcessRequested = false;
-		const TArray<FComponentPtr> Participants = RegisteredComponents.Array();
-		for (const FComponentPtr& ParticipantPtr : Participants)
+		int32 Index = 0;
+		while (Index < PendingQueue.Num() && Steps < MaxSteps)
 		{
+			const FComponentPtr ParticipantPtr = PendingQueue[Index++];
+			QueuedComponents.Remove(ParticipantPtr);
+			++Steps;
 			UActorComponent* Component = ParticipantPtr.Get();
 			if (!IsValid(Component) || Component->GetWorld() != GetWorld())
 			{
@@ -290,7 +477,14 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 			{
 				ensureMsgf(bExactlyOneStep,
 				           TEXT("Initialization transition must commit exactly one step in the same generation."));
-				bProcessRequested |= bExactlyOneStep;
+				if (bExactlyOneStep)
+				{
+					QueueParticipant(Component);
+					if (Participant->GetInitState() == Nelaric::EInitState::Ready)
+					{
+						QueueParticipantAndDependents(Component);
+					}
+				}
 			}
 			else
 			{
@@ -299,13 +493,12 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 				           TEXT("Initialization transition returned false after changing state or generation."));
 			}
 		}
-	} while (bProcessRequested && --RemainingPasses > 0);
-	ensureMsgf(!bProcessRequested, TEXT("Initialization participants requested too many progress passes."));
-	for (const FComponentPtr& ParticipantPtr : RegisteredComponents)
-	{
-		if (UActorComponent* Component = ParticipantPtr.Get())
+		PendingQueue.RemoveAt(0, Index, EAllowShrinking::No);
+		const TArray<TWeakObjectPtr<AActor>> Owners = PendingOwners.Array();
+		PendingOwners.Empty();
+		for (const TWeakObjectPtr<AActor>& OwnerPtr : Owners)
 		{
-			if (AActor* Owner = Component->GetOwner())
+			if (AActor* Owner = OwnerPtr.Get())
 			{
 				if (UNelaricPawnInitializationComponent* Manager =
 				        Owner->FindComponentByClass<UNelaricPawnInitializationComponent>())
@@ -315,11 +508,21 @@ void UNelaricInitStateWorldSubsystem::ProcessParticipants()
 			}
 		}
 	}
+	ensureMsgf(PendingQueue.IsEmpty(), TEXT("Initialization participants requested too many progress steps."));
 }
 
 void UNelaricInitStateWorldSubsystem::Deinitialize()
 {
 	RegisteredComponents.Empty();
 	ConfiguredComponents.Empty();
+	ForwardDependencies.Empty();
+	ReverseDependencies.Empty();
+	RequiredByOwner.Empty();
+	ReadyGroupByComponent.Empty();
+	ReadyGroups.Empty();
+	GraphEdgeCount = 0;
+	PendingQueue.Empty();
+	QueuedComponents.Empty();
+	PendingOwners.Empty();
 	Super::Deinitialize();
 }

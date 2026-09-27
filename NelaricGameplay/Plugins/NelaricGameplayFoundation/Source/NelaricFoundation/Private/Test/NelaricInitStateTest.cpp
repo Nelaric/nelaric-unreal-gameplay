@@ -82,6 +82,12 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	         UNelaricPawnInitStateComponent::ResolveInitResult(TWeakObjectPtr<UNelaricPawnInitStateComponent>(), World,
 	                                                           First->GetInitGeneration()));
 	TestEqual(TEXT("Invalidation cancels old work"), First->CancelCount, 1);
+	const Nelaric::FInitGeneration BeforeUnregister = First->GetInitGeneration();
+	First->UnregisterComponent();
+	TestTrue(TEXT("Unregister invalidates before cancellation"),
+	         First->GenerationAtCancel == First->GetInitGeneration());
+	TestFalse(TEXT("Unregister rejects the old generation"), First->CanApplyInitResult(World, BeforeUnregister));
+	TestEqual(TEXT("Unregister cannot restart preparation"), First->GetInitState(), Nelaric::EInitState::Registered);
 
 	UNelaricInitStateTestDirectComponent* Direct = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
 	Direct->bAllowAdvance = true;
@@ -123,6 +129,83 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	Direct->InvalidateInitGeneration();
 	TestEqual(TEXT("New generation may advance again"), Direct->GetInitState(), Nelaric::EInitState::Ready);
 	Subsystem->UnregisterParticipant(Direct);
+
+	UNelaricInitStateTestDirectComponent* Upstream = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
+	UNelaricInitStateTestDirectComponent* Downstream = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
+	Upstream->bAllowAdvance = true;
+	Downstream->bAllowAdvance = true;
+	Downstream->ObservedDependency = Upstream;
+	Upstream->RegisterComponent();
+	Downstream->RegisterComponent();
+	Subsystem->ConfigureParticipant(Upstream, TEXT("Upstream"), true, {});
+	Subsystem->ConfigureParticipant(Downstream, TEXT("Downstream"), true, {Upstream});
+	Subsystem->RegisterParticipant(Downstream);
+	Subsystem->RegisterParticipant(Upstream);
+	TestEqual(TEXT("Both components prepare without Ready permission"), Downstream->GetInitState(),
+	          Nelaric::EInitState::DataInitialized);
+	const int32 UpstreamNotificationsBeforeReady = Upstream->NotificationCount;
+	Upstream->bInternalReady = true;
+	Downstream->bInternalReady = true;
+	Subsystem->RequestParticipantRefresh(Upstream);
+	TestEqual(TEXT("Upstream reaches Ready"), Upstream->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Downstream reaches Ready"), Downstream->GetInitState(), Nelaric::EInitState::Ready);
+	TestTrue(TEXT("Dependency published Ready before downstream notification"),
+	         Downstream->bDependencyReadyAtNotification);
+	TestTrue(TEXT("Upstream notification precedes downstream notification"),
+	         Downstream->DependencyNotificationsAtReady > UpstreamNotificationsBeforeReady);
+	Subsystem->UnregisterParticipant(Downstream);
+	Subsystem->UnregisterParticipant(Upstream);
+
+	UNelaricInitStateTestDirectComponent* Outside = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
+	UNelaricInitStateTestDirectComponent* CycleA = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
+	UNelaricInitStateTestDirectComponent* CycleB = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
+	UNelaricInitStateTestDirectComponent* AfterCycle = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
+	for (UNelaricInitStateTestDirectComponent* Member : {Outside, CycleA, CycleB, AfterCycle})
+	{
+		Member->bAllowAdvance = true;
+		Member->RegisterComponent();
+	}
+	CycleA->ObservedDependency = CycleB;
+	CycleB->ObservedDependency = CycleA;
+	AfterCycle->ObservedDependency = CycleB;
+	Subsystem->ConfigureParticipants({{Outside, TEXT("Outside"), true, {}},
+	                                  {CycleA, TEXT("CycleA"), true, {Outside, CycleB}},
+	                                  {CycleB, TEXT("CycleB"), true, {CycleA}},
+	                                  {AfterCycle, TEXT("AfterCycle"), true, {CycleB}}});
+	Subsystem->RegisterParticipant(AfterCycle);
+	Subsystem->RegisterParticipant(CycleA);
+	Subsystem->RegisterParticipant(CycleB);
+	Subsystem->RegisterParticipant(Outside);
+	CycleA->bInternalReady = true;
+	AfterCycle->bInternalReady = true;
+	Subsystem->RequestParticipantRefresh(CycleA);
+	TestEqual(TEXT("External dependency holds the cycle"), CycleA->GetInitState(),
+	          Nelaric::EInitState::DataInitialized);
+	TestEqual(TEXT("Downstream waits for the cycle"), AfterCycle->GetInitState(), Nelaric::EInitState::DataInitialized);
+	const int32 CycleBNotificationsBeforeReady = CycleB->NotificationCount;
+	Outside->bInternalReady = true;
+	Subsystem->RequestParticipantRefresh(Outside);
+	TestEqual(TEXT("External dependency reaches Ready"), Outside->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Cycle waits for every internal preparation check"), CycleA->GetInitState(),
+	          Nelaric::EInitState::DataInitialized);
+	CycleB->bInternalReady = true;
+	Subsystem->RequestParticipantRefresh(CycleB);
+	TestEqual(TEXT("First cycle member reaches Ready"), CycleA->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Second cycle member reaches Ready"), CycleB->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Cycle downstream reaches Ready"), AfterCycle->GetInitState(), Nelaric::EInitState::Ready);
+	TestTrue(TEXT("First cycle observer sees its peer Ready"), CycleA->bDependencyReadyAtNotification);
+	TestTrue(TEXT("Second cycle observer sees its peer Ready"), CycleB->bDependencyReadyAtNotification);
+	TestTrue(TEXT("Downstream receives Ready after cycle notifications"),
+	         AfterCycle->DependencyNotificationsAtReady > CycleBNotificationsBeforeReady);
+	CycleA->MarkTerminalInitFailure();
+	TestFalse(TEXT("Failure invalidates the cycle peer"), CycleB->GetInitState() == Nelaric::EInitState::Ready);
+	TestFalse(TEXT("Failure invalidates transitive downstream"),
+	          AfterCycle->GetInitState() == Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Independent upstream remains Ready"), Outside->GetInitState(), Nelaric::EInitState::Ready);
+	for (UNelaricInitStateTestDirectComponent* Member : {AfterCycle, CycleA, CycleB, Outside})
+	{
+		Subsystem->UnregisterParticipant(Member);
+	}
 
 	UNelaricInitStateTestDirectComponent* GroupA = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);
 	UNelaricInitStateTestDirectComponent* GroupB = NewObject<UNelaricInitStateTestDirectComponent>(Pawn);

@@ -224,6 +224,7 @@ void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 			ToRegister.Add(Component);
 		}
 	}
+	TArray<Nelaric::FInitParticipantConfiguration> LocalGraph;
 	for (const FNelaricPawnInitializationEntry& Entry : InitializationConfig->Components)
 	{
 		UActorComponent* Component = ConfiguredComponents.FindRef(Entry.ComponentId).Get();
@@ -231,16 +232,20 @@ void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 		{
 			continue;
 		}
-		TArray<UActorComponent*> Dependencies;
-		Dependencies.Reserve(Entry.DependencyIds.Num());
+		Nelaric::FInitParticipantConfiguration Configuration;
+		Configuration.Component = Component;
+		Configuration.ComponentId = Entry.ComponentId;
+		Configuration.bRequiredForPawnReady = Entry.bRequiredForPawnReady;
+		Configuration.Dependencies.Reserve(Entry.DependencyIds.Num());
 		for (FName DependencyId : Entry.DependencyIds)
 		{
 			UActorComponent* Dependency = ConfiguredComponents.FindRef(DependencyId).Get();
 			check(Dependency);
-			Dependencies.Add(Dependency);
+			Configuration.Dependencies.Add(Dependency);
 		}
-		Subsystem->ConfigureParticipant(Component, Entry.ComponentId, Entry.bRequiredForPawnReady, Dependencies);
+		LocalGraph.Add(MoveTemp(Configuration));
 	}
+	Subsystem->ConfigureParticipants(LocalGraph);
 	bConfiguredComponentsCreated = true;
 	for (UActorComponent* Component : ToRegister)
 	{

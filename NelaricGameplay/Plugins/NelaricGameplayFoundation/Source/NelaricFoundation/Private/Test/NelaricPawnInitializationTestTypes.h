@@ -5,6 +5,7 @@
 #include "Pawn/NelaricPawnInitializationComponent.h"
 #include "Pawn/NelaricPawnInitializationConfig.h"
 #include "Test/NelaricInitStateTestTypes.h"
+#include "UObject/UObjectGlobals.h"
 
 #include "NelaricPawnInitializationTestTypes.generated.h"
 
@@ -45,9 +46,20 @@ class UNelaricConfiguredInitStateTestComponent : public UNelaricInitStateTestPaw
 	GENERATED_BODY()
 
 public:
+	bool bPeerExistsOnRegister = false;
+
 	UNelaricConfiguredInitStateTestComponent()
 	{
 		bAllowAdvance = true;
 		bInternalReady = true;
+	}
+
+protected:
+	virtual void OnRegister() override
+	{
+		const FName PeerName = GetFName() == TEXT("NelaricInit_First") ? TEXT("NelaricInit_Second")
+		                                                              : TEXT("NelaricInit_First");
+		bPeerExistsOnRegister = FindObject<UActorComponent>(GetOwner(), *PeerName.ToString()) != nullptr;
+		Super::OnRegister();
 	}
 };

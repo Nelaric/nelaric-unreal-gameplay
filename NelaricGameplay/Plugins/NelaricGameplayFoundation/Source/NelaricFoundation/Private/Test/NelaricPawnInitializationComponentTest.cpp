@@ -85,6 +85,12 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 	UActorComponent* SecondCreated = FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Second"));
 	TestNotNull(TEXT("Stable ID names first instance"), FirstCreated);
 	TestNotNull(TEXT("Stable ID names second instance"), SecondCreated);
+	TestTrue(TEXT("First registers after both instances exist"),
+	         Cast<UNelaricConfiguredInitStateTestComponent>(FirstCreated) &&
+	             Cast<UNelaricConfiguredInitStateTestComponent>(FirstCreated)->bPeerExistsOnRegister);
+	TestTrue(TEXT("Second registers after both instances exist"),
+	         Cast<UNelaricConfiguredInitStateTestComponent>(SecondCreated) &&
+	             Cast<UNelaricConfiguredInitStateTestComponent>(SecondCreated)->bPeerExistsOnRegister);
 	TestNotNull(TEXT("Optional component is created"),
 	            FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_Optional")));
 	TestNull(TEXT("Client-only component is absent on authority"),
@@ -94,6 +100,12 @@ bool FNelaricPawnInitializationTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestTrue(TEXT("Configured cycle reaches Ready together"), Manager->TryInitializePawn());
+	TestTrue(TEXT("Created instances are actor-managed"),
+	         ConfiguredPawn->GetInstanceComponents().Contains(FirstCreated) &&
+	             ConfiguredPawn->GetInstanceComponents().Contains(SecondCreated));
+	TestTrue(TEXT("Repeated initialization keeps the first instance"), Manager->TryInitializePawn());
+	TestEqual(TEXT("Stable ID is not duplicated"), FindObject<UActorComponent>(ConfiguredPawn, TEXT("NelaricInit_First")),
+	          FirstCreated);
 	TestEqual(TEXT("First cycle member is Ready"),
 	          Cast<UNelaricConfiguredInitStateTestComponent>(FirstCreated)->GetInitState(), Nelaric::EInitState::Ready);
 	TestEqual(TEXT("Second cycle member is Ready"),

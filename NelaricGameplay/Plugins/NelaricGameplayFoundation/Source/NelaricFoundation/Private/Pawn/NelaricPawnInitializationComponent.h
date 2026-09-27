@@ -8,7 +8,6 @@
 
 #include "Pawn/NelaricPawnComponent.h"
 #include "Containers/Map.h"
-#include "UObject/WeakObjectPtr.h"
 
 #include "NelaricPawnInitializationComponent.generated.h"
 
@@ -90,7 +89,9 @@ private:
 	bool bInitializationInProgress = false;
 	bool bInitializationAllowed = false;
 	bool bConfigValid = true;
-	TMap<FName, TWeakObjectPtr<UActorComponent>> ConfiguredComponents;
+	UPROPERTY(Transient)
+	TMap<FName, TObjectPtr<UActorComponent>> ConfiguredComponents;
+	bool bConfiguredComponentsCreated = false;
 	bool ValidateConfiguration() const;
 	void CreateConfiguredComponents();
 	bool AreRequiredComponentsReady() const;

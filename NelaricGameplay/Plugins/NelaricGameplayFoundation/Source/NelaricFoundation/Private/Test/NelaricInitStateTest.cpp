@@ -39,22 +39,21 @@ bool FNelaricInitStateContractTest::RunTest(const FString& Parameters)
 	First->bAllowAdvance = true;
 	Dependent->bAllowAdvance = true;
 	Dependent->bInternalReady = true;
-	Subsystem->ConfigureParticipant(Dependent, TEXT("Dependent"), {TEXT("First")});
-	First->RegisterComponent();
+	Subsystem->ConfigureParticipant(First, TEXT("First"), true, {});
+	Subsystem->ConfigureParticipant(Dependent, TEXT("Dependent"), true, {First});
 	Dependent->RegisterComponent();
 	TestEqual(TEXT("Own preparation proceeds without a ready dependency"), Dependent->GetInitState(),
 	          Nelaric::EInitState::DataInitialized);
 	TestFalse(TEXT("Missing dependency is recoverable"), Dependent->HasTerminalInitFailure());
-	TestEqual(TEXT("Internal preparation blocks Ready"), First->GetInitState(), Nelaric::EInitState::DataInitialized);
+	TestEqual(TEXT("Unregistered dependency has not advanced"), First->GetInitState(),
+	          Nelaric::EInitState::Registered);
 	TestTrue(TEXT("Internal gate is independent of unresolved dependencies"), Dependent->CanEnterReady());
+	First->RegisterComponent();
+	TestEqual(TEXT("Internal preparation blocks Ready"), First->GetInitState(), Nelaric::EInitState::DataInitialized);
 	First->bInternalReady = true;
 	First->RequestInitRefresh();
 	TestEqual(TEXT("Dependency reaches ready"), First->GetInitState(), Nelaric::EInitState::Ready);
-	TestEqual(TEXT("Missing reference remains blocked"), Dependent->GetInitState(),
-	          Nelaric::EInitState::DataInitialized);
-	TestFalse(TEXT("Missing reference does not fail the attempt"), Dependent->HasTerminalInitFailure());
-	Subsystem->ConfigureParticipant(First, TEXT("First"), {});
-	TestEqual(TEXT("Configured ID unlocks Ready"), Dependent->GetInitState(), Nelaric::EInitState::Ready);
+	TestEqual(TEXT("Registered dependency unlocks Ready"), Dependent->GetInitState(), Nelaric::EInitState::Ready);
 	TestFalse(TEXT("Ready cannot advance"), First->TryChangeInitState());
 
 	First->MarkTerminalInitFailure();

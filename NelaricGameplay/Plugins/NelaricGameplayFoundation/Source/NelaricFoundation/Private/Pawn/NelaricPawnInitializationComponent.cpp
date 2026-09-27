@@ -57,8 +57,8 @@ bool UNelaricPawnInitializationComponent::CanInitializePawn_Implementation() con
 void UNelaricPawnInitializationComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	bInitializationAllowed = true;
 	CreateConfiguredComponents();
+	bInitializationAllowed = true;
 	TryInitializePawn();
 }
 
@@ -179,7 +179,7 @@ bool UNelaricPawnInitializationComponent::ValidateConfiguration() const
 
 void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 {
-	if (!InitializationConfig || !GetPawn())
+	if (bConfiguredComponentsCreated || !bConfigValid || !InitializationConfig || !GetPawn())
 	{
 		return;
 	}
@@ -201,6 +201,7 @@ void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 	}
 
 	TArray<UActorComponent*> ToRegister;
+	// Build the entire ID table before resolving any dependencies or registering components.
 	for (const FNelaricPawnInitializationEntry& Entry : InitializationConfig->Components)
 	{
 		if (Owner->HasAuthority() ? !Entry.bCreateOnAuthority : !Entry.bCreateOnClient)
@@ -208,19 +209,40 @@ void UNelaricPawnInitializationComponent::CreateConfiguredComponents()
 			continue;
 		}
 		const FName InstanceName(*FString::Printf(TEXT("NelaricInit_%s"), *Entry.ComponentId.ToString()));
-		UActorComponent* Component = FindObject<UActorComponent>(Owner, *InstanceName.ToString());
+		UActorComponent* Component = ConfiguredComponents.FindRef(Entry.ComponentId).Get();
+		if (!Component)
+		{
+			Component = FindObject<UActorComponent>(Owner, *InstanceName.ToString());
+		}
 		if (!Component)
 		{
 			Component = NewObject<UActorComponent>(Owner, Entry.ComponentClass, InstanceName);
 			Owner->AddInstanceComponent(Component);
 		}
 		ConfiguredComponents.Add(Entry.ComponentId, Component);
-		Subsystem->ConfigureParticipant(Component, Entry.ComponentId, Entry.DependencyIds);
 		if (!Component->IsRegistered())
 		{
 			ToRegister.Add(Component);
 		}
 	}
+	for (const FNelaricPawnInitializationEntry& Entry : InitializationConfig->Components)
+	{
+		UActorComponent* Component = ConfiguredComponents.FindRef(Entry.ComponentId).Get();
+		if (!Component)
+		{
+			continue;
+		}
+		TArray<UActorComponent*> Dependencies;
+		Dependencies.Reserve(Entry.DependencyIds.Num());
+		for (FName DependencyId : Entry.DependencyIds)
+		{
+			UActorComponent* Dependency = ConfiguredComponents.FindRef(DependencyId).Get();
+			check(Dependency);
+			Dependencies.Add(Dependency);
+		}
+		Subsystem->ConfigureParticipant(Component, Entry.ComponentId, Entry.bRequiredForPawnReady, Dependencies);
+	}
+	bConfiguredComponentsCreated = true;
 	for (UActorComponent* Component : ToRegister)
 	{
 		Component->RegisterComponent();
@@ -245,14 +267,13 @@ bool UNelaricPawnInitializationComponent::AreRequiredComponentsReady() const
 		{
 			continue;
 		}
-		UActorComponent* Component = ConfiguredComponents.FindRef(Entry.ComponentId).Get();
-		const INelaricInitStateParticipantInterface* Participant =
-		    Cast<INelaricInitStateParticipantInterface>(Component);
-		if (!Participant || !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
-		    Participant->GetInitState() != Nelaric::EInitState::Ready)
+		if (!IsValid(ConfiguredComponents.FindRef(Entry.ComponentId).Get()))
 		{
 			return false;
 		}
 	}
-	return true;
+	const UWorld* World = GetWorld();
+	const UNelaricInitStateWorldSubsystem* Subsystem =
+	    World ? World->GetSubsystem<UNelaricInitStateWorldSubsystem>() : nullptr;
+	return Subsystem && Subsystem->AreRequiredParticipantsReady(Owner);
 }

@@ -28,11 +28,19 @@ void UNelaricInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Com
 }
 
 void UNelaricInitStateWorldSubsystem::ConfigureParticipant(UActorComponent* Component, FName ComponentId,
-                                                           const TArray<FName>& DependencyIds)
+	                                                           bool bRequiredForPawnReady,
+	                                                           const TArray<UActorComponent*>& Dependencies)
 {
 	if (IsValid(Component) && !ComponentId.IsNone())
 	{
-		ConfiguredComponents.Add(Component, {ComponentId, DependencyIds});
+		FConfiguredParticipant Configuration;
+		Configuration.ComponentId = ComponentId;
+		Configuration.bRequiredForPawnReady = bRequiredForPawnReady;
+		for (UActorComponent* Dependency : Dependencies)
+		{
+			Configuration.Dependencies.Add(Dependency);
+		}
+		ConfiguredComponents.Add(Component, MoveTemp(Configuration));
 		if (RegisteredComponents.Contains(Component))
 		{
 			ProcessParticipants();
@@ -46,17 +54,29 @@ void UNelaricInitStateWorldSubsystem::UnconfigureParticipant(UActorComponent* Co
 	ProcessParticipants();
 }
 
-UActorComponent* UNelaricInitStateWorldSubsystem::FindConfiguredComponent(const AActor* Owner, FName ComponentId) const
+bool UNelaricInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor* Owner) const
 {
+	if (!Owner)
+	{
+		return false;
+	}
 	for (const auto& Pair : ConfiguredComponents)
 	{
-		UActorComponent* Candidate = Pair.Key.Get();
-		if (IsValid(Candidate) && Candidate->GetOwner() == Owner && Pair.Value.ComponentId == ComponentId)
+		UActorComponent* Component = Pair.Key.Get();
+		if (!IsValid(Component) || Component->GetOwner() != Owner || !Pair.Value.bRequiredForPawnReady)
 		{
-			return Candidate;
+			continue;
+		}
+		const INelaricInitStateParticipantInterface* Participant =
+		    Cast<INelaricInitStateParticipantInterface>(Component);
+		if (!RegisteredComponents.Contains(Component) || !Participant || !Participant->IsInitApplicable() ||
+		    Participant->HasTerminalInitFailure() ||
+		    Participant->GetInitState() != Nelaric::EInitState::Ready)
+		{
+			return false;
 		}
 	}
-	return nullptr;
+	return true;
 }
 
 void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorComponent* Component)
@@ -70,13 +90,10 @@ void UNelaricInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorCompo
 	{
 		return;
 	}
-	const FName ChangedId = Changed->ComponentId;
-	const AActor* Owner = Component->GetOwner();
 	for (const auto& Pair : ConfiguredComponents)
 	{
 		UActorComponent* DependentComponent = Pair.Key.Get();
-		if (!IsValid(DependentComponent) || DependentComponent->GetOwner() != Owner ||
-		    !Pair.Value.DependencyIds.Contains(ChangedId))
+		if (!IsValid(DependentComponent) || !Pair.Value.Dependencies.Contains(FComponentPtr(Component)))
 		{
 			continue;
 		}
@@ -116,12 +133,13 @@ bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 		}
 		if (const FConfiguredParticipant* Configuration = ConfiguredComponents.Find(Component))
 		{
-			for (FName Id : Configuration->DependencyIds)
+			for (const FComponentPtr& DependencyPtr : Configuration->Dependencies)
 			{
-				UActorComponent* Dependency = FindConfiguredComponent(Component->GetOwner(), Id);
+				UActorComponent* Dependency = DependencyPtr.Get();
 				const INelaricInitStateParticipantInterface* Required =
 				    Cast<INelaricInitStateParticipantInterface>(Dependency);
-				if (Id.IsNone() || !Required || !RegisteredComponents.Contains(Dependency) ||
+				if (!IsValid(Dependency) || Dependency->GetOwner() != Component->GetOwner() || !Required ||
+				    !RegisteredComponents.Contains(Dependency) ||
 				    !Required->IsInitApplicable() || Required->HasTerminalInitFailure())
 				{
 					return false;

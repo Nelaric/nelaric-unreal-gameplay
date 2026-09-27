@@ -53,14 +53,24 @@ public:
 	NELARICFOUNDATION_API void RequestParticipantRefresh(UActorComponent* Component);
 
 	/** @brief Installs the manager's immutable configuration for a component.
-	 * @details Call on the game thread before registering the component. IDs
-	 * are resolved only among configured components of the same actor.
+	 * @details Call on the game thread before registering any configured
+	 * component. Dependency references do not transfer ownership.
 	 * @param Component Component owned by the configured actor.
 	 * @param ComponentId Stable ID unique on that actor.
-	 * @param DependencyIds IDs required to reach Ready.
+	 * @param bRequiredForPawnReady Whether pawn readiness includes this member.
+	 * @param Dependencies Components required to reach Ready.
 	 */
 	NELARICFOUNDATION_API void ConfigureParticipant(UActorComponent* Component, FName ComponentId,
-	                                                const TArray<FName>& DependencyIds);
+	                                                bool bRequiredForPawnReady,
+	                                                const TArray<UActorComponent*>& Dependencies);
+
+	/** @brief Checks the configured required participants of an actor.
+	 * @details Call on the game thread after configuration. Missing or failed
+	 * required participants prevent readiness.
+	 * @param Owner Actor whose required participants are checked.
+	 * @return Whether all required participants have reached Ready.
+	 */
+	NELARICFOUNDATION_API bool AreRequiredParticipantsReady(const AActor* Owner) const;
 
 	/** @brief Removes the manager's configuration for a component.
 	 * @param Component Component leaving its configured pawn.
@@ -76,13 +86,13 @@ private:
 	struct FConfiguredParticipant
 	{
 		FName ComponentId;
-		TArray<FName> DependencyIds;
+		bool bRequiredForPawnReady = true;
+		TArray<FComponentPtr> Dependencies;
 	};
 	TMap<FComponentPtr, FConfiguredParticipant> ConfiguredComponents;
 	bool bProcessing = false;
 	bool bProcessRequested = false;
 	void ProcessParticipants();
 	bool TryCommitReadyGroup(UActorComponent* Root);
-	UActorComponent* FindConfiguredComponent(const AActor* Owner, FName ComponentId) const;
 	void InvalidateConfiguredDependents(UActorComponent* Component);
 };

@@ -59,6 +59,6 @@ struct FInitDependency
 	TWeakObjectPtr<UActorComponent> Component;
 
 	/// Stage required from the component.
-	EInitState RequiredState;
+	EInitState RequiredState = EInitState::Registered;
 };
 } // namespace Nelaric

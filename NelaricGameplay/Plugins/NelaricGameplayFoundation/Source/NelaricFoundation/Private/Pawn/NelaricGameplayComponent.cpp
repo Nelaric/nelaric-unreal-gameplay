@@ -3,6 +3,6 @@
 #include "Pawn/NelaricGameplayComponent.h"
 
 UNelaricGameplayComponent::UNelaricGameplayComponent(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
+    : Super(ObjectInitializer)
 {
 }

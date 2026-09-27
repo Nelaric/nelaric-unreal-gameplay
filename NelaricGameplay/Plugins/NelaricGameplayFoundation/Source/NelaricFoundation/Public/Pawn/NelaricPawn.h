@@ -10,6 +10,13 @@
 
 #include "NelaricPawn.generated.h"
 
+class UNelaricPawnInitializationComponent;
+
+namespace Nelaric::Pawn
+{
+struct FInitializationHelper;
+}
+
 /** @brief Base pawn for project-specific controllable actors.
  *
  * @details Derive in C++ or Blueprint and compose gameplay with pawn
@@ -28,4 +35,12 @@ public:
 	 * @param ObjectInitializer Initializer supporting derived subobjects.
 	 */
 	NELARICFOUNDATION_API ANelaricPawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+protected:
+	/// Initialization component owned by this pawn.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Nelaric|Pawn|Initialization")
+	TObjectPtr<UNelaricPawnInitializationComponent> PawnInitializationComponent;
+
+private:
+	friend struct Nelaric::Pawn::FInitializationHelper;
 };

@@ -13,10 +13,10 @@
 
 /** @brief Optional pawn base implementing the initialization contract.
  *
- * @details Derived classes implement preparation through DataInitialized in
- * TryChangeInitState and a pure CanEnterReady check. They may
- * also implement the interface directly on another UActorComponent. The
- * component owns its state and is called only on the game thread.
+ * @details Use CanEntry for preparation and OnInitReady for gameplay.
+ * The first three return true when their
+ * work is complete.
+ * Pending stages retry after RequestInitRefresh. Calls use the game thread.
  */
 UCLASS(Abstract, MinimalAPI)
 class UNelaricPawnInitStateComponent : public UNelaricPawnComponent, public INelaricInitStateParticipantInterface
@@ -24,14 +24,14 @@ class UNelaricPawnInitStateComponent : public UNelaricPawnComponent, public INel
 	GENERATED_BODY()
 
 public:
-	/// Defaults to false until a derived component opts in.
+	/// Participates by default; override for conditional applicability.
 	NELARICFOUNDATION_API virtual bool IsInitApplicable() const override;
 
 	/// Commits at most one adjacent preparation step when the derived gate passes.
 	NELARICFOUNDATION_API virtual bool TryChangeInitState() final override;
 
-	/// Returns false until internal preparation is ready.
-	NELARICFOUNDATION_API virtual bool CanEnterReady() const override;
+	/// Runs DataInitialized preparation until it succeeds in this generation.
+	NELARICFOUNDATION_API virtual bool CanEnterReady() final override;
 
 	/// Writes Ready without callbacks after the coordinator checks the group.
 	NELARICFOUNDATION_API virtual bool CommitReadyWithoutNotification() override;
@@ -89,26 +89,28 @@ public:
 	NELARICFOUNDATION_API virtual void OnUnregister() override;
 
 protected:
-	/** @brief Starts this registered attempt's own data acquisition.
-	 * @details Called on the game thread after
-	 * entering Registered and before
-	 * the coordinator can advance this attempt. Gameplay must remain inactive.
-
+	/** @brief Acquires this component's data while Registered.
+	 * @details Retry-safe work may run again after a
+	 * refresh. Defaults to true.
+	 * @return True to enter DataAvailable; false to keep waiting.
 	 */
-	NELARICFOUNDATION_API virtual void OnInitRegistered();
+	NELARICFOUNDATION_API virtual bool CanEntryDataAvailable();
 
-	/** @brief Starts initialization using data now available to this component.
-	 * @details Called once on entering
-	 * DataAvailable in each generation.
+	/** @brief Initializes this component's available data.
+	 * @details Retry-safe work may run again after a
+	 * refresh. Defaults to true.
+	 * @return True to enter DataInitialized; false to keep waiting.
 	 */
-	NELARICFOUNDATION_API virtual void OnInitDataAvailable();
+	NELARICFOUNDATION_API virtual bool CanEntryDataInitialized();
 
 	/** @brief Performs final local preparation before the Ready check.
-	 * @details Called once on entering
-	 * DataInitialized in each generation.
-	 * Runtime dependency gameplay must remain inactive.
+	 * @details Retry-safe work may run again
+	 * until true, then remains complete
+	 * for this generation. Defaults to true. Gameplay requires Ready.
+	 *
+	 * @return Whether local preparation for Ready is complete.
 	 */
-	NELARICFOUNDATION_API virtual void OnInitDataInitialized();
+	NELARICFOUNDATION_API virtual bool CanEntryReady();
 
 	/** @brief Starts gameplay after the entire readiness group entered Ready.
 	 * @details Called once per Ready entry,
@@ -119,20 +121,11 @@ protected:
 	/** @brief Stops work and gameplay belonging to an invalidated attempt.
 	 * @details The generation has changed.
 	 * The old state remains readable.
-	 * OnInitRegistered follows the reset when the component is registered.
+	 * Preparation resumes through the coordinator after the reset.
 	 *
 	 * @param Previous Snapshot before invalidation.
 	 */
 	NELARICFOUNDATION_API virtual void OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot& Previous);
-
-	/** @brief Checks whether the next preparation step can be committed.
-	 * @details Derived implementations may
-	 * start asynchronous work here.
-	 * Request a refresh after it completes. Do not change state here.
-	 * @return
-	 * Whether one adjacent preparation step can be committed now.
-	 */
-	NELARICFOUNDATION_API virtual bool CanAdvanceInitState();
 
 	/** @brief Cancels work and removes listeners for an invalidated attempt.
 	 * @details Called after the generation changes and before state resets.
@@ -146,6 +139,7 @@ private:
 	bool bTerminalInitFailure = false;
 	bool bCommittingInitState = false;
 	bool bReadyNotificationPending = false;
+	bool bLocalReadyPrepared = false;
 	bool bLeavingWorld = false;
 	bool bRefreshRequestedDuringTransition = false;
 	void NotifyInitChanged(const Nelaric::FInitStateSnapshot& Previous);

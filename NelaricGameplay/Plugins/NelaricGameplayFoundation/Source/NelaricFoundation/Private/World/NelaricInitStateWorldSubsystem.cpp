@@ -440,8 +440,7 @@ bool UNelaricInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 	BeforeReady.Reserve(Pending.Num());
 	for (UActorComponent* Component : Pending)
 	{
-		const INelaricInitStateParticipantInterface* Participant =
-		    Cast<INelaricInitStateParticipantInterface>(Component);
+		INelaricInitStateParticipantInterface* Participant = Cast<INelaricInitStateParticipantInterface>(Component);
 		const Nelaric::FInitStateSnapshot Before{Participant->GetInitGeneration(), Participant->GetInitState(),
 		                                         Participant->HasTerminalInitFailure()};
 		if (!Participant->CanEnterReady() || GraphVersion != ExpectedGraphVersion ||

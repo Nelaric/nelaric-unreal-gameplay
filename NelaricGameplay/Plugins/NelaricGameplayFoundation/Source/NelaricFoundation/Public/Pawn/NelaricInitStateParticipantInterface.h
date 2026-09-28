@@ -41,12 +41,14 @@ public:
 
 	/** @brief Checks this component's internal preparation for Ready.
 	 * @details Called at DataInitialized after the coordinator checks external
-	 * dependencies. This query must not mutate state, start
-	 * gameplay, or broadcast events. Component gameplay requires Ready; work
-	 * requiring the complete pawn must additionally wait for pawn Ready.
+	 * dependencies. Preparation may perform retry-safe local work but must not
+	 * change init state or start
+	 * gameplay. Component gameplay requires Ready; work
+	 * requiring the complete pawn must additionally wait for
+	 * pawn Ready.
 	 * @return Whether this component may enter Ready now.
 	 */
-	virtual bool CanEnterReady() const = 0;
+	virtual bool CanEnterReady() = 0;
 
 	/** @brief Writes Ready without callbacks after group checks pass.
 	 * @details The coordinator calls this once per member, then notifies every

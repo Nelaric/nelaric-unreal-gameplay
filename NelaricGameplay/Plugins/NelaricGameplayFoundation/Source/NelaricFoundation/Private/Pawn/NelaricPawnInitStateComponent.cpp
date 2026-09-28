@@ -12,7 +12,7 @@ UNelaricPawnInitStateComponent::UNelaricPawnInitStateComponent(const FObjectInit
 
 bool UNelaricPawnInitStateComponent::IsInitApplicable() const
 {
-	return false;
+	return true;
 }
 
 bool UNelaricPawnInitStateComponent::TryChangeInitState()
@@ -24,28 +24,32 @@ bool UNelaricPawnInitStateComponent::TryChangeInitState()
 	}
 	const Nelaric::FInitGeneration Generation = InitGeneration;
 	const Nelaric::EInitState PreviousState = InitState;
-	if (!CanAdvanceInitState() || !(Generation == InitGeneration) || PreviousState != InitState || bTerminalInitFailure)
+	bCommittingInitState = true;
+	const bool bPrepared =
+	    PreviousState == Nelaric::EInitState::Registered ? CanEntryDataAvailable() : CanEntryDataInitialized();
+	bCommittingInitState = false;
+	if (!bPrepared || !(Generation == InitGeneration) || PreviousState != InitState || bTerminalInitFailure ||
+	    bLeavingWorld)
 	{
+		bRefreshRequestedDuringTransition = false;
 		return false;
 	}
 	return CommitInitState(static_cast<Nelaric::EInitState>(static_cast<uint8>(PreviousState) + 1));
 }
 
-bool UNelaricPawnInitStateComponent::CanAdvanceInitState()
+bool UNelaricPawnInitStateComponent::CanEntryDataAvailable()
 {
-	return false;
+	return true;
 }
 
-void UNelaricPawnInitStateComponent::OnInitRegistered()
+bool UNelaricPawnInitStateComponent::CanEntryDataInitialized()
 {
+	return true;
 }
 
-void UNelaricPawnInitStateComponent::OnInitDataAvailable()
+bool UNelaricPawnInitStateComponent::CanEntryReady()
 {
-}
-
-void UNelaricPawnInitStateComponent::OnInitDataInitialized()
-{
+	return true;
 }
 
 void UNelaricPawnInitStateComponent::OnInitReady()
@@ -56,15 +60,31 @@ void UNelaricPawnInitStateComponent::OnInitGenerationInvalidated(const Nelaric::
 {
 }
 
-bool UNelaricPawnInitStateComponent::CanEnterReady() const
+bool UNelaricPawnInitStateComponent::CanEnterReady()
 {
-	return false;
+	if (bLeavingWorld || bCommittingInitState || bTerminalInitFailure ||
+	    InitState != Nelaric::EInitState::DataInitialized)
+	{
+		return false;
+	}
+	if (!bLocalReadyPrepared)
+	{
+		const Nelaric::FInitGeneration Generation = InitGeneration;
+		bCommittingInitState = true;
+		const bool bPrepared = CanEntryReady();
+		bCommittingInitState = false;
+		bRefreshRequestedDuringTransition = false;
+		bLocalReadyPrepared = bPrepared && Generation == InitGeneration &&
+		                      InitState == Nelaric::EInitState::DataInitialized && !bTerminalInitFailure &&
+		                      !bLeavingWorld;
+	}
+	return bLocalReadyPrepared;
 }
 
 bool UNelaricPawnInitStateComponent::CommitReadyWithoutNotification()
 {
 	if (bLeavingWorld || bCommittingInitState || bTerminalInitFailure || bReadyNotificationPending ||
-	    InitState != Nelaric::EInitState::DataInitialized)
+	    !bLocalReadyPrepared || InitState != Nelaric::EInitState::DataInitialized)
 	{
 		return false;
 	}
@@ -155,14 +175,6 @@ bool UNelaricPawnInitStateComponent::CommitInitState(Nelaric::EInitState NextSta
 	const Nelaric::FInitStateSnapshot Previous{InitGeneration, InitState, bTerminalInitFailure};
 	bCommittingInitState = true;
 	InitState = NextState;
-	if (NextState == Nelaric::EInitState::DataAvailable)
-	{
-		OnInitDataAvailable();
-	}
-	else
-	{
-		OnInitDataInitialized();
-	}
 	NotifyInitChanged(Previous);
 	bCommittingInitState = false;
 	FlushDeferredInitRefresh();
@@ -179,10 +191,7 @@ void UNelaricPawnInitStateComponent::InvalidateInitGeneration()
 	InitState = Nelaric::EInitState::Registered;
 	bTerminalInitFailure = false;
 	bReadyNotificationPending = false;
-	if (IsRegistered() && !bLeavingWorld)
-	{
-		OnInitRegistered();
-	}
+	bLocalReadyPrepared = false;
 	NotifyInitChanged(Previous);
 	bCommittingInitState = false;
 	FlushDeferredInitRefresh();
@@ -228,9 +237,6 @@ void UNelaricPawnInitStateComponent::OnRegister()
 {
 	Super::OnRegister();
 	bLeavingWorld = false;
-	bCommittingInitState = true;
-	OnInitRegistered();
-	bCommittingInitState = false;
 	if (UWorld* World = GetWorld())
 	{
 		if (UNelaricInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UNelaricInitStateWorldSubsystem>())

@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -34,6 +35,27 @@ _MIRROR_OUTPUT_LIMIT = 4 * 1024 * 1024
 _CIRCLECI_OUTPUT_PREFIX = "https://circleci.com/api/private/output/presigned/"
 
 
+class SupersededRun(Exception):
+    """A newer Actions run owns the commit's build statuses."""
+
+
+def read_response(request: urllib.request.Request) -> bytes:
+    """Retry transient failures only for reads; webhook POSTs are not idempotent."""
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.read()
+        except urllib.error.HTTPError as error:
+            if request.get_method() != "GET" or error.code not in {429, 500, 502, 503, 504} or attempt == 4:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if request.get_method() != "GET" or attempt == 4:
+                raise
+        print(f"Transient API read failure; retry {attempt + 1}/4", flush=True)
+        time.sleep(2 ** (attempt + 1))
+    raise RuntimeError("API read retry limit exceeded")
+
+
 def request_json(url: str, *, token: str | None = None, payload: dict | None = None) -> object:
     headers = {"Accept": "application/json", "User-Agent": "nelaric-fork-pr-build-bot"}
     if token:
@@ -42,8 +64,7 @@ def request_json(url: str, *, token: str | None = None, payload: dict | None = N
         headers["Content-Type"] = "application/json"
     data = json.dumps(payload).encode() if payload is not None else None
     request = urllib.request.Request(url, data=data, headers=headers)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        body = response.read()
+    body = read_response(request)
     if not body:
         return {}
     try:
@@ -52,9 +73,44 @@ def request_json(url: str, *, token: str | None = None, payload: dict | None = N
         return {}
 
 
+def run_status_url() -> str | None:
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if not run_id:
+        return None
+    return (
+        f"https://github.com/{_REPOSITORY}/actions/runs/{int(run_id)}"
+        f"/attempts/{int(os.environ.get('GITHUB_RUN_ATTEMPT', '1'))}"
+    )
+
+
+def check_status_owner(sha: str, *, claim: bool = False) -> None:
+    current_url = run_status_url()
+    if current_url is None:
+        return
+    # The aggregate context is also the ownership marker, including the run attempt.
+    statuses = request_json(
+        f"https://api.github.com/repos/{_REPOSITORY}/commits/{sha}/status",
+        token=os.environ["GITHUB_TOKEN"],
+    ).get("statuses", [])
+    latest = next((item for item in statuses if item.get("context") == _STATUS_CONTEXT), {})
+    owner_url = latest.get("target_url")
+    if claim:
+        pattern = rf"https://github\.com/{re.escape(_REPOSITORY)}/actions/runs/(\d+)/attempts/(\d+)"
+        owner = re.fullmatch(pattern, owner_url or "")
+        current = re.fullmatch(pattern, current_url)
+        if owner and tuple(map(int, owner.groups())) > tuple(map(int, current.groups())):
+            raise SupersededRun("A newer build run already owns this commit")
+    elif owner_url != current_url:
+        raise SupersededRun("Skipping status update from an obsolete build run")
+
+
 def post_status(
-    sha: str, state: str, description: str, target_url: str | None = None, *, context: str = _STATUS_CONTEXT
+    sha: str, state: str, description: str, target_url: str | None = None, *, context: str = _STATUS_CONTEXT,
+    claim: bool = False,
 ) -> None:
+    check_status_owner(sha, claim=claim)
+    if context == _STATUS_CONTEXT and run_status_url():
+        target_url = run_status_url()
     payload = {"state": state, "context": context, "description": description[:140]}
     if target_url:
         payload["target_url"] = target_url
@@ -262,11 +318,13 @@ def start_main() -> None:
     token = os.environ["GITHUB_TOKEN"]
     sha = get_pull_request(number, token)["head"]["sha"]
     try:
+        post_status(sha, "pending", "Waiting for UE 5.6.1 Linux builds", claim=True)
         verify_pull_request(number, sha, token)
-        post_status(sha, "pending", "Waiting for UE 5.6.1 Linux builds")
         post_job_statuses(sha, "pending", "Waiting for UE 5.6.1 Linux build")
         nonce = str(uuid.uuid4())
         trigger_circleci(number, sha, nonce)
+    except SupersededRun:
+        raise
     except Exception:
         post_status(sha, "error", "Could not start the CircleCI PR build")
         post_job_statuses(sha, "error", "Could not start the CircleCI PR build")
@@ -372,6 +430,7 @@ def finish_main() -> None:
     lines = ["## Linux build results", "| Target | CircleCI result |", "| --- | --- |"]
     all_succeeded = start_result == "success" and build_result == "success"
     if sha and nonce:
+        check_status_owner(sha)
         try:
             if get_pull_request(int(os.environ["PR_NUMBER"]), os.environ["GITHUB_TOKEN"])["head"]["sha"] != sha:
                 raise RuntimeError("Pull request was updated during the build")
@@ -418,7 +477,7 @@ def main() -> None:
         post_status(sha, "failure", str(error))
         post_job_statuses(sha, "failure", str(error))
         raise
-    post_status(sha, "pending", "Waiting for UE 5.6.1 Linux build")
+    post_status(sha, "pending", "Waiting for UE 5.6.1 Linux build", claim=True)
     post_job_statuses(sha, "pending", "Waiting for UE 5.6.1 Linux build")
     nonce = str(uuid.uuid4())
     try:
@@ -442,6 +501,9 @@ if __name__ == "__main__":
             modes[sys.argv[1]]()
         else:
             raise ValueError("Usage: fork_pr_build_bot.py [start|watch|finish]")
+    except SupersededRun as error:
+        print(str(error), flush=True)
+        write_summary(["## Linux build superseded", str(error)])
     except Exception as error:
         print(f"Fork PR build bot failed: {type(error).__name__}: {error}", file=sys.stderr)
         raise SystemExit(1) from None

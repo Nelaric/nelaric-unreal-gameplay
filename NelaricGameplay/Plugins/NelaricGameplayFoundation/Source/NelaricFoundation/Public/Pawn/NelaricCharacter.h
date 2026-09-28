@@ -10,6 +10,13 @@
 
 #include "NelaricCharacter.generated.h"
 
+class UNelaricPawnInitializationComponent;
+
+namespace Nelaric::Pawn
+{
+struct FInitializationHelper;
+}
+
 /** @brief Base character for project-specific walking characters.
  *
  * @details Derive in C++ or Blueprint and compose gameplay with pawn
@@ -29,4 +36,12 @@ public:
 	 * @param ObjectInitializer Initializer supporting derived subobjects.
 	 */
 	NELARICFOUNDATION_API ANelaricCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+protected:
+	/// Initialization component owned by this character.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Nelaric|Pawn|Initialization")
+	TObjectPtr<UNelaricPawnInitializationComponent> PawnInitializationComponent;
+
+private:
+	friend struct Nelaric::Pawn::FInitializationHelper;
 };

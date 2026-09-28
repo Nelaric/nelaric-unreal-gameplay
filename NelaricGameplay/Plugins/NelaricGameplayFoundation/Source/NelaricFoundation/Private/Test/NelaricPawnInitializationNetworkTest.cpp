@@ -1,21 +1,24 @@
 ﻿// Copyright (c) 2026 Nelaric
 
-#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
-
 #include "Test/NelaricPawnInitializationNetworkTestTypes.h"
+
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
+#include "Pawn/NelaricPawnInitializationComponent.h"
+#include "Pawn/NelaricPawnInitializationConfig.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
 #include "Containers/Ticker.h"
 #include "Engine/Engine.h"
 #include "Engine/NetDriver.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerState.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
-#include "Pawn/NelaricPawnInitializationComponent.h"
-#include "Pawn/NelaricPawnInitializationConfig.h"
 #include "UObject/StrongObjectPtr.h"
+
+#endif
 
 bool UNelaricInitNetworkTestC::CanEntryReady()
 {
@@ -107,6 +110,8 @@ void UNelaricInitNetworkTestGraphNode::OnInitReady()
 		return;
 	}
 }
+
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
 namespace
 {

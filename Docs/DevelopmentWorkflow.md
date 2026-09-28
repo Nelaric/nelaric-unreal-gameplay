@@ -11,7 +11,7 @@ This page explains the checks you will see on a pull request. For guidance on pr
 1. Make a focused change on a branch or fork. Run the [local checks](CodingStandards/BuildAndReview.md#local-checks) relevant to your change.
 2. Open a pull request to `main`. The automated checks start when you open or update it.
 3. Review any failure, make a correction, and wait for the checks and maintainer review before merging.
-4. After merge, the API documentation site is published from `main`. Validation and project target builds have already finished on the pull request.
+4. After merge, the coding standards site is published from `main`. Validation and project target builds have already finished on the pull request.
 
 ## Checks on a pull request
 

@@ -14,7 +14,7 @@
 
 ## 项目结构
 
-[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/README.zh-CN.md) 包含四个互不依赖的玩法模板模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplayFoundation` 插件的 `NelaricFoundation` 模块中。
+[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/) 包含四个互不依赖的玩法模板模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplayFoundation` 插件的 `NelaricFoundation` 模块中。
 
 Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 NelaricGameplayFoundation 和 PuerTS 插件。
 
@@ -42,17 +42,15 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用
 
 体积最大的 V8 Windows 静态库和 Node.js 运行时二进制文件通过 Git LFS 存储，其余后端文件直接纳入 Git。克隆前请安装 Git LFS，以便检出这些二进制文件。如果检出的是 V8 Windows 库的 LFS 指针，Windows Setup 会获取实际文件。下载缓存仅保留在本机。PuerTS 已启用；需要编辑器 TypeScript 工具时，每次克隆运行一次 Setup。Linux CI 无需运行 Setup，就会使用仓库内默认的 V8 后端编译 PuerTS。仓库保留了 [PuerTS](NelaricGameplay/Plugins/Puerts/LICENSE)、[V8](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE)、[QuickJS](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE) 和 [Node.js](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) 的许可证。该配置支持编辑器内的 TypeScript 编译和脚本热重载。
 
-模块职责和依赖见 [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.zh-CN.md) 模块说明；已实现的职责、运行拓扑和集成边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
-
 ## 参与贡献
 
 所有参与本项目的开发者都必须遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) 和[项目编码规范](Docs/CodingStandards/README.zh-CN.md)。项目规范定义了模块边界、API 契约、审查规则和必要的自动检查。
 
 关于 Issue 和 Pull Request 的提交方式，请阅读[贡献指南](CONTRIBUTING.zh-CN.md)；自动检查和 Linux 项目编译见[开发与 CI 流程](Docs/DevelopmentWorkflow.zh-CN.md)。
 
-## API 文档
+## 编码规范
 
-[API 文档网站](https://nelaric.github.io/nelaric-unreal-gameplay/)由 [API 指南](Docs/API/README.zh-CN.md)、编码规范和公开 C++ 头文件生成。使用方式见 [Pawn 组件初始化](Docs/API/Pawn/PawnInitialization.zh-CN.md)和[客户端换服](Docs/API/Core/NetWork/NetworkSessionTransitions.zh-CN.md)。
+[文档网站](https://nelaric.github.io/nelaric-unreal-gameplay/)发布[项目编码规范](Docs/CodingStandards/README.zh-CN.md)。
 
 ## Star 历史
 

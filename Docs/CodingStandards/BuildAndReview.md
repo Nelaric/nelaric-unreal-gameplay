@@ -38,7 +38,7 @@ Use the versions fixed by `.github/workflows/quality.yml` and `.config/dotnet-to
 2. `python Scripts/check_format.py` checks C++ and UE build-script formatting. Install the pinned clang-format and restore the local .NET tool manifest first.
 3. `python Scripts/check_public_docs.py` checks every public header for an `@file` comment and methods in each class's first `public:` section for Doxygen comments. It rejects another access specifier between the first and second `public:` sections. The second section is not checked for method comments.
 4. `python Scripts/check_doxygen_style.py` checks the 25- and 75-character limits, single- and multi-line forms, a tag at the start of every multi-line paragraph, and consistent enum comment style and alignment.
-5. `python Scripts/run_doxygen.py` builds the API site and fails on Doxygen warnings. Install the pinned Doxygen release first.
+5. `python Scripts/run_doxygen.py` builds the coding standards site and fails on Doxygen warnings. Install the pinned Doxygen release first.
 
 Before requesting review, run the local checks relevant to your change. Pull requests must pass the format, API documentation, PR naming, and Linux project build status before merge. CircleCI builds the submitted project commit, including for branches in this repository. Fork PRs that change CI workflows, automation, Unreal build scripts, or plugin descriptors need a maintainer to handle those changes in a source-repository branch. No clang-tidy or numeric code coverage threshold is required now.
 

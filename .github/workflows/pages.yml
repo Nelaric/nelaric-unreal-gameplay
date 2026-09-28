@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nelaric
 name: API Pages
 
 on:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Publish API documentation
+    name: Publish coding standards
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -33,7 +34,7 @@ jobs:
           doxygen_bin="$(find "$RUNNER_TEMP/doxygen" -type f -name doxygen | head -n 1)"
           test -n "$doxygen_bin"
           echo "$(dirname "$doxygen_bin")" >> "$GITHUB_PATH"
-      - name: Generate API documentation for publishing
+      - name: Generate coding standards for publishing
         run: python Scripts/run_doxygen.py --publish
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

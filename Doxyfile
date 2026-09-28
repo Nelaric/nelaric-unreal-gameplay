@@ -1,14 +1,14 @@
 # Copyright (c) 2026 Nelaric
 PROJECT_NAME           = "Nelaric Unreal Gameplay"
-PROJECT_BRIEF          = "Gameplay framework API"
+PROJECT_BRIEF          = "Project coding standards"
 OUTPUT_DIRECTORY       = .tools/api-docs
 CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English
-INPUT                  = Docs/API Docs/CodingStandards
+INPUT                  = Docs/CodingStandards
 FILTER_PATTERNS        = *.md="python Scripts/doxygen_markdown_filter.py"
 RECURSIVE              = YES
-FILE_PATTERNS          = *.h *.hpp *.md
-USE_MDFILE_AS_MAINPAGE = Docs/API/README.md
+FILE_PATTERNS          = *.md
+USE_MDFILE_AS_MAINPAGE = Docs/CodingStandards/README.md
 MARKDOWN_SUPPORT       = YES
 GENERATE_HTML          = YES
 HTML_OUTPUT            = html

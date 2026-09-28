@@ -14,7 +14,7 @@ An Unreal Engine gameplay framework with reusable Pawn and Character bases, comp
 
 ## Project layout
 
-The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/README.md) contains four independent gameplay template modules and Game, Editor, and Server targets. Reusable runtime code lives in the `NelaricFoundation` module of the `NelaricGameplayFoundation` plugin.
+The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/) contains four independent gameplay template modules and Game, Editor, and Server targets. Reusable runtime code lives in the `NelaricFoundation` module of the `NelaricGameplayFoundation` plugin.
 
 Linux CI builds this project for Game, Editor, and Server, including the enabled NelaricGameplayFoundation and PuerTS plugins.
 
@@ -42,17 +42,15 @@ Install Node.js with npm first. Setup also needs network access, `curl`, and `ta
 
 The largest V8 Windows static library and the Node.js runtime binaries are stored in Git LFS; other backend files are stored directly in Git. Install Git LFS before cloning so these binaries are checked out. If the Windows V8 checkout contains an LFS pointer, Windows Setup retrieves that library. The download cache stays local. PuerTS is already enabled; run Setup once per clone when you need the editor TypeScript tooling. Linux CI compiles PuerTS with the bundled default V8 backend without running Setup. PuerTS's own [license](NelaricGameplay/Plugins/Puerts/LICENSE), the [V8 license](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE), the [QuickJS license](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE), and the [Node.js license](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) are retained. This setup supports editor TypeScript compilation and script hot reload.
 
-See the [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module description for its responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the implemented responsibilities, runtime topologies, and integration boundaries.
-
 ## Contributing
 
 All developers contributing to this project must follow both [Epic Games' Unreal Engine Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [project coding standards](Docs/CodingStandards/). The project standards define our module boundaries, API contracts, review rules, and required automated checks.
 
 See the [contribution guide](CONTRIBUTING.md) for issue and pull request guidance, and the [development and CI workflow](Docs/DevelopmentWorkflow.md) for automated checks and the Linux project build.
 
-## API Documentation
+## Coding Standards
 
-The [API documentation site](https://nelaric.github.io/nelaric-unreal-gameplay/) is generated from the [API guides](Docs/API/README.md), coding standards, and public C++ headers. See the guides for [Pawn component initialization](Docs/API/Pawn/PawnInitialization.md) and [client-to-client session transitions](Docs/API/Core/NetWork/NetworkSessionTransitions.md).
+The [documentation site](https://nelaric.github.io/nelaric-unreal-gameplay/) publishes the [project coding standards](Docs/CodingStandards/README.md).
 
 ## Star History
 

@@ -3,7 +3,11 @@ name: Fork PR Linux build
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize, edited, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+concurrency:
+  group: fork-pr-linux-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

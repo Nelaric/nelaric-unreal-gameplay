@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Nelaric
 
+import io
 import os
+import urllib.error
 import sys
 import tempfile
 import unittest
@@ -14,8 +16,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Scripts"))
 
 import fork_pr_build_bot
 
+bot = fork_pr_build_bot
+
 
 class ForkPrBuildBotTests(unittest.TestCase):
+    def setUp(self) -> None:
+        environment = patch.dict(os.environ, {"GITHUB_RUN_ID": ""})
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def test_in_repository_pr_starts_linux_build(self) -> None:
         pull = {"head": {"sha": "a" * 40, "repo": {"full_name": "Nelaric/nelaric-unreal-gameplay"}}}
         with (
@@ -30,7 +39,7 @@ class ForkPrBuildBotTests(unittest.TestCase):
 
         verify.assert_called_once_with(23, "a" * 40, "test-token")
         self.assertEqual(4, post_status.call_count)
-        post_status.assert_any_call("a" * 40, "pending", "Waiting for UE 5.6.1 Linux build")
+        post_status.assert_any_call("a" * 40, "pending", "Waiting for UE 5.6.1 Linux build", claim=True)
         for context in fork_pr_build_bot._JOB_CONTEXTS.values():
             post_status.assert_any_call(
                 "a" * 40, "pending", "Waiting for UE 5.6.1 Linux build", None, context=context
@@ -309,6 +318,84 @@ class ForkPrBuildBotTests(unittest.TestCase):
                     fork_pr_build_bot.finish_main()
             self.assertIn("Pull request was updated", summary.read_text())
         self.assertEqual("failure", post_status.call_args.args[1])
+
+
+class ApiRetryTests(unittest.TestCase):
+    def test_transient_read_recovers(self):
+        response = io.BytesIO(b'{"items": []}')
+        error = urllib.error.HTTPError("https://circleci.com/api/v2/example", 503, "unavailable", {}, None)
+        with patch.object(bot.urllib.request, "urlopen", side_effect=[error, response]) as open_url:
+            with patch.object(bot.time, "sleep") as sleep:
+                self.assertEqual(bot.request_json(error.url), {"items": []})
+        self.assertEqual(open_url.call_count, 2)
+        sleep.assert_called_once_with(2)
+
+    def test_repeated_transient_read_has_a_limit(self):
+        error = urllib.error.URLError("timeout")
+        with patch.object(bot.urllib.request, "urlopen", side_effect=error) as open_url:
+            with patch.object(bot.time, "sleep") as sleep:
+                with self.assertRaises(urllib.error.URLError):
+                    bot.request_json("https://circleci.com/api/v2/example")
+        self.assertEqual(open_url.call_count, 5)
+        self.assertEqual(sleep.call_count, 4)
+
+    def test_permission_error_and_post_are_not_retried(self):
+        for code, payload in [(403, None), (503, {"nonce": "example"})]:
+            with self.subTest(code=code, payload=payload):
+                error = urllib.error.HTTPError("https://example.com", code, "error", {}, None)
+                with patch.object(bot.urllib.request, "urlopen", side_effect=error) as open_url:
+                    with patch.object(bot.time, "sleep") as sleep:
+                        with self.assertRaises(urllib.error.HTTPError):
+                            bot.request_json(error.url, payload=payload)
+                open_url.assert_called_once()
+                sleep.assert_not_called()
+
+
+class StatusOwnershipTests(unittest.TestCase):
+    def setUp(self):
+        self.environment = patch.dict(os.environ, {
+            "GITHUB_RUN_ID": "200", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_TOKEN": "test-token",
+        })
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+
+    def status(self, run_id, attempt=1):
+        return {"statuses": [{
+            "context": bot._STATUS_CONTEXT,
+            "target_url": f"https://github.com/{bot._REPOSITORY}/actions/runs/{run_id}/attempts/{attempt}",
+        }]}
+
+    def test_obsolete_run_cannot_publish_any_build_status(self):
+        for context in [bot._STATUS_CONTEXT, "ci/linux-game-build"]:
+            with self.subTest(context=context):
+                with patch.object(bot, "request_json", return_value=self.status(201)) as request:
+                    with self.assertRaises(bot.SupersededRun):
+                        bot.post_status("abc", "failure", "failed", context=context)
+                self.assertEqual(request.call_count, 1)
+
+    def test_current_run_keeps_ownership_when_publishing(self):
+        with patch.object(bot, "request_json", side_effect=[self.status(200, 2), {}]) as request:
+            bot.post_status("abc", "success", "passed")
+        payload = request.call_args.kwargs["payload"]
+        self.assertEqual(payload["state"], "success")
+        self.assertEqual(payload["target_url"], bot.run_status_url())
+
+    def test_claim_rejects_older_runs_and_attempts(self):
+        for run_id, attempt in [(201, 1), (200, 3)]:
+            with self.subTest(run_id=run_id, attempt=attempt):
+                with patch.object(bot, "request_json", return_value=self.status(run_id, attempt)):
+                    with self.assertRaises(bot.SupersededRun):
+                        bot.check_status_owner("abc", claim=True)
+        with patch.object(bot, "request_json", return_value=self.status(200, 1)):
+            bot.check_status_owner("abc", claim=True)
+
+    def test_canceled_summary_cannot_overwrite_new_run(self):
+        with patch.dict(os.environ, {"PR_SHA": "abc", "BUILD_NONCE": "example"}):
+            with patch.object(bot, "request_json", return_value=self.status(201)) as request:
+                with self.assertRaises(bot.SupersededRun):
+                    bot.finish_main()
+        self.assertEqual(request.call_count, 1)
+
 
 
 if __name__ == "__main__":

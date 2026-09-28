@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "1.0",
+	"Version": 2,
+	"VersionName": "0.0.4",
 	"FriendlyName": "Nelaric Gameplay Foundation",
 	"Description": "Genre-independent gameplay foundations for standalone, listen-server, and dedicated-server play.",
 	"Category": "Gameplay",
@@ -11,7 +11,7 @@
 	"MarketplaceURL": "",
 	"SupportURL": "",
 	"CanContainContent": false,
-	"IsBetaVersion": false,
+	"IsBetaVersion": true,
 	"IsExperimentalVersion": false,
 	"Installed": false,
 	"Modules": [

@@ -4,55 +4,49 @@
 
 # 基础架构约束
 
-本文规定 Nelaric Unreal Gameplay 的目标架构。
+本文说明 Nelaric Unreal Gameplay 已实现的职责与集成边界。
 
 ## 定位与职责边界
 
-Nelaric 为 Unreal Engine 5.6 及以上版本提供可复用的玩法基础。游戏通过 C++ 和 Blueprint 扩展点定义具体规则与内容；Foundation 提供玩法状态、规则判定、玩家生命周期和组合所需的通用契约。对局流程、目标和计分是按需组合的能力，不是所有玩法必须经过的主线。
+Nelaric 为 Unreal Engine 5.6 及以上版本提供可复用的玩法基础。`NelaricFoundation` 包含 Pawn 与 Character 基础类、Pawn 上下文查询、组件初始化契约、世界启动配置和客户端换服流程。四个独立 Runtime 模板模块提供可通过 Blueprint 继承的 GameMode、PlayerController 和 PlayerState 类，供游戏扩展。
 
-Nelaric 基于 Unreal Engine 的 Gameplay Framework 和原生网络系统。具体技能、背包、AI、表现和匹配由接入游戏或可选模块实现。Gameplay Ability System、Game Features 和后端服务是可选集成，不是 Foundation 的前置条件。
+Foundation 基于 Unreal Engine 的 Gameplay Framework 和原生网络系统，公开依赖 `Core`、`CoreUObject`、`Engine` 和 `OnlineSubsystemUtils`。项目启用 Foundation 与 PuerTS 插件；具体玩法规则和内容由接入游戏提供。
 
 ## 玩法权威与状态
 
-权威 World 负责规则判定和玩家生命周期；启用阶段、目标或计分的活动也由权威端推进和结算。GameMode 承载仅在服务器运行的决策；GameState 和 PlayerState 提供客户端所需状态。玩法定义描述规则及启用的能力，运行状态记录世界或活动的进展。客户端负责表现和提交输入，不决定权威结果。
+`ANelaricGameModeBase` 是项目配置的默认 GameMode，选用 `ANelaricPlayerController`。它在监听服务器和独立服务器上启动转换审批 Beacon；玩家控制器在当前服务器与所属客户端之间传输离开审批，目标端通过 Online Beacon 和目标 GameMode 处理审批。
+
+Pawn 初始化状态、代次和受管理的动态组件实例保留在各端本地。玩法数据使用独立的 Unreal 复制路径；数据到达事件可请求本地初始化刷新。Pawn 组件查询当前本地上下文，不缓存控制器或玩家状态指针。
 
 ## 玩法生命周期
 
-- **持续世界**：世界的运行不以一局对局的开始或结束为前提。区域事件、任务进度和玩家状态可以各自演进；持久化由接入游戏或可选适配实现，并明确恢复边界。世界本身不要求统一目标、计分或胜负判定。
-- **有限时长活动**：需要开局和结算的玩法以独立活动表示。活动有自己的参与者、运行状态，以及按需启用的阶段、目标、计分或胜负规则；开始、结束和结果只作用于该活动，不隐含整个 World 结束。
-- **可嵌套的局部活动**：持续世界或另一活动可以承载多个局部活动；它们可以同时运行，也可以形成父子关系。每个活动须有可区分的身份、状态和作用范围；父活动结束或子活动变化时如何处理其他活动，由具体规则明确，不由 Foundation 强制级联。局部活动的结果可按规则写回父活动或世界状态。
+`ANelaricPawn` 与 `ANelaricCharacter` 各自拥有初始化组件。`UNelaricPawnInitializationConfig` 资产指定参与组件类、创建端、必需组件和本地 Ready 依赖。参与组件拥有 Registered、DataAvailable、DataInitialized 和 Ready 有序状态；World 子系统协调推进，循环依赖组先统一提交，再通知成员。
 
-## 支持的运行拓扑
+Pawn 就绪由必需参与组件的状态和 Pawn 自身上下文检查共同决定。替换配置会撤销就绪并替换受管理实例；参与组件的代次失效检查拒绝过期异步结果。EndPlay 和 World 销毁会停止初始化并清理受管理实例。详见 [Pawn 组件初始化](API/Pawn/PawnInitialization.zh-CN.md)。
 
-| 拓扑 | 权威端 | 要求 |
-| --- | --- | --- |
-| 单机 | 本地 World | 无需网络连接或后端即可运行玩法。 |
-| 监听服务器 | 主机的服务器 World | 相同规则在权威端执行，状态同步至远程客户端。 |
-| 独立服务器 | 无头服务器 World | 相同规则无需本地玩家或表现层即可运行。 |
+## 运行拓扑
 
-这些是 Unreal Engine 网络拓扑，不是 Nelaric 的编译期模式。玩法规则不得要求分别实现本地与联机版本。是否接入后端是独立的可选问题；具体集成自行定义启动、身份和信任契约。
+| 上下文 | 已实现行为 |
+| --- | --- |
+| 单机 | Pawn 配置组件使用权威端创建标记。 |
+| 监听服务器 | 服务端 Pawn 使用权威端条目，远程客户端创建本地客户端条目；GameMode 启动审批 Beacon。 |
+| 独立服务器 | 服务端 Pawn 使用权威端条目；GameMode 无需本地玩家即可启动审批 Beacon。 |
+| 客户端 | Pawn 配置组件使用客户端创建标记；会话子系统可请求转移至另一远程服务器。 |
+
+这些上下文使用 Unreal 的网络角色。初始化管理组件依据所属 Pawn 的 `HasAuthority()` 结果选择条目。会话切换要求起点和目标均为客户端，再验证新的客户端 World 和目标连接。详见[网络会话与权威转换](API/Core/NetWork/NetworkSessionTransitions.zh-CN.md)。
 
 ## 玩法组合
 
-Foundation 定义规则判定、状态归属、玩家生命周期及活动组合的稳定契约；阶段、目标和计分机制由可选模块按需提供。游戏选择所需机制并提供具体策略；未选用的机制不应成为启动、运行或结束的前置条件。公开扩展点按需要支持 C++ 和 Blueprint。Foundation 不强制使用特定角色类、相机、输入方案、技能系统或资源布局。
+`UNelaricPawnComponent` 提供 Pawn 上下文查询，`UNelaricGameplayComponent` 将其提供为可在 Blueprint 中添加的组件。初始化参与组件直接实现 `INelaricInitStateParticipantInterface`，或继承 `UNelaricPawnInitStateComponent`。声明的依赖控制进入 Ready 的时机，各组件自行提供数据准备和玩法行为。
 
-## 内容更新
+`UNelaricWorldStartupConfig` 保存地图软引用、玩家人数策略和活动参与者默认策略；校验函数检查配置中的人数范围、地图引用和策略枚举值。该资产保存配置数据，不是复制的运行状态。
 
-已 Cook 的玩法数据和内容可以按版本独立于基础构建交付。内容版本标明兼容的基础构建、所需资源和激活边界。运行中的活动在其生命周期内使用同一版本；持续世界可在进程启动、世界维护窗口或其他明确且安全的边界激活新内容，不要求等待一个不存在的全局结算。局部活动激活与父级版本的兼容关系必须明确。同一联机活动的参与方必须使用兼容的内容和协议版本。
+## 内容与开发工具
 
-原生 C++ 代码、反射类型布局和网络协议的变更需要兼容的新构建及发布流程。编辑器 Live Coding 属于开发工具，不是运行时内容更新契约。分发渠道和平台专属补丁交付不属于 Foundation。
+项目包含 PuerTS，支持选择 V8、QuickJS 或 Node.js 后端。Setup 脚本准备 TypeScript 编辑器工具；编辑器集成支持 TypeScript 编译和脚本热重载。共享框架资产放在 `NelaricGameplay/Content`，具体游戏的地图、角色和规则属于接入游戏或可选功能。
 
-## 验收条件
+## 验证
 
-框架应支持在单机、监听服务器和独立服务器会话中制作、测试相同规则。首组验收样例覆盖以下不同生命周期；各样例通过公开扩展点实现，无需修改 Foundation：
+Foundation 模块包含 Pawn 上下文查询、初始化生命周期检查、依赖图、代次失效、本地服务端与客户端初始化，以及客户端换服审批协调的自动化测试。框架测试使用 `Nelaric.*` 层级；Editor CI Job 在编译后运行兼容测试，Game、Editor 和 Server Target 分别使用 UE 5.6.1 在 Linux 上构建。
 
-| 样例 | 必须验证的能力 |
-| --- | --- |
-| 开放世界探索 | 世界持续运行；区域事件或局部活动独立开始、结束；玩家状态和任务进度可由持久化适配保存与恢复。 |
-| 大逃杀 | 活动有开局、阶段转换和结算；管理参赛者、淘汰与胜负判定。 |
-| MOBA | 一局活动中多个目标同时推进；管理阵营、目标状态、按需使用的计分或资源，以及胜负判定。 |
-| 建造沙盒 | 世界可以没有统一目标和终点；世界事件、玩家状态和可选规则可运行，不要求计分或胜负判定。 |
-
-内容更新测试应覆盖版本兼容性，以及持续世界和有限时长活动各自规定边界上的激活行为。
-
-本文与[模块边界](CodingStandards/Modules.zh-CN.md)及[运行时规范](CodingStandards/Runtime.zh-CN.md)共同约束后续实现。
+本文与[模块边界](CodingStandards/Modules.zh-CN.md)及[运行时规范](CodingStandards/Runtime.zh-CN.md)共同适用。

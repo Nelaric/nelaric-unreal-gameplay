@@ -10,13 +10,13 @@ English | [简体中文](README.zh-CN.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Unreal CI](https://github.com/Nelaric/nelaric-unreal-gameplay/actions/workflows/fork-pr-linux.yml/badge.svg)](https://github.com/Nelaric/nelaric-unreal-gameplay/actions/workflows/fork-pr-linux.yml)
 
-An Unreal Engine gameplay framework for persistent worlds and bounded activities across standalone play, listen servers, and dedicated servers, with versioned gameplay content delivery.
+An Unreal Engine gameplay framework with reusable Pawn and Character bases, component initialization, world startup configuration, and client-to-client session transitions.
 
 ## Project layout
 
 The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/README.md) contains four independent gameplay template modules and Game, Editor, and Server targets. Reusable runtime code lives in the `NelaricFoundation` module of the `NelaricGameplayFoundation` plugin.
 
-Linux CI builds this project for Game, Editor, and Server, including the enabled Core, Foundation, and PuerTS plugins.
+Linux CI builds this project for Game, Editor, and Server, including the enabled NelaricGameplayFoundation and PuerTS plugins.
 
 ## PuerTS setup
 
@@ -40,9 +40,9 @@ After cloning, run **one** Setup script for your operating system from the repos
 
 Install Node.js with npm first. Setup also needs network access, `curl`, and `tar`; Linux needs `sha256sum`, and macOS needs `shasum`. No separate npm or PuerTS setup command is needed. All three backends and their licenses are in the repository. Setup checks the bundled default V8 backend, prepares the TypeScript editor tooling, and confirms that PuerTS is enabled in the shared `.uproject`. If the V8 backend directory is missing, Setup downloads it from the official PuerTS release and verifies its SHA-256 digest. You can rerun Setup after an interruption.
 
-The largest V8 Windows static library and the Node.js runtime binaries are stored in Git LFS; other backend files are stored directly in Git. Install Git LFS before cloning so these binaries are checked out. If the Windows V8 checkout contains an LFS pointer, Windows Setup retrieves that library. The download cache stays local. PuerTS is already enabled; run Setup once per clone when you need the editor TypeScript tooling. Linux CI compiles PuerTS with the bundled default V8 backend without running Setup. PuerTS's own [license](NelaricGameplay/Plugins/Puerts/LICENSE), the [V8 license](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE), the [QuickJS license](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE), and the [Node.js license](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) are retained. This setup supports editor TypeScript compilation and script hot reload; production content delivery and version activation require separate implementation.
+The largest V8 Windows static library and the Node.js runtime binaries are stored in Git LFS; other backend files are stored directly in Git. Install Git LFS before cloning so these binaries are checked out. If the Windows V8 checkout contains an LFS pointer, Windows Setup retrieves that library. The download cache stays local. PuerTS is already enabled; run Setup once per clone when you need the editor TypeScript tooling. Linux CI compiles PuerTS with the bundled default V8 backend without running Setup. PuerTS's own [license](NelaricGameplay/Plugins/Puerts/LICENSE), the [V8 license](NelaricGameplay/Plugins/Puerts/ThirdParty/v8_9.4.146.24/LICENSE), the [QuickJS license](NelaricGameplay/Plugins/Puerts/ThirdParty/quickjs/LICENSE), and the [Node.js license](NelaricGameplay/Plugins/Puerts/ThirdParty/nodejs_16/LICENSE) are retained. This setup supports editor TypeScript compilation and script hot reload.
 
-See the [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module description for its responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
+See the [NelaricFoundation](Docs/Modules/Plugins/NelaricGameplayFoundation/NelaricFoundation.md) module description for its responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the implemented responsibilities, runtime topologies, and integration boundaries.
 
 ## Contributing
 
@@ -52,7 +52,7 @@ See the [contribution guide](CONTRIBUTING.md) for issue and pull request guidanc
 
 ## API Documentation
 
-The [API documentation site](https://nelaric.github.io/nelaric-unreal-gameplay/) publishes the coding standards now and will include the public C++ API when public headers are added.
+The [API documentation site](https://nelaric.github.io/nelaric-unreal-gameplay/) is generated from the [API guides](Docs/API/README.md), coding standards, and public C++ headers. See the guides for [Pawn component initialization](Docs/API/Pawn/PawnInitialization.md) and [client-to-client session transitions](Docs/API/Core/NetWork/NetworkSessionTransitions.md).
 
 ## Star History
 

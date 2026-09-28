@@ -20,7 +20,7 @@
 
 ## 项目范围
 
-框架面向 Unreal Engine 5.6 及以上版本，在单机、监听服务器和独立服务器拓扑下提供通用玩法契约。Foundation 支持持续世界与有限时长活动；对局流程、目标和计分由可选模块提供。具体规则与内容由游戏实现。玩法状态复制继续使用 Unreal Engine 的网络系统。已 Cook 内容的版本化交付与玩法执行分属不同能力。
+框架面向 Unreal Engine 5.6 及以上版本，Foundation 提供 Pawn 与 Character 基础类、组件初始化、世界启动配置和客户端换服流程。四个独立模板模块提供 GameMode、PlayerController 和 PlayerState 类。具体规则与内容由游戏实现，玩法状态复制使用 Unreal Engine 的网络系统。
 
 提出改动时，请说明它属于 Foundation、可选集成、内容更新工具、开发工具还是游戏本身。具体玩法类型的规则与表现属于游戏或可选模块。Foundation 的新增能力应说明如何适用于不止一种玩法生命周期。
 

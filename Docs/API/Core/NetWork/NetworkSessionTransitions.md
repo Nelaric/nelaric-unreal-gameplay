@@ -6,79 +6,38 @@ English | [简体中文](NetworkSessionTransitions.zh-CN.md)
 
 ## Purpose and boundaries
 
-Unreal Engine's network mode answers, “What role does this world currently play?”
+`UNelaricSessionTransitionSubsystem` coordinates a client's move from one remote server to another. Unreal creates one instance per GameInstance. Requests, cancellation, and callbacks run on the game thread.
 
-- **Standalone:** Local gameplay authority without remote players.
-- **Listen server:** Local gameplay authority that accepts remote players.
-- **Client:** Connected to remote authority; it does not decide gameplay outcomes.
-- **Dedicated server:** Authority provided by a server process without a local player.
+`GetNetMode()` returns the current world's observed network mode, or an empty value when no world exists. During travel, that value may describe the old or an intermediate world. Completion is determined by the destination world and connection checks.
 
-A network mode describes an established world. It cannot say whether a transition is underway or has succeeded. The framework separately tracks the intended role, old and destination authorities, target world, and transition progress. It confirms the result only when the target world and required connection are ready. For example, the front-end world may remain standalone while joining a remote server, but it is not a ready gameplay server.
+## Transition path
 
-A transition does not necessarily change maps. World travel, network-role changes, progress synchronization, and online feature availability can occur separately. Joining a remote server usually requires travel; signing in, synchronizing progress, enabling online features, or admitting remote players to an existing local world need not change the map.
+| Source | Destination | Execution |
+| --- | --- | --- |
+| Client | Client | Request departure approval from the current server and arrival approval from the target server, then call `ClientTravel` after both approve. |
 
-## Transition paths
+`RequestTransition()` accepts `NM_Client` as both the source and target mode. The caller supplies `Nelaric::FTransitionDestination` containing two `FNetworkEndpoint` values. `GameEndpoint` selects the travel connection; `BeaconEndpoint` selects the target approval channel. Each endpoint requires a nonempty address and a port from 1 to 65535. Both endpoints must form valid URLs with a host.
 
-| Path | Meaning and required boundary |
-| --- | --- |
-| Standalone → Listen server | Open an existing local authority world to remote players when its content and runtime state can support admission. Confirm that listening is established before admitting players. A new map may instead be loaded when the selected startup configuration requires it. |
-| Listen server → Standalone | Close admission, handle connected players and session visibility, then stop listening. Local authority may continue in the same world if the gameplay state supports it. Stopping the listener alone does not settle remote-player state. |
-| Standalone → Client | Settle local progress, connect to remote authority, and follow the server's world. The local startup map does not dictate the remote map. |
-| Client → Standalone | Leave remote authority and establish a local authority world. Returning to a local front end is distinct from continuing the same gameplay content, which requires an authorized snapshot and explicit restoration rules. |
-| Client → Listen server | Leaving a remote session and starting an unrelated host composes the ordinary leave and host operations. Taking over the previous session is authority migration with state transfer and reconnection. |
-| Listen server → Client | Closing one host and joining another composes the ordinary stop and join operations. Handing the existing session to another host requires authority migration. |
-| Client → Client | Changing remote authority is a transition even though the network mode remains client. Track the old connection, destination identity, travel, new connection, and completion or failure. |
-
-A server-led map change within the same authority and a client-initiated move to another server have different ownership of the travel decision. The transition must preserve that distinction. A dedicated server starts and loads its configured local world as a server process; it is not a runtime destination mode for a client or listen-server process.
+The request returns a nonzero `FTransitionHandle` when accepted. It returns a zero handle without calling a terminal callback if another request is active, no world is available, the source or target mode is unsuitable, the endpoints are invalid, or the approval transport is not bound. Only one request can be active per subsystem.
 
 ## Authority confirmation before execution
 
-`RequestTransition` records intent and returns a handle; it does not authorize
-travel or a network-role change. The source authority must approve departure,
-and the destination authority must approve admission and reserve any required
-capacity. For a standalone endpoint, the local authoritative world makes that
-endpoint's decision. A client cannot substitute its own approval for a remote
-authority. Host shutdown or a server-led map change likewise starts from the
-server's decision, not from a client request alone.
+The internal transport obtains the first local `ANelaricPlayerController` and sends the departure request through its server RPC. The server approves a nonzero request ID with a nonempty target address. The owning client receives the result; the transport checks the returned target address against the requested address before reporting approval.
 
-The coordinator correlates both confirmations with the same request identity,
-source session generation, destination identity, and deadline. It validates
-the confirmations and destination reservation immediately before execution.
-Only then may it invoke travel, open or close listening, or hand off gameplay
-authority. A refusal, lost authority, mismatched or expired confirmation, or
-timeout ends the request without starting those actions. Cancellation before
-execution releases a destination reservation. If execution has started,
-cancellation cannot promise to undo completed Unreal travel.
+The transport also creates an `ANelaricTransitionBeaconClient` to contact the supplied beacon endpoint. On a listen server or dedicated server, `ANelaricGameModeBase::StartPlay()` starts an Online Beacon host when its listen port is valid. `TransitionBeaconListenPort` defaults to 15000. The destination's supplied beacon port must match that server's configuration.
 
-Approval is separate from completion. After execution, the coordinator still
-verifies the resulting world, connection, runtime state, and authority before
-reporting success. A network mode alone cannot identify a destination server
-or prove either approval. The destination and approval transport must be
-provided by the consuming session integration; a GameInstance subsystem is
-not itself a client-owned RPC endpoint.
+The coordinator accepts replies only for its active request ID before travel starts. A refusal ends the request with `AuthorityRejected`; inability to start approval or reach the target authority reports `AuthorityUnavailable`. After both replies approve, the next coordinator tick checks the deadline and obtains the local player controller before starting absolute `ClientTravel` to the game endpoint.
 
-The current project integration handles client-to-client moves through a
-PlayerController RPC and a target Online Beacon. Its target decision currently
-returns `true` while active `WorldStartupConfig.MaxPlayers` retrieval is left
-at `TODO(NELARIC-TRANSITION-CAPACITY-INTEGRATION)`. It does not yet reserve
-capacity or validate a reservation at `PreLogin`; those safeguards above
-remain requirements for enforcing a real destination capacity limit.
+The target GameMode's `CanAcceptTransition()` returns `true`. `TODO(NELARIC-TRANSITION-CAPACITY-INTEGRATION)` in that method marks retrieval of the active `WorldStartupConfig` and enforcement of `MaxPlayers`, including pending joins.
 
-Callers provide a `FTransitionDestination` containing two generic
-`FNetworkEndpoint` values. Each endpoint has a host address and port: the game
-endpoint selects the travel connection, and the beacon endpoint selects the
-target approval channel. The destination server must listen on the supplied
-beacon port; `ANelaricGameModeBase::TransitionBeaconListenPort` defaults to
-15000 and can be configured for that server.
+## Completion and cancellation
 
-## Starting and admitting a world
+An accepted request has a 30-second deadline covering approval and travel. Success requires a world different from the source world, `NM_Client`, and an open server connection whose host matches the game endpoint without case sensitivity and whose port matches exactly. A world or connection that does not meet those checks keeps the request pending until its deadline.
 
-A startup owner selects and retains a world startup configuration before loading its map. The configuration defines the authored map and player policy, not the current network role or replicated runtime state. The owner validates the configuration and target capacity before travel. Once the destination world and its intended role are confirmed, the authority creates its runtime state and applies the startup policy. Admission stays closed until that preparation is complete; the configured initial admission policy then determines whether it opens.
+`FTransitionCallbacks` provides optional `OnSucceeded`, `OnCancelled`, `OnTimedOut`, and `OnFailed` delegates. Each accepted request has one terminal outcome, and only its matching bound callback runs. The coordinator clears the active request and releases transport state before invoking the callback. Transport cleanup removes the departure listener and destroys the target beacon.
 
-An operation has one terminal outcome: ready, cancelled, timed out, or failed with a reason. World teardown, travel failure, connection loss, and superseded operations must not let an earlier completion mark a later world ready. The session coordinator therefore retains the intended role and transition progress independently of the observed network mode.
+`CancelTransition()` succeeds only for the active handle before travel starts. It then reports cancellation. After travel starts, the method returns `false`. Clearing the approval transport fails an active request with `AuthorityUnavailable`; coordinator deinitialization cancels an active request.
 
-## Purpose of transitions and exceptions
+## World startup configuration
 
-The transition mechanism coordinates worlds, connections, and gameplay authority so that an old world or an unfinished connection cannot be mistaken for the destination session. A change of gameplay authority should normally travel to the destination authority's world and resume play only after its connection and runtime state are ready. This is the default path for joining a remote server, moving between servers, and leaving a remote session.
-
-The framework also permits a project with an explicit need to keep the map content while completing a transition that does not depend on a map change. For example, offline progress can be submitted after local play for an online authority to accept and govern thereafter; an existing local world can also admit remote players once ready. Such paths should not be the default. The project defines state transfer, trust, and conflict rules.
+`UNelaricWorldStartupConfig` stores a map soft reference, world player policy, and activity participant defaults. `HasValidPlayerLimits()` and `HasValidActivityParticipantLimits()` check nonnegative counts and that a positive maximum is at least the minimum. `HasValidStartupConfig()` also checks the map reference and policy enum values. The asset's validation functions check authored values; they do not load the map or perform travel.

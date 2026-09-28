@@ -4,55 +4,49 @@ English | [简体中文](FoundationArchitectureConstraints.zh-CN.md)
 
 # Foundation Architecture Constraints
 
-This document defines the target architecture of Nelaric Unreal Gameplay.
+This document describes the implemented responsibilities and integration boundaries of Nelaric Unreal Gameplay.
 
 ## Purpose and responsibility boundaries
 
-Nelaric provides reusable gameplay foundations for Unreal Engine 5.6 and later. A game defines its rules and content through C++ and Blueprint extension points. Foundation provides common contracts for gameplay state, rule evaluation, player lifecycle, and composition. Match flow, objectives, and scoring are capabilities a game may compose rather than a required path for every game.
+Nelaric provides reusable gameplay foundations for Unreal Engine 5.6 and later. `NelaricFoundation` contains Pawn and Character bases, pawn context queries, component initialization contracts, world startup configuration, and client-to-client session transitions. Four independent Runtime template modules provide Blueprintable GameMode, PlayerController, and PlayerState classes for game-specific extension.
 
-Nelaric builds on Unreal Engine's Gameplay Framework and native networking. Game-specific abilities, inventory, AI, presentation, and matchmaking remain with the integrating game or optional modules. Gameplay Ability System, Game Features, and backend services are optional integrations rather than Foundation requirements.
+Foundation builds on Unreal Engine's Gameplay Framework and native networking. It publicly depends on `Core`, `CoreUObject`, `Engine`, and `OnlineSubsystemUtils`. The project enables the Foundation and PuerTS plugins. Concrete gameplay rules and content belong to the consuming game.
 
 ## Gameplay authority and state
 
-The authoritative world evaluates rules and manages player lifecycle. It also advances phases and resolves objectives or scores for activities that use those capabilities. GameMode holds server-only decisions; GameState and PlayerState expose the state clients need. Definitions describe rules and enabled capabilities; runtime state records the progress of a world or activity. Clients render and submit input without becoming the source of authoritative outcomes.
+`ANelaricGameModeBase` is the project's configured default GameMode and selects `ANelaricPlayerController`. On listen servers and dedicated servers, it starts the transition approval beacon. The player controller carries departure approval between the current server and its owning client. Target approval is handled through an Online Beacon and the target GameMode.
+
+Pawn initialization state, generation, and managed dynamic component instances are local to each peer. Gameplay data uses separate Unreal replication paths. A data-arrival event can request a local initialization refresh. Pawn components query the current local pawn context; they do not cache controller or player state pointers.
 
 ## Gameplay lifecycles
 
-- **Persistent world:** The world does not depend on a global match start or end. Regional events, quest progress, and player state can evolve independently. The integrating game or an optional adapter owns persistence and defines the restore boundary. The world itself needs no global objective, score, or win condition.
-- **Bounded activity:** Gameplay that needs a start and resolution is represented as a distinct activity. It has its own participants and runtime state, with phases, objectives, scoring, or win conditions enabled as needed. Its start, end, and result apply to that activity without implying that the whole world ends.
-- **Nested local activity:** A persistent world or another activity can host multiple local activities, concurrently or in a parent-child relationship. Each activity has a distinct identity, state, and scope. Game rules define what happens to other activities when a parent ends or a child changes; Foundation does not force cascading termination. Rules may write a local result back to parent or world state.
+`ANelaricPawn` and `ANelaricCharacter` each own an initialization component. A `UNelaricPawnInitializationConfig` asset selects participant classes, creation sides, required components, and local Ready dependencies. Participants own the ordered states Registered, DataAvailable, DataInitialized, and Ready. The world subsystem coordinates progress; cyclic dependencies commit as a group before notification.
 
-## Supported topologies
+Pawn readiness combines the required participant states with a pawn-specific context check. Replacing the configuration revokes readiness and replaces managed instances. Participant generation invalidation rejects stale asynchronous work; EndPlay and world teardown stop initialization and clean up managed instances. See [Pawn component initialization](API/Pawn/PawnInitialization.md).
 
-| Topology | Authority | Requirement |
-| --- | --- | --- |
-| Standalone | Local world | Gameplay runs without a network connection or backend. |
-| Listen server | Host server world | The same rules run on authority and replicate state to remote clients. |
-| Dedicated server | Headless server world | The same rules run without a local player or presentation dependency. |
+## Runtime topologies
 
-These are Unreal Engine network topologies, not Nelaric compile-time modes. Gameplay rules must not require separate local and online implementations. Backend connectivity is an independent, optional concern; concrete integrations define their own startup, identity, and trust contracts.
+| Context | Implemented behavior |
+| --- | --- |
+| Standalone | Configured pawn components use the authority creation flag. |
+| Listen server | The server pawn uses authority entries; remote clients create their local client entries. The GameMode starts the approval beacon. |
+| Dedicated server | The server pawn uses authority entries. The GameMode starts the approval beacon without a local player. |
+| Client | Configured pawn components use the client creation flag. The session subsystem can request a move to another remote server. |
+
+These contexts use Unreal's network roles. The initialization manager chooses entries from the owning pawn's `HasAuthority()` result. Session transitions accept a client source and client target, then verify a new client world and its destination connection. See [network sessions and authority transitions](API/Core/NetWork/NetworkSessionTransitions.md).
 
 ## Gameplay composition
 
-Foundation defines stable contracts for rule evaluation, state ownership, player lifecycle, and activity composition, while optional modules provide phase, objective, and scoring mechanisms when needed. A game selects the mechanisms it needs and supplies game-specific policy. Unused mechanisms must not be prerequisites for startup, operation, or shutdown. Public extension points support C++ and Blueprint where appropriate. Foundation must not require a particular character class, camera, input scheme, ability system, or asset layout.
+`UNelaricPawnComponent` provides pawn context queries; `UNelaricGameplayComponent` makes that base available as a Blueprint-spawnable component. Initialization participants implement `INelaricInitStateParticipantInterface` directly or derive from `UNelaricPawnInitStateComponent`. Their declared dependencies control entry into Ready, while each component supplies its own data preparation and gameplay behavior.
 
-## Content updates
+`UNelaricWorldStartupConfig` stores a map soft reference, player-count policy, and activity participant defaults. Its validation functions check the authored count ranges, map reference, and policy enum values. The asset is configuration data rather than replicated runtime state.
 
-Versioned cooked gameplay data and content may be delivered separately from the base build. A content version identifies its compatible build, required assets, and activation boundary. A running activity keeps one version for its lifetime. A persistent world may activate new content at process start, a world maintenance window, or another explicit safe boundary, without waiting for a nonexistent global resolution. Compatibility between local activity activation and the parent version must be defined. Participants in one network activity must use compatible content and protocol versions.
+## Content and development tooling
 
-Native C++ code, reflected type layouts, and network protocol changes require a compatible new build and rollout. Editor Live Coding is a development facility, not the runtime content-update contract. Distribution channels and platform-specific patch delivery remain outside Foundation.
+The project includes PuerTS with selectable V8, QuickJS, and Node.js backends. Setup scripts prepare TypeScript editor tooling. The editor integration supports TypeScript compilation and script hot reload. Shared framework assets belong in `NelaricGameplay/Content`; game-specific maps, characters, and rules belong to consuming games or optional features.
 
 ## Validation
 
-The framework must support authoring and testing the same rules in standalone, listen-server, and dedicated-server sessions. The first set of acceptance cases covers distinct lifecycles; each case must use public extension points without changing Foundation:
-
-| Case | Required capabilities to validate |
-| --- | --- |
-| Open-world exploration | The world keeps running; regional events or local activities start and end independently; a persistence adapter can save and restore player state and quest progress. |
-| Battle royale | An activity starts, changes phases, and resolves; it manages participants, elimination, and a win condition. |
-| MOBA | Multiple objectives progress concurrently within one activity; it manages teams, objective state, scoring or resources as needed, and a win condition. |
-| Building sandbox | The world may have no global objective or end; world events, player state, and optional rules work without scoring or a win condition. |
-
-Content-update tests must cover version compatibility and activation at the specified boundaries for both persistent worlds and bounded activities.
+The Foundation module includes automated tests for pawn context queries, initialization lifecycle gates, dependency graphs, generation invalidation, local server/client initialization, and client-to-client approval coordination. Framework tests use the `Nelaric.*` hierarchy. The Editor CI job runs compatible tests after compilation; Game, Editor, and Server targets build separately with UE 5.6.1 on Linux.
 
 This document applies together with the [module boundaries](CodingStandards/Modules.md) and [runtime rules](CodingStandards/Runtime.md).

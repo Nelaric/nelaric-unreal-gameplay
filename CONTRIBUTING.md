@@ -20,7 +20,7 @@ Blank issues remain available for topics that do not fit these forms. Keep each 
 
 ## Project scope
 
-The framework targets Unreal Engine 5.6 and later. It provides shared gameplay contracts across standalone, listen-server, and dedicated-server topologies. Foundation supports persistent worlds and bounded activities; optional modules provide match flow, objectives, and scoring. Games supply concrete rules and content. Unreal Engine networking continues to handle gameplay state replication. Versioned cooked content delivery is a separate capability from gameplay execution.
+The framework targets Unreal Engine 5.6 and later. Foundation provides Pawn and Character bases, component initialization, world startup configuration, and client-to-client session transitions. Four independent template modules provide GameMode, PlayerController, and PlayerState classes. Games supply concrete rules and content. Unreal Engine networking handles gameplay state replication.
 
 When proposing a change, identify whether it belongs in Foundation, an optional integration, content-update tooling, development tooling, or the game. Genre-specific rules and presentation remain with the game or optional modules. Explain how a Foundation addition applies to more than one gameplay lifecycle.
 

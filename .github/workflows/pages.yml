@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Nelaric
 name: API Pages
 
 on:
@@ -35,9 +36,14 @@ jobs:
           echo "$(dirname "$doxygen_bin")" >> "$GITHUB_PATH"
       - name: Generate API documentation for publishing
         run: python Scripts/run_doxygen.py --publish
+      - name: Arrange project documentation routes
+        run: |
+          mkdir -p .tools/pages/API
+          cp -a .tools/api-docs/html/. .tools/pages/API/
+          cp Docs/Hosting/project-index.html .tools/pages/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .tools/api-docs/html
+          path: .tools/pages
       - id: deployment
         uses: actions/deploy-pages@v4

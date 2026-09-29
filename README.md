@@ -54,7 +54,9 @@ See the [contribution guide](CONTRIBUTING.md) for issue and pull request guidanc
 
 ## API Documentation
 
-The [API documentation site](https://nelaric.github.io/nelaric-unreal-gameplay/) publishes the coding standards now and will include the public C++ API when public headers are added.
+The [API documentation site](https://docs.nelaric.com/nelaric-unreal-gameplay/API/) publishes the coding standards now and will include the public C++ API when public headers are added.
+
+See the [organization documentation hosting guide](Docs/Hosting/README.md) for domain and publishing configuration.
 
 ## Star History
 

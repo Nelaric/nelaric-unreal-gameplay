@@ -4,7 +4,7 @@
 
 # GameplayRuntime
 
-`GameplayRuntime` 是 `NelaricGameplay/Plugins/NelaricGameplay` 插件中的运行时模块，承载玩法契约、可复用项目侧 Actor 和会话传输。`NelaricGameplay/NelaricGameplay.uproject` 项目启用该插件；
+`GameplayRuntime` 是 `NelaricGameplay/Plugins/NelaricGameplay` 插件中的运行时模块，承载玩法契约、可复用项目侧 Actor 和会话传输。`NelaricGameplay/NelaricGameplay.uproject` 项目启用该插件，其 `Source/` 目录包含 `DemoGame` Runtime 模块。
 
 该模块承载规则判定、玩法状态、玩家生命周期和活动组合的通用契约。对局流程、目标和计分由可选模块提供；持续世界无需全局对局或结算也可运行。模块基于 Unreal Engine 的玩法与网络系统，不依赖特定玩法类型、后端、技能系统或内容分发 Provider。可选模块可以依赖 GameplayRuntime；GameplayRuntime 不依赖这些模块。
 

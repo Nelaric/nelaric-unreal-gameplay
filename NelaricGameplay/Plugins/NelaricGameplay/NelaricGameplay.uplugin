@@ -21,8 +21,18 @@
 			"LoadingPhase": "Default"
 		},
 		{
-			"Name": "PerformanceAnalysis",
+			"Name": "Diagnostics",
 			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "Benchmark",
+			"Type": "DeveloperTool",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "Editor",
+			"Type": "Editor",
 			"LoadingPhase": "Default"
 		}
 	],

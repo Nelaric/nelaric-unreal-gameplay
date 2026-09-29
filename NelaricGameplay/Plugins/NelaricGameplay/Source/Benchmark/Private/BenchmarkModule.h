@@ -6,7 +6,7 @@
 
 namespace Nelaric
 {
-class FPerformanceAnalysisModule : public IModuleInterface
+class FBenchmarkModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override;

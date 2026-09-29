@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class PerformanceAnalysis : ModuleRules
+public class Editor : ModuleRules
 {
-	public PerformanceAnalysis(ReadOnlyTargetRules Target)
+	public Editor(ReadOnlyTargetRules Target)
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;

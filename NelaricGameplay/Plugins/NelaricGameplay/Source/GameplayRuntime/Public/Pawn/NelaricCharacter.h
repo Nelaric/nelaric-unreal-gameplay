@@ -48,10 +48,20 @@ public:
 	GAMEPLAYRUNTIME_API virtual void PossessedBy(AController* NewController) override;
 	GAMEPLAYRUNTIME_API virtual void UnPossessed() override;
 	GAMEPLAYRUNTIME_API virtual void OnRep_Controller() override;
+	GAMEPLAYRUNTIME_API virtual void NotifyControllerChanged() override;
 	GAMEPLAYRUNTIME_API virtual void OnRep_PlayerState() override;
 	GAMEPLAYRUNTIME_API virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 protected:
+	/** @brief Restarts bindings when Unreal changes the player state.
+	 * @details Runs on the game thread, including direct SetPlayerState calls.
+	 * Nested possession and replication notifications share one reset.
+	 * @param NewPlayerState Newly assigned player state, possibly null.
+	 * @param OldPlayerState Previously assigned player state, possibly null.
+	 */
+	GAMEPLAYRUNTIME_API virtual void OnPlayerStateChanged(APlayerState* NewPlayerState,
+	                                                      APlayerState* OldPlayerState) override;
+
 	/// Initialization component owned by this character.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Nelaric|Pawn|Initialization")
 	TObjectPtr<UPawnInitializationComponent> PawnInitializationComponent;

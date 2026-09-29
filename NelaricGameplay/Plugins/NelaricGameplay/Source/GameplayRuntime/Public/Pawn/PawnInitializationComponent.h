@@ -149,6 +149,12 @@ protected:
 
 private:
 	friend class UInitStateWorldSubsystem;
+	friend class ANelaricPawn;
+	friend class ANelaricCharacter;
+	void BeginPawnContextChange();
+	void EndPawnContextChange();
+	int32 ContextChangeDepth = 0;
+	bool bNotifyingRevocation = false;
 	bool TryInitializationPass();
 	bool bRefreshPending = false;
 	bool bContextResetRequested = false;

@@ -12,32 +12,51 @@ ANelaricCharacter::ANelaricCharacter(const FObjectInitializer& ObjectInitializer
 
 void ANelaricCharacter::PossessedBy(AController* NewController)
 {
+	PawnInitializationComponent->BeginPawnContextChange();
 	Super::PossessedBy(NewController);
-	PawnInitializationComponent->InvalidatePawnContext();
+	PawnInitializationComponent->EndPawnContextChange();
 }
 
 void ANelaricCharacter::UnPossessed()
 {
+	PawnInitializationComponent->BeginPawnContextChange();
 	Super::UnPossessed();
-	PawnInitializationComponent->InvalidatePawnContext();
+	PawnInitializationComponent->EndPawnContextChange();
 }
 
 void ANelaricCharacter::OnRep_Controller()
 {
+	PawnInitializationComponent->BeginPawnContextChange();
 	Super::OnRep_Controller();
-	PawnInitializationComponent->InvalidatePawnContext();
+	PawnInitializationComponent->EndPawnContextChange();
 }
 
 void ANelaricCharacter::OnRep_PlayerState()
 {
+	PawnInitializationComponent->BeginPawnContextChange();
 	Super::OnRep_PlayerState();
-	PawnInitializationComponent->InvalidatePawnContext();
+	PawnInitializationComponent->EndPawnContextChange();
 }
 
 void ANelaricCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
+	PawnInitializationComponent->BeginPawnContextChange();
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-	PawnInitializationComponent->InvalidatePawnContext();
+	PawnInitializationComponent->EndPawnContextChange();
+}
+
+void ANelaricCharacter::NotifyControllerChanged()
+{
+	PawnInitializationComponent->BeginPawnContextChange();
+	Super::NotifyControllerChanged();
+	PawnInitializationComponent->EndPawnContextChange();
+}
+
+void ANelaricCharacter::OnPlayerStateChanged(APlayerState* NewPlayerState, APlayerState* OldPlayerState)
+{
+	PawnInitializationComponent->BeginPawnContextChange();
+	Super::OnPlayerStateChanged(NewPlayerState, OldPlayerState);
+	PawnInitializationComponent->EndPawnContextChange();
 }
 
 UPawnInitializationComponent* ANelaricCharacter::GetPawnInitializationComponent() const

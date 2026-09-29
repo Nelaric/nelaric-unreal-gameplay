@@ -22,7 +22,7 @@ bool UPawnInitializationComponent::TryInitializePawn()
 	}
 	// Defer callback retries until the current initialization pass finishes.
 	bRefreshPending = true;
-	if (bInitializationInProgress)
+	if (bInitializationInProgress || ContextChangeDepth > 0 || bNotifyingRevocation)
 	{
 		return false;
 	}
@@ -95,9 +95,26 @@ void UPawnInitializationComponent::InvalidatePawnContext()
 	{
 		return;
 	}
+	BeginPawnContextChange();
+	EndPawnContextChange();
+}
+
+void UPawnInitializationComponent::BeginPawnContextChange()
+{
+	// Revoke before engine callbacks; nested context changes share one reset.
+	++ContextChangeDepth;
 	bContextResetRequested = true;
 	RevokePawnReady();
-	TryInitializePawn();
+}
+
+void UPawnInitializationComponent::EndPawnContextChange()
+{
+	check(ContextChangeDepth > 0);
+	--ContextChangeDepth;
+	if (ContextChangeDepth == 0)
+	{
+		TryInitializePawn();
+	}
 }
 
 void UPawnInitializationComponent::RegisterAndCallPawnInitialized(FPawnInitializationCallback Callback)
@@ -131,7 +148,8 @@ void UPawnInitializationComponent::UnregisterPawnInitializationCallback(FPawnIni
 bool UPawnInitializationComponent::IsPawnInitialized() const
 {
 	return bPawnInitialized && bInitializationAllowed && !bInitializationEnded && !bContextResetRequested &&
-	       ActiveConfig == InitializationConfig && AreRequiredComponentsReady() && CanInitializePawn();
+	       ContextChangeDepth == 0 && !bNotifyingRevocation && ActiveConfig == InitializationConfig &&
+	       AreRequiredComponentsReady() && CanInitializePawn();
 }
 
 void UPawnInitializationComponent::SetInitializationConfig(UPawnInitializationConfig* NewConfig)
@@ -208,7 +226,10 @@ void UPawnInitializationComponent::RevokePawnReady()
 	if (bPawnInitialized)
 	{
 		bPawnInitialized = false;
+		// All revocation listeners finish before a callback can restart gameplay.
+		bNotifyingRevocation = true;
 		OnPawnInitializationRevoked.Broadcast(this);
+		bNotifyingRevocation = false;
 	}
 }
 

@@ -3,13 +3,13 @@
 # Gameplay template modules
 
 The project builds four independent Runtime modules for the acceptance
-examples in [Foundation architecture constraints](../../Docs/FoundationArchitectureConstraints.md).
+examples in [GameplayRuntime architecture constraints](../../Docs/FoundationArchitectureConstraints.md).
 Each module owns Blueprintable GameMode, PlayerController, and PlayerState
 classes and can be selected per map. Each GameMode selects its own controller
 and player state by default. None of the four modules includes or depends on
 another template.
 All four depend only on Unreal's Core, CoreUObject, and Engine modules and the
-shared NelaricFoundation plugin. They derive from its game mode and player
+shared `GameplayRuntime` module in the `NelaricGameplay` plugin. They derive from its game mode and player
 controller bases to retain the common session-transition setup.
 
 | Module | Game mode | Intended extension |

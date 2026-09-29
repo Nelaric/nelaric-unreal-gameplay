@@ -6,7 +6,7 @@
 中的四个验收样例构建四个独立的 Runtime 模块。每个模块提供可继承的
 GameMode、PlayerController 和 PlayerState，可按地图选用；GameMode 默认
 使用本模块的控制器和玩家状态。四个模板互不引用、互不依赖；它们只依赖
-Unreal 的 Core、CoreUObject、Engine 模块和共用的 NelaricFoundation 插件，
+Unreal 的 Core、CoreUObject、Engine 模块和 `NelaricGameplay` 插件中的共用 `GameplayRuntime` 模块，
 并继承后者的 GameMode 和玩家控制器基础类，以保留会话切换配置。
 
 | 模块 | GameMode | 扩展方向 |

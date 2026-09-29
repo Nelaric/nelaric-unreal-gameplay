@@ -27,7 +27,7 @@
 	],
 	"Plugins": [
 		{
-			"Name": "NelaricGameplayFoundation",
+			"Name": "NelaricGameplay",
 			"Enabled": true
 		},
 		{

@@ -20,9 +20,9 @@ Blank issues remain available for topics that do not fit these forms. Keep each 
 
 ## Project scope
 
-The framework targets Unreal Engine 5.6 and later. It provides shared gameplay contracts across standalone, listen-server, and dedicated-server topologies. Foundation supports persistent worlds and bounded activities; optional modules provide match flow, objectives, and scoring. Games supply concrete rules and content. Unreal Engine networking continues to handle gameplay state replication. Versioned cooked content delivery is a separate capability from gameplay execution.
+The framework targets Unreal Engine 5.6 and later. It provides shared gameplay contracts across standalone, listen-server, and dedicated-server topologies. GameplayRuntime supports persistent worlds and bounded activities; optional modules provide match flow, objectives, and scoring. Games supply concrete rules and content. Unreal Engine networking continues to handle gameplay state replication. Versioned cooked content delivery is a separate capability from gameplay execution.
 
-When proposing a change, identify whether it belongs in Foundation, an optional integration, content-update tooling, development tooling, or the game. Genre-specific rules and presentation remain with the game or optional modules. Explain how a Foundation addition applies to more than one gameplay lifecycle.
+When proposing a change, identify whether it belongs in GameplayRuntime, an optional integration, content-update tooling, development tooling, or the game. Genre-specific rules and presentation remain with the game or optional modules. Explain how a GameplayRuntime addition applies to more than one gameplay lifecycle.
 
 ## Before opening a pull request
 

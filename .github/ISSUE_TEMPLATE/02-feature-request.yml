@@ -43,8 +43,8 @@ body:
     id: boundaries
     attributes:
       label: Scope and boundaries | 范围与边界
-      description: Explain whether this belongs in Foundation, an optional provider, or tooling, and what should remain game-specific. If unsure, say so. | 说明该能力属于 Foundation、可选提供方还是工具，以及哪些部分应由游戏自行实现；如不确定，请直接说明。
-      placeholder: Foundation would provide ...; a provider or game would decide ... | Foundation 提供……；提供方或游戏决定……
+      description: Explain whether this belongs in GameplayRuntime, an optional provider, or tooling, and what should remain game-specific. If unsure, say so. | 说明该能力属于 GameplayRuntime、可选提供方还是工具，以及哪些部分应由游戏自行实现；如不确定，请直接说明。
+      placeholder: GameplayRuntime would provide ...; a provider or game would decide ... | GameplayRuntime 提供……；提供方或游戏决定……
     validations:
       required: false
   - type: textarea

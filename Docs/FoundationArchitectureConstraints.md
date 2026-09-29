@@ -2,15 +2,15 @@
 
 English | [简体中文](FoundationArchitectureConstraints.zh-CN.md)
 
-# Foundation Architecture Constraints
+# GameplayRuntime Architecture Constraints
 
 This document defines the target architecture of Nelaric Unreal Gameplay.
 
 ## Purpose and responsibility boundaries
 
-Nelaric provides reusable gameplay foundations for Unreal Engine 5.6 and later. A game defines its rules and content through C++ and Blueprint extension points. Foundation provides common contracts for gameplay state, rule evaluation, player lifecycle, and composition. Match flow, objectives, and scoring are capabilities a game may compose rather than a required path for every game.
+Nelaric provides reusable gameplay foundations for Unreal Engine 5.6 and later. A game defines its rules and content through C++ and Blueprint extension points. GameplayRuntime provides common contracts for gameplay state, rule evaluation, player lifecycle, and composition. Match flow, objectives, and scoring are capabilities a game may compose rather than a required path for every game.
 
-Nelaric builds on Unreal Engine's Gameplay Framework and native networking. Game-specific abilities, inventory, AI, presentation, and matchmaking remain with the integrating game or optional modules. Gameplay Ability System, Game Features, and backend services are optional integrations rather than Foundation requirements.
+Nelaric builds on Unreal Engine's Gameplay Framework and native networking. Game-specific abilities, inventory, AI, presentation, and matchmaking remain with the integrating game or optional modules. Gameplay Ability System, Game Features, and backend services are optional integrations rather than GameplayRuntime requirements.
 
 ## Gameplay authority and state
 
@@ -20,7 +20,7 @@ The authoritative world evaluates rules and manages player lifecycle. It also ad
 
 - **Persistent world:** The world does not depend on a global match start or end. Regional events, quest progress, and player state can evolve independently. The integrating game or an optional adapter owns persistence and defines the restore boundary. The world itself needs no global objective, score, or win condition.
 - **Bounded activity:** Gameplay that needs a start and resolution is represented as a distinct activity. It has its own participants and runtime state, with phases, objectives, scoring, or win conditions enabled as needed. Its start, end, and result apply to that activity without implying that the whole world ends.
-- **Nested local activity:** A persistent world or another activity can host multiple local activities, concurrently or in a parent-child relationship. Each activity has a distinct identity, state, and scope. Game rules define what happens to other activities when a parent ends or a child changes; Foundation does not force cascading termination. Rules may write a local result back to parent or world state.
+- **Nested local activity:** A persistent world or another activity can host multiple local activities, concurrently or in a parent-child relationship. Each activity has a distinct identity, state, and scope. Game rules define what happens to other activities when a parent ends or a child changes; GameplayRuntime does not force cascading termination. Rules may write a local result back to parent or world state.
 
 ## Supported topologies
 
@@ -34,17 +34,17 @@ These are Unreal Engine network topologies, not Nelaric compile-time modes. Game
 
 ## Gameplay composition
 
-Foundation defines stable contracts for rule evaluation, state ownership, player lifecycle, and activity composition, while optional modules provide phase, objective, and scoring mechanisms when needed. A game selects the mechanisms it needs and supplies game-specific policy. Unused mechanisms must not be prerequisites for startup, operation, or shutdown. Public extension points support C++ and Blueprint where appropriate. Foundation must not require a particular character class, camera, input scheme, ability system, or asset layout.
+GameplayRuntime defines stable contracts for rule evaluation, state ownership, player lifecycle, and activity composition, while optional modules provide phase, objective, and scoring mechanisms when needed. A game selects the mechanisms it needs and supplies game-specific policy. Unused mechanisms must not be prerequisites for startup, operation, or shutdown. Public extension points support C++ and Blueprint where appropriate. GameplayRuntime must not require a particular character class, camera, input scheme, ability system, or asset layout.
 
 ## Content updates
 
 Versioned cooked gameplay data and content may be delivered separately from the base build. A content version identifies its compatible build, required assets, and activation boundary. A running activity keeps one version for its lifetime. A persistent world may activate new content at process start, a world maintenance window, or another explicit safe boundary, without waiting for a nonexistent global resolution. Compatibility between local activity activation and the parent version must be defined. Participants in one network activity must use compatible content and protocol versions.
 
-Native C++ code, reflected type layouts, and network protocol changes require a compatible new build and rollout. Editor Live Coding is a development facility, not the runtime content-update contract. Distribution channels and platform-specific patch delivery remain outside Foundation.
+Native C++ code, reflected type layouts, and network protocol changes require a compatible new build and rollout. Editor Live Coding is a development facility, not the runtime content-update contract. Distribution channels and platform-specific patch delivery remain outside GameplayRuntime.
 
 ## Validation
 
-The framework must support authoring and testing the same rules in standalone, listen-server, and dedicated-server sessions. The first set of acceptance cases covers distinct lifecycles; each case must use public extension points without changing Foundation:
+The framework must support authoring and testing the same rules in standalone, listen-server, and dedicated-server sessions. The first set of acceptance cases covers distinct lifecycles; each case must use public extension points without changing GameplayRuntime:
 
 | Case | Required capabilities to validate |
 | --- | --- |

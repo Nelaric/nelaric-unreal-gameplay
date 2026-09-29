@@ -8,6 +8,8 @@ public class GameplayRuntime : ModuleRules
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "OnlineSubsystemUtils" });
+		PublicDependencyModuleNames.AddRange(
+			new string[] { "Core", "CoreUObject", "Engine", "OnlineSubsystemUtils", "EnhancedInput", "GameplayTags" }
+		);
 	}
 }

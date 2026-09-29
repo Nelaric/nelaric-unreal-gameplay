@@ -1,0 +1,82 @@
+﻿// Copyright (c) 2026 Nelaric
+
+/** @file TransitionBeaconClient.h
+ * Declares the destination server's pre-travel approval channel.
+ */
+
+#pragma once
+
+#include "CoreTypes.h"
+#include "Core/NetWork/NetworkEndpoint.h"
+#include "Delegates/Delegate.h"
+#include "OnlineBeaconClient.h"
+
+#include "TransitionBeaconClient.generated.h"
+
+/** @brief Reports a target decision or beacon failure on the game thread.
+ *
+ * @details Parameters are request ID, approval, and whether the target
+ * authority replied. A connection failure has false for both bools.
+ */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FTargetDecision, uint64, bool, bool);
+
+/** @brief Contacts a destination server before game travel.
+ *
+ * @details The requesting client owns this beacon until it receives a
+ * decision or failure. The destination server decides whether to admit
+ * the request; a valid response is bound to the supplied request ID.
+ */
+UCLASS(MinimalAPI, Transient, NotPlaceable)
+class ATransitionBeaconClient : public AOnlineBeaconClient
+{
+	GENERATED_BODY()
+
+public:
+	/** @brief Connects to a target's beacon and requests admission.
+	 *
+	 * @details Call on the game thread with the target beacon endpoint.
+	 *
+	 * @param Endpoint Destination approval beacon address and port.
+	 * @param RequestId Nonzero identity of the pending transition.
+	 * @return True if a beacon connection attempt was started.
+	 */
+	GAMEPLAYRUNTIME_API bool BeginTargetApproval(const Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId);
+
+	/** @brief Observes the destination server's decision or failure.
+	 *
+	 * @details Bind before BeginTargetApproval. The final bool is false
+	 * when the beacon failed before the target authority replied. The
+	 * owner must also enforce a timeout.
+	 *
+	 * @return Delegate carrying identity, approval, and reply presence.
+	 */
+	GAMEPLAYRUNTIME_API FTargetDecision& OnTargetDecision();
+
+public:
+	/** @brief Sends the approval request after beacon connection.
+	 *
+	 * @details Unreal calls this on the game thread.
+	 */
+	GAMEPLAYRUNTIME_API virtual void OnConnected() override;
+
+	/** @brief Reports a failed beacon connection.
+	 *
+	 * @details Unreal calls this on the game thread.
+	 */
+	GAMEPLAYRUNTIME_API virtual void OnFailure() override;
+
+	// Native subclasses in other modules need these virtual definitions.
+	GAMEPLAYRUNTIME_API virtual void ServerRequestTargetApproval_Implementation(uint64 RequestId);
+	GAMEPLAYRUNTIME_API virtual void ClientReceiveTargetDecision_Implementation(uint64 RequestId, bool bApproved);
+
+private:
+	UFUNCTION(Server, Reliable)
+	void ServerRequestTargetApproval(uint64 RequestId);
+
+	UFUNCTION(Client, Reliable)
+	void ClientReceiveTargetDecision(uint64 RequestId, bool bApproved);
+
+	uint64 PendingRequestId = 0;
+	bool bDecisionDelivered = false;
+	FTargetDecision TargetDecision;
+};

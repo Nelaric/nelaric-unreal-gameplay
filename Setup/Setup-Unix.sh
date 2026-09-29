@@ -3,6 +3,14 @@
 set -eu
 
 platform=$1
+shift
+configure_rider=false
+for argument in "$@"; do
+    case "$argument" in
+        --Rider) configure_rider=true ;;
+        *) echo "Unknown Setup argument: $argument. Supported option: --Rider" >&2; exit 1 ;;
+    esac
+done
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo=$(CDPATH= cd -- "$script_dir/.." && pwd)
 plugin=$repo/NelaricGameplay/Plugins/Puerts
@@ -97,9 +105,14 @@ else
     mv "$extracted" "$backend"
 fi
 
-cp "$repo/Setup/V8-LICENSE" "$backend/LICENSE"
+if [ ! -f "$backend/LICENSE" ]; then
+    cp "$repo/Setup/V8-LICENSE" "$backend/LICENSE"
+fi
 echo 'Configuring PuerTS TypeScript tooling...'
 node "$repo/Setup/PrepareEditor.js"
 node "$plugin/enable_puerts_module.js"
 node "$repo/Setup/EnablePlugin.js"
+if [ "$configure_rider" = true ]; then
+    node "$repo/Setup/ConfigureRider.js"
+fi
 echo 'PuerTS setup is complete.'

@@ -46,6 +46,8 @@ The largest V8 Windows static library and the Node.js runtime binaries are store
 
 See the [GameplayRuntime](Docs/Modules/Plugins/NelaricGameplay/GameplayRuntime.md) module description for its responsibilities and dependencies. The [foundation architecture constraints](Docs/FoundationArchitectureConstraints.md) describe the gameplay model, network topologies, and content-update boundaries.
 
+For Rider TypeScript analysis and debugging, append `--Rider` to the Setup command. This installs project tooling and prepares compiler, debug, and packaging settings. See [Setup for Rider](Setup/README.md) for the generated files and the remaining editor and gameplay entry steps.
+
 ## Contributing
 
 All developers contributing to this project must follow both [Epic Games' Unreal Engine Coding Standard](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) and the [project coding standards](Docs/CodingStandards/). The project standards define our module boundaries, API contracts, review rules, and required automated checks.

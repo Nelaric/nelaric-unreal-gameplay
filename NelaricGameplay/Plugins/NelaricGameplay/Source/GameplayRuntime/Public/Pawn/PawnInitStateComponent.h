@@ -41,9 +41,17 @@ public:
 	 */
 	GAMEPLAYRUNTIME_API virtual void NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous) override;
 
+	/** @brief Invalidates this component's context and its dependents.
+	 * @details Call on the game thread after replacing required objects or
+	 * bindings, including after Ready. Cancels the old generation and starts
+	 * a new attempt. Calls inside lifecycle callbacks are deferred.
+	 */
+	GAMEPLAYRUNTIME_API void InvalidateInitContext();
+
 	/** @brief Requests another local coordinator pass after context changes.
 	 * @details Call from a replicated gameplay-data arrival event, such as
-	 * OnRep, after updating local data used by readiness checks.
+	 * OnRep, after updating local data used by pending readiness checks.
+	 * Ready bindings require InvalidateInitContext when context changes.
 	 */
 	GAMEPLAYRUNTIME_API void RequestInitRefresh();
 
@@ -114,7 +122,10 @@ protected:
 
 	/** @brief Starts gameplay after the entire readiness group entered Ready.
 	 * @details Called once per Ready entry,
-	 * after every group member commits.
+	 * after every group member commits. Other members may not have run their
+	 * Ready callbacks yet; shared callable data must be prepared earlier.
+	 * Work requiring the entire pawn must subscribe to pawn Ready and revoked
+	 * notifications through UPawnInitializationComponent.
 	 */
 	GAMEPLAYRUNTIME_API virtual void OnInitReady();
 
@@ -138,10 +149,12 @@ private:
 	Nelaric::FInitGeneration InitGeneration{1};
 	bool bTerminalInitFailure = false;
 	bool bCommittingInitState = false;
+	bool bInvalidatingGeneration = false;
 	bool bReadyNotificationPending = false;
 	bool bLocalReadyPrepared = false;
 	bool bLeavingWorld = false;
 	bool bRefreshRequestedDuringTransition = false;
+	bool bContextInvalidationRequested = false;
 	void NotifyInitChanged(const Nelaric::FInitStateSnapshot& Previous);
 	void FlushDeferredInitRefresh();
 };

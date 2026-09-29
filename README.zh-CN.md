@@ -68,6 +68,10 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模
   </picture>
 </a>
 
+## 许可证
+
+Nelaric 编写的内容采用 [MIT 许可证](LICENSE)。第三方组件保留各自的许可证和声明，详情见[第三方组件声明](THIRD_PARTY_NOTICES.md)。
+
 ## 致谢
 
 感谢所有参与 Nelaric Unreal Gameplay 的贡献者，感谢 Epic Games 提供 Unreal Engine，也感谢 CircleCI 提供 Linux 项目编译服务。

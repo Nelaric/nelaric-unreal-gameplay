@@ -68,6 +68,10 @@ See the [organization documentation hosting guide](Docs/Hosting/README.md) for d
   </picture>
 </a>
 
+## License
+
+Material authored by Nelaric is licensed under the [MIT License](LICENSE). Third-party components retain their own licenses and notices; see [Third-Party Notices](THIRD_PARTY_NOTICES.md) for details.
+
 ## Thanks
 
 Thanks to everyone contributing to Nelaric Unreal Gameplay, to Epic Games for Unreal Engine, and to CircleCI for the Linux project build service.

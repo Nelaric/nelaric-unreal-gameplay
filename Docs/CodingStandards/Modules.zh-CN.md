@@ -17,9 +17,18 @@
 
 ## 插件与模块结构
 
-框架使用一个项目自有插件 `NelaricGameplay`，位于 `NelaricGameplay/Plugins/NelaricGameplay/`。新增框架能力以该插件内的模块组织，并明确记录职责和依赖。PuerTS 等第三方插件单独保留，沿用其自身名称和版权归属。
+框架使用一个项目自有插件 `NelaricGameplay`，位于 `NelaricGameplay/Plugins/NelaricGameplay/`。插件中的四个模块分别对应 Runtime、Diagnostics、Benchmark 和 Editor 职责。新增框架能力以该插件内的模块组织，并明确记录职责和直接依赖。PuerTS 等第三方插件单独保留，沿用其自身名称和版权归属。
 
-`GameplayRuntime` 提供共用的玩法运行时，包括可复用框架 Actor、初始化与生命周期协调、世界启动配置和会话切换。`PerformanceAnalysis` 负责性能分析支持。模块命名遵循 [C++ 命名与类型](Cpp.zh-CN.md#命名与类型)中的可选项目前缀规则。
+| 职责 | 插件 `Source/` 下的模块目录 | 模块类型 |
+| --- | --- | --- |
+| Runtime | `GameplayRuntime/` | `Runtime` |
+| Diagnostics（性能分析） | `Diagnostics/` | `Runtime` |
+| Benchmark | `Benchmark/` | `DeveloperTool` |
+| Editor | `Editor/` | `Editor` |
+
+`GameplayRuntime` 提供共用的玩法运行时，包括可复用框架 Actor、初始化与生命周期协调、世界启动配置和会话切换。`Diagnostics` 负责性能分析支持；`Benchmark` 负责可复现的性能场景和结果比较；`Editor` 负责仅在编辑器使用的制作工具。模块命名遵循 [C++ 命名与类型](Cpp.zh-CN.md#命名与类型)中的可选项目前缀规则。
+
+`Diagnostics`、`Benchmark` 和 `Editor` 当前仅包含模块生命周期骨架，分别私有依赖 `Core`，尚未实现性能采集、基准执行或编辑器界面。实现需要跨模块调用时再声明相应依赖；GameplayRuntime 必须保持独立，不依赖这些可选工具。`DeveloperTool` 模块仅在目标构建开发工具时可用；`Editor` 模块仅在编辑器目标中可用。
 
 ## 内部集成约定
 

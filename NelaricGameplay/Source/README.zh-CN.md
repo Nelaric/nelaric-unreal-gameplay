@@ -1,23 +1,16 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-# 玩法模板模块
+[English](README.md) | 简体中文
 
-项目按照[基础架构约束](../../Docs/FoundationArchitectureConstraints.zh-CN.md)
-中的四个验收样例构建四个独立的 Runtime 模块。每个模块提供可继承的
-GameMode、PlayerController 和 PlayerState，可按地图选用；GameMode 默认
-使用本模块的控制器和玩家状态。四个模板互不引用、互不依赖；它们只依赖
-Unreal 的 Core、CoreUObject、Engine 模块和 `NelaricGameplay` 插件中的共用 `GameplayRuntime` 模块，
-并继承后者的 GameMode 和玩家控制器基础类，以保留会话切换配置。
+# Demo 游戏模块
 
-| 模块 | GameMode | 扩展方向 |
-| --- | --- | --- |
-| `NelaricOpenWorldTemplate` | `ANelaricOpenWorldGameMode` | 世界持续运行，区域活动独立启停；通过可选持久化适配保存玩家与任务进度。 |
-| `NelaricBattleRoyaleTemplate` | `ANelaricBattleRoyaleGameMode` | 以活动管理参赛者、阶段、淘汰和结算；活动结束不代表整个 World 结束。 |
-| `NelaricMobaTemplate` | `ANelaricMobaGameMode` | 以活动管理阵营、并行目标、可选计分或资源以及胜负规则。 |
-| `NelaricSandboxTemplate` | `ANelaricSandboxGameMode` | 运行玩家状态、世界事件和可选规则，不要求全局目标、计分或终点。 |
+项目的 `Source/` 目录包含 `DemoGame` Runtime 模块和 Game、Editor、Server
+三个 Target。三个 Target 都构建 `DemoGame`，由它注册项目的主游戏模块。
 
-这些类是项目具体规则和玩家数据的起点。玩家状态类尚无自定义复制字段，
-也尚未实现战斗、背包、任务、持久化、目标或计分。
-创建 Blueprint 或 C++ 派生类并配置到对应地图。权威判定在服务端执行；
-客户端可见状态通过 Unreal 的 GameState、PlayerState 和 Actor 复制。
-同一套规则应适用于单机、监听服务器和独立服务器。
+`DemoGame` 用于编写项目具体的演示玩法。目前只提供模块骨架，直接依赖为
+Unreal 的 `Core` 模块，作为私有依赖用于模块注册。后续将玩法类放在 `Public/`
+目录，实现放在 `Private/` 目录，并按实际需要声明其他模块依赖。
+
+可复用玩法契约和框架 Actor 位于 `NelaricGameplay` 插件的 `GameplayRuntime`
+模块中。项目配置选择插件提供的默认玩法类。模块职责与集成契约见
+[GameplayRuntime 模块文档](../../Docs/Modules/Plugins/NelaricGameplay/GameplayRuntime.zh-CN.md)。

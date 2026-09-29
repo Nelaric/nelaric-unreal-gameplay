@@ -4,7 +4,7 @@ English | [简体中文](GameplayRuntime.zh-CN.md)
 
 # GameplayRuntime
 
-`GameplayRuntime` is the runtime module in the `NelaricGameplay/Plugins/NelaricGameplay` plugin. It contains the gameplay contracts, reusable project-facing actors, and session transport. The `NelaricGameplay/NelaricGameplay.uproject` project enables the plugin; its `Source/` directory contains four independent gameplay template modules.
+`GameplayRuntime` is the runtime module in the `NelaricGameplay/Plugins/NelaricGameplay` plugin. It contains the gameplay contracts, reusable project-facing actors, and session transport. The `NelaricGameplay/NelaricGameplay.uproject` project enables the plugin; its `Source/` directory contains the `DemoGame` Runtime module.
 
 The module owns common contracts for rule evaluation, gameplay state, player lifecycle, and activity composition. Match flow, objectives, and scoring belong in optional modules; a persistent world can run without a global match or result. The module builds on Unreal Engine's gameplay and networking systems without requiring a specific genre, backend, ability system, or content-distribution provider. Optional modules may depend on GameplayRuntime; GameplayRuntime must not depend on them.
 

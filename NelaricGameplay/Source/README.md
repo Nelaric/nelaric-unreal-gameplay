@@ -1,29 +1,21 @@
 ﻿<!-- Copyright (c) 2026 Nelaric -->
 
-# Gameplay template modules
+English | [简体中文](README.zh-CN.md)
 
-The project builds four independent Runtime modules for the acceptance
-examples in [GameplayRuntime architecture constraints](../../Docs/FoundationArchitectureConstraints.md).
-Each module owns Blueprintable GameMode, PlayerController, and PlayerState
-classes and can be selected per map. Each GameMode selects its own controller
-and player state by default. None of the four modules includes or depends on
-another template.
-All four depend only on Unreal's Core, CoreUObject, and Engine modules and the
-shared `GameplayRuntime` module in the `NelaricGameplay` plugin. They derive from its game mode and player
-controller bases to retain the common session-transition setup.
+# Demo game module
 
-| Module | Game mode | Intended extension |
-| --- | --- | --- |
-| `NelaricOpenWorldTemplate` | `ANelaricOpenWorldGameMode` | Keep the world running while regional activities start and finish independently; connect player and quest progress to an optional persistence adapter. |
-| `NelaricBattleRoyaleTemplate` | `ANelaricBattleRoyaleGameMode` | Add an activity with participants, phases, elimination, and a result. The activity ends without ending its World. |
-| `NelaricMobaTemplate` | `ANelaricMobaGameMode` | Add an activity with teams, concurrent objectives, optional score or resources, and victory rules. |
-| `NelaricSandboxTemplate` | `ANelaricSandboxGameMode` | Run player state, world events, and optional rules without a global objective, score, or ending. |
+The project's `Source/` directory contains the `DemoGame` Runtime module and
+Game, Editor, and Server targets. All three targets build `DemoGame`, which
+registers the project's primary game module.
 
-These classes are starting points for project-specific rules and player data.
-The player state classes contain no custom replicated fields yet. They do not
-implement combat, inventory, quests, persistence, objectives, or scoring.
-Create a derived Blueprint or C++ class and assign it to the relevant map.
-Keep authoritative decisions on the server and replicate client-visible
-state through Unreal's GameState, PlayerState, and actor replication. The
-same rules should run in standalone, listen-server, and dedicated-server
-worlds.
+`DemoGame` is the starting point for project-specific demo gameplay. It
+currently provides module scaffolding and has one private dependency, Unreal's
+`Core` module, for module registration. Add gameplay classes under `Public/`
+and their implementations under `Private/`, declaring further dependencies
+when those classes need them.
+
+Reusable gameplay contracts and framework actors live in the `GameplayRuntime`
+module of the `NelaricGameplay` plugin. The project configuration selects the
+plugin's default gameplay classes. See the
+[GameplayRuntime module documentation](../../Docs/Modules/Plugins/NelaricGameplay/GameplayRuntime.md)
+for its responsibilities and integration contracts.

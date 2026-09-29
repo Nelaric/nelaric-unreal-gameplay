@@ -14,9 +14,11 @@
 
 ## 项目结构
 
-[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/README.zh-CN.md) 包含四个互不依赖的玩法模板模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplay` 插件的 `GameplayRuntime` 模块中。
+[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/README.zh-CN.md) 包含 `DemoGame` Runtime 模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplay` 插件的 `GameplayRuntime` 模块中。
 
-Linux CI 会构建该项目的 Game、Editor 和 Server Target，包括已启用的 NelaricGameplay 和 PuerTS 插件。
+框架在 `NelaricGameplay` 插件内包含四个模块：Runtime（`GameplayRuntime`）、性能分析 Diagnostics（`Diagnostics`）、开发基准工具 Benchmark（`Benchmark`）和编辑器工具 Editor（`Editor`）。目录、职责与依赖见[插件与模块结构](Docs/CodingStandards/Modules.zh-CN.md#插件与模块结构)。可选工具当前提供模块骨架。
+
+Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模块类型编译适用的已启用插件，同时编译 PuerTS。
 
 ## PuerTS 配置
 

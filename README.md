@@ -14,9 +14,11 @@ An Unreal Engine gameplay framework for persistent worlds and bounded activities
 
 ## Project layout
 
-The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/README.md) contains four independent gameplay template modules and Game, Editor, and Server targets. Reusable runtime code lives in the `GameplayRuntime` module of the `NelaricGameplay` plugin.
+The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/README.md) contains the `DemoGame` Runtime module and Game, Editor, and Server targets. Reusable runtime code lives in the `GameplayRuntime` module of the `NelaricGameplay` plugin.
 
-Linux CI builds this project for Game, Editor, and Server, including the enabled NelaricGameplay and PuerTS plugins.
+The framework has four modules in the `NelaricGameplay` plugin: Runtime (`GameplayRuntime`), Diagnostics (`Diagnostics`, performance analysis), Benchmark (`Benchmark`, developer tools), and Editor (`Editor`, editor-only tools). See [plugin and module structure](Docs/CodingStandards/Modules.md#plugin-and-module-structure) for directories, responsibilities, and dependencies. The optional tools currently provide module scaffolding.
+
+Linux CI builds this project for Game, Editor, and Server, including enabled plugins whose module types are supported by each target, as well as PuerTS.
 
 ## PuerTS setup
 

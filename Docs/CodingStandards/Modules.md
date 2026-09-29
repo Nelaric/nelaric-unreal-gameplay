@@ -17,9 +17,18 @@ Every module should state its responsibility and direct dependencies in its modu
 
 ## Plugin and module structure
 
-The framework uses one project-owned plugin, `NelaricGameplay`, under `NelaricGameplay/Plugins/NelaricGameplay/`. Add framework capabilities as modules in this plugin, with responsibilities and dependencies documented explicitly. Third-party plugins such as PuerTS remain separate and retain their own names and attribution.
+The framework uses one project-owned plugin, `NelaricGameplay`, under `NelaricGameplay/Plugins/NelaricGameplay/`. Its four modules correspond to the Runtime, Diagnostics, Benchmark, and Editor responsibilities. Add framework capabilities as modules in this plugin, with responsibilities and direct dependencies documented explicitly. Third-party plugins such as PuerTS remain separate and retain their own names and attribution.
 
-`GameplayRuntime` provides the shared gameplay runtime, including reusable framework actors, initialization and lifecycle coordination, world startup configuration, and session transitions. `PerformanceAnalysis` owns performance analysis support. Module naming follows the optional project-prefix rule in [C++ names and types](Cpp.md#names-and-types).
+| Responsibility | Module directory under the plugin's `Source/` | Module type |
+| --- | --- | --- |
+| Runtime | `GameplayRuntime/` | `Runtime` |
+| Diagnostics (performance analysis) | `Diagnostics/` | `Runtime` |
+| Benchmark | `Benchmark/` | `DeveloperTool` |
+| Editor | `Editor/` | `Editor` |
+
+`GameplayRuntime` provides the shared gameplay runtime, including reusable framework actors, initialization and lifecycle coordination, world startup configuration, and session transitions. `Diagnostics` owns performance analysis support; `Benchmark` owns reproducible performance scenarios and comparisons; `Editor` owns editor-only authoring tools. Module naming follows the optional project-prefix rule in [C++ names and types](Cpp.md#names-and-types).
+
+`Diagnostics`, `Benchmark`, and `Editor` currently contain module lifecycle scaffolding only and each privately depends on `Core`. They do not yet provide profiling, benchmark execution, or editor UI. Add dependencies when an implementation needs another module; GameplayRuntime must remain independent of these optional tools. `DeveloperTool` modules are available only when the target builds developer tools; `Editor` modules are available only to editor targets.
 
 ## Internal integration convention
 

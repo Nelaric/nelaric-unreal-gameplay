@@ -2,6 +2,15 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+$configureRider = $false
+foreach ($argument in $args) {
+    if ($argument -ceq '--Rider') {
+        $configureRider = $true
+    } else {
+        throw "Unknown Setup argument: $argument. Supported option: --Rider"
+    }
+}
+
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw 'Run this script on Windows.'
 }
@@ -87,7 +96,9 @@ if (Test-Path -LiteralPath $backend) {
     }
 }
 
-Copy-Item -LiteralPath (Join-Path $repo 'Setup/V8-LICENSE') -Destination (Join-Path $backend 'LICENSE') -Force
+if (-not (Test-Path -LiteralPath (Join-Path $backend 'LICENSE'))) {
+    Copy-Item -LiteralPath (Join-Path $repo 'Setup/V8-LICENSE') -Destination (Join-Path $backend 'LICENSE')
+}
 Write-Host 'Configuring PuerTS TypeScript tooling...'
 & node (Join-Path $repo 'Setup/PrepareEditor.js')
 if ($LASTEXITCODE -ne 0) { throw 'Could not prepare PuerTS editor files.' }
@@ -95,4 +106,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not prepare PuerTS editor files.' }
 if ($LASTEXITCODE -ne 0) { throw 'PuerTS TypeScript configuration failed.' }
 & node (Join-Path $repo 'Setup/EnablePlugin.js')
 if ($LASTEXITCODE -ne 0) { throw 'Could not enable PuerTS.' }
+if ($configureRider) {
+    & node (Join-Path $repo 'Setup/ConfigureRider.js')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not configure Rider TypeScript tooling.' }
+}
 Write-Host 'PuerTS setup is complete.'

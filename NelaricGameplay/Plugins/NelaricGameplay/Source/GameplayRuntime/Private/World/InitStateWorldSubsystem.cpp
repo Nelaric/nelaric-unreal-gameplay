@@ -37,6 +37,7 @@ void UInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 	}
 
 	RegisteredComponents.Add(Component);
+	ObservedApplicability.Add(Component, Cast<IInitStateParticipantInterface>(Component)->IsInitApplicable());
 	QueueParticipantAndDependents(Component);
 	ProcessParticipants();
 }
@@ -44,6 +45,7 @@ void UInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 void UInitStateWorldSubsystem::UnregisterParticipant(UActorComponent* Component)
 {
 	RegisteredComponents.Remove(Component);
+	ObservedApplicability.Remove(Component);
 	if (bShuttingDown || StoppedComponents.Contains(Component))
 	{
 		return;
@@ -154,6 +156,8 @@ void UInitStateWorldSubsystem::StopConfiguredParticipants(const TArray<UActorCom
 		}
 		StoppedComponents.Add(Component);
 		RegisteredComponents.Remove(Component);
+		ObservedApplicability.Remove(Component);
+		PendingInvalidationRoots.Remove(Component);
 		QueuedComponents.Remove(Component);
 		bChanged |= ConfiguredComponents.Remove(Component) > 0;
 		if (IsValid(Component))
@@ -314,24 +318,19 @@ void UInitStateWorldSubsystem::QueueAllRegistered()
 
 bool UInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor* Owner) const
 {
-	if (bShuttingDown || !Owner)
+	if (bShuttingDown || !IsValid(Owner))
 	{
 		return false;
 	}
 	const TArray<FComponentPtr>* RequiredComponents = RequiredByOwner.Find(Owner);
-	if (!RequiredComponents)
+	if (RequiredComponents)
 	{
-		return true;
-	}
-	for (const FComponentPtr& ComponentPtr : *RequiredComponents)
-	{
-		UActorComponent* Component = ComponentPtr.Get();
-		const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
-		if (!IsValid(Component) || !RegisteredComponents.Contains(Component) || !Participant ||
-		    !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
-		    Participant->GetInitState() != Nelaric::EInitState::Ready)
+		for (const FComponentPtr& Component : *RequiredComponents)
 		{
-			return false;
+			if (!IsParticipantReady(Component.Get()))
+			{
+				return false;
+			}
 		}
 	}
 	return true;
@@ -339,136 +338,317 @@ bool UInitStateWorldSubsystem::AreRequiredParticipantsReady(const AActor* Owner)
 
 bool UInitStateWorldSubsystem::IsParticipantReady(UActorComponent* Component) const
 {
-	const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
-	return !bShuttingDown && IsValid(Component) && ConfiguredComponents.Contains(Component) &&
-	       RegisteredComponents.Contains(Component) && Participant && Participant->IsInitApplicable() &&
-	       !Participant->HasTerminalInitFailure() && Participant->GetInitState() == Nelaric::EInitState::Ready;
+	if (bShuttingDown || !IsValid(Component) || !ConfiguredComponents.Contains(Component))
+	{
+		return false;
+	}
+	TArray<FComponentPtr> Pending{Component};
+	TSet<FComponentPtr> Visited;
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	{
+		const FComponentPtr Current = Pending[Index];
+		if (Visited.Contains(Current))
+		{
+			continue;
+		}
+		Visited.Add(Current);
+		UActorComponent* Member = Current.Get();
+		const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Member);
+		if (!IsValid(Member) || Member->GetOwner() != Component->GetOwner() ||
+		    !RegisteredComponents.Contains(Current) || StoppedComponents.Contains(Current) || !Participant ||
+		    !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
+		    Participant->GetInitState() != Nelaric::EInitState::Ready)
+		{
+			return false;
+		}
+		if (const TArray<FComponentPtr>* Dependencies = ForwardDependencies.Find(Current))
+		{
+			Pending.Append(*Dependencies);
+		}
+	}
+	return true;
+}
+
+void UInitStateWorldSubsystem::InvalidateParticipantContext(UActorComponent* Component)
+{
+	InvalidateParticipants({Component}, true);
+	ProcessParticipants();
+}
+
+void UInitStateWorldSubsystem::InvalidateActorContext(AActor* Owner)
+{
+	TArray<FComponentPtr> Roots;
+	for (const FComponentPtr& Component : RegisteredComponents)
+	{
+		if (Component.IsValid() && Component->GetOwner() == Owner)
+		{
+			Roots.Add(Component);
+		}
+	}
+	InvalidateParticipants(Roots, true);
+	ProcessParticipants();
 }
 
 void UInitStateWorldSubsystem::InvalidateConfiguredDependents(UActorComponent* Component)
 {
-	if (!IsValid(Component) || bInvalidatingDependents)
+	InvalidateParticipants({Component}, false);
+}
+
+void UInitStateWorldSubsystem::InvalidateParticipants(const TArray<FComponentPtr>& Roots, bool bIncludeRoots)
+{
+	if (bShuttingDown)
 	{
+		return;
+	}
+	// Queue nested invalidations instead of interrupting the cleanup batch.
+	if (bInvalidatingDependents)
+	{
+		if (bIncludeRoots)
+		{
+			for (const FComponentPtr& Root : Roots)
+			{
+				PendingInvalidationRoots.Add(Root);
+			}
+		}
+		else
+		{
+			for (const FComponentPtr& Root : Roots)
+			{
+				if (!ActiveInvalidationMembers.Contains(Root))
+				{
+					for (const FComponentPtr& Dependent : ReverseDependencies.FindRef(Root))
+					{
+						PendingInvalidationRoots.Add(Dependent);
+					}
+				}
+			}
+		}
 		return;
 	}
 	bInvalidatingDependents = true;
 	ON_SCOPE_EXIT
 	{
 		bInvalidatingDependents = false;
+		ActiveInvalidationMembers.Empty();
 	};
-	TSet<FComponentPtr> Visited{Component};
-	TArray<FComponentPtr> Pending{Component};
+	TSet<FComponentPtr> Visited;
+	TArray<FComponentPtr> Pending = Roots;
+	TArray<FComponentPtr> ToInvalidate;
+	TSet<TWeakObjectPtr<AActor>> Owners;
+	for (const FComponentPtr& Root : Roots)
+	{
+		Visited.Add(Root);
+		if (Root.IsValid())
+		{
+			Owners.Add(Root->GetOwner());
+			if (bIncludeRoots)
+			{
+				ToInvalidate.Add(Root);
+			}
+		}
+	}
+	// Snapshot the traversal before cleanup callbacks can rebuild the graph.
 	for (int32 Index = 0; Index < Pending.Num(); ++Index)
 	{
-		const TArray<FComponentPtr>* Dependents = ReverseDependencies.Find(Pending[Index]);
-		if (!Dependents)
+		if (const TArray<FComponentPtr>* Dependents = ReverseDependencies.Find(Pending[Index]))
 		{
-			continue;
-		}
-		for (const FComponentPtr& DependentPtr : *Dependents)
-		{
-			if (Visited.Contains(DependentPtr))
+			for (const FComponentPtr& Dependent : *Dependents)
 			{
-				continue;
-			}
-			Visited.Add(DependentPtr);
-			Pending.Add(DependentPtr);
-			IInitStateParticipantInterface* Dependent = Cast<IInitStateParticipantInterface>(DependentPtr.Get());
-			if (Dependent && Dependent->GetInitState() == Nelaric::EInitState::Ready)
-			{
-				Dependent->InvalidateInitGeneration();
+				if (!Visited.Contains(Dependent))
+				{
+					Visited.Add(Dependent);
+					Pending.Add(Dependent);
+					ToInvalidate.Add(Dependent);
+					if (Dependent.IsValid())
+					{
+						Owners.Add(Dependent->GetOwner());
+					}
+				}
 			}
 		}
+	}
+	ActiveInvalidationMembers = Visited;
+	TMap<FComponentPtr, Nelaric::FInitGeneration> Generations;
+	for (const FComponentPtr& Member : ToInvalidate)
+	{
+		if (const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Member.Get()))
+		{
+			Generations.Add(Member, Participant->GetInitGeneration());
+			ObservedApplicability.Add(Member, Participant->IsInitApplicable());
+		}
+	}
+	// Stop pawn-level gameplay before participant cleanup callbacks run.
+	for (const TWeakObjectPtr<AActor>& OwnerPtr : Owners)
+	{
+		if (AActor* Owner = OwnerPtr.Get())
+		{
+			TArray<UPawnInitializationComponent*> Managers;
+			Owner->GetComponents<UPawnInitializationComponent>(Managers);
+			for (UPawnInitializationComponent* Manager : Managers)
+			{
+				if (IsValid(Manager))
+				{
+					Manager->RevokePawnReady();
+				}
+			}
+		}
+	}
+	for (const FComponentPtr& Member : ToInvalidate)
+	{
+		if (bShuttingDown)
+		{
+			break;
+		}
+		UActorComponent* Component = Member.Get();
+		IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
+		const Nelaric::FInitGeneration* Generation = Generations.Find(Member);
+		if (Participant && Generation && *Generation == Participant->GetInitGeneration() &&
+		    RegisteredComponents.Contains(Member) && !StoppedComponents.Contains(Member))
+		{
+			Participant->InvalidateInitGeneration();
+			QueueParticipant(Component);
+		}
+	}
+	for (const TWeakObjectPtr<AActor>& Owner : Owners)
+	{
+		PendingOwners.Add(Owner);
 	}
 }
 
 bool UInitStateWorldSubsystem::TryCommitReadyGroup(UActorComponent* Root)
 {
-	TArray<UActorComponent*> Pending{Root};
-	const int32* FoundGroupIndex = ReadyGroupByComponent.Find(Root);
-	const int32 RootGroupIndex = FoundGroupIndex ? *FoundGroupIndex : INDEX_NONE;
-	if (RootGroupIndex != INDEX_NONE)
+	TArray<FComponentPtr> Pending{Root};
+	if (const int32* GroupIndex = ReadyGroupByComponent.Find(Root))
 	{
-		Pending.Empty();
-		for (const FComponentPtr& Member : ReadyGroups[RootGroupIndex])
-		{
-			Pending.Add(Member.Get());
-		}
+		Pending = ReadyGroups[*GroupIndex];
 	}
 	const uint64 ExpectedGraphVersion = GraphVersion;
-	for (UActorComponent* Component : Pending)
+	TMap<FComponentPtr, Nelaric::FInitStateSnapshot> BeforeReady;
+	TMap<FComponentPtr, Nelaric::FInitStateSnapshot> DependenciesBefore;
+	const TWeakObjectPtr<AActor> ExpectedOwner = Root->GetOwner();
+	auto Capture = [this, &ExpectedOwner](const FComponentPtr& Member, Nelaric::EInitState State,
+	                                      TMap<FComponentPtr, Nelaric::FInitStateSnapshot>& Snapshots)
 	{
-		if (GraphVersion != ExpectedGraphVersion || !IsValid(Component) || Component->GetWorld() != GetWorld() ||
-		    !RegisteredComponents.Contains(Component))
-		{
-			return false;
-		}
+		UActorComponent* Component = Member.Get();
 		const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
-		if (!Participant || !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
-		    Participant->GetInitState() != Nelaric::EInitState::DataInitialized || GraphVersion != ExpectedGraphVersion)
+		if (!Component || Component->GetWorld() != GetWorld() || Component->GetOwner() != ExpectedOwner.Get() ||
+		    !RegisteredComponents.Contains(Member) || StoppedComponents.Contains(Member) || !Participant ||
+		    !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
+		    Participant->GetInitState() != State)
 		{
 			return false;
 		}
-		if (const TArray<FComponentPtr>* Dependencies = ForwardDependencies.Find(Component))
+		Snapshots.Add(Member, {Participant->GetInitGeneration(), State, false});
+		return true;
+	};
+	for (const FComponentPtr& Member : Pending)
+	{
+		if (!Capture(Member, Nelaric::EInitState::DataInitialized, BeforeReady))
 		{
-			for (const FComponentPtr& DependencyPtr : *Dependencies)
+			return false;
+		}
+		// Copy edges before invoking participant code.
+		const TArray<FComponentPtr> Dependencies = ForwardDependencies.FindRef(Member);
+		for (const FComponentPtr& Dependency : Dependencies)
+		{
+			if (!Pending.Contains(Dependency) && !Capture(Dependency, Nelaric::EInitState::Ready, DependenciesBefore))
 			{
-				UActorComponent* Dependency = DependencyPtr.Get();
-				const IInitStateParticipantInterface* Required = Cast<IInitStateParticipantInterface>(Dependency);
-				if (!IsValid(Dependency) || Dependency->GetOwner() != Component->GetOwner() || !Required ||
-				    !RegisteredComponents.Contains(Dependency) || !Required->IsInitApplicable() ||
-				    Required->HasTerminalInitFailure() || GraphVersion != ExpectedGraphVersion)
-				{
-					return false;
-				}
-				const int32* DependencyGroupIndex = ReadyGroupByComponent.Find(Dependency);
-				const bool bInGroup =
-				    RootGroupIndex != INDEX_NONE && DependencyGroupIndex && RootGroupIndex == *DependencyGroupIndex;
-				if (!bInGroup && Required->GetInitState() != Nelaric::EInitState::Ready)
-				{
-					return false;
-				}
+				return false;
 			}
 		}
 	}
-
-	TArray<Nelaric::FInitStateSnapshot> BeforeReady;
-	BeforeReady.Reserve(Pending.Num());
-	for (UActorComponent* Component : Pending)
+	// Recheck the captured rounds and external dependencies after callbacks.
+	auto Validate = [this, ExpectedGraphVersion, &ExpectedOwner, &BeforeReady, &DependenciesBefore](bool bCommitted)
 	{
-		IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
-		const Nelaric::FInitStateSnapshot Before{Participant->GetInitGeneration(), Participant->GetInitState(),
-		                                         Participant->HasTerminalInitFailure()};
-		if (!Participant->CanEnterReady() || GraphVersion != ExpectedGraphVersion ||
-		    !(Before.Generation == Participant->GetInitGeneration()) || Before.State != Participant->GetInitState() ||
-		    Participant->HasTerminalInitFailure())
+		if (bShuttingDown || GraphVersion != ExpectedGraphVersion || !ExpectedOwner.IsValid())
 		{
 			return false;
 		}
-		BeforeReady.Add(Before);
-	}
-	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+		TArray<UPawnInitializationComponent*> Managers;
+		ExpectedOwner->GetComponents<UPawnInitializationComponent>(Managers);
+		for (const UPawnInitializationComponent* Manager : Managers)
+		{
+			if (IsValid(Manager) && (Manager->bInitializationEnded || Manager->bContextResetRequested ||
+			                         Manager->ActiveConfig != Manager->InitializationConfig))
+			{
+				return false;
+			}
+		}
+		for (const auto& Pair : BeforeReady)
+		{
+			UActorComponent* Component = Pair.Key.Get();
+			const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
+			if (!Component || !RegisteredComponents.Contains(Pair.Key) || StoppedComponents.Contains(Pair.Key) ||
+			    Component->GetOwner() != ExpectedOwner.Get() || Component->GetWorld() != GetWorld() || !Participant ||
+			    !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
+			    !(Pair.Value.Generation == Participant->GetInitGeneration()) ||
+			    Participant->GetInitState() !=
+			        (bCommitted ? Nelaric::EInitState::Ready : Nelaric::EInitState::DataInitialized))
+			{
+				return false;
+			}
+		}
+		for (const auto& Pair : DependenciesBefore)
+		{
+			const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Pair.Key.Get());
+			if (!Participant || !IsParticipantReady(Pair.Key.Get()) ||
+			    !(Pair.Value.Generation == Participant->GetInitGeneration()))
+			{
+				return false;
+			}
+		}
+		return !bShuttingDown && GraphVersion == ExpectedGraphVersion;
+	};
+	for (const FComponentPtr& Member : Pending)
 	{
-		const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Pending[Index]);
-		if (GraphVersion != ExpectedGraphVersion || !RegisteredComponents.Contains(Pending[Index]) ||
-		    !(BeforeReady[Index].Generation == Participant->GetInitGeneration()) ||
-		    BeforeReady[Index].State != Participant->GetInitState() || Participant->HasTerminalInitFailure())
+		if (!Validate(false))
+		{
+			return false;
+		}
+		IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Member.Get());
+		if (!Participant->CanEnterReady() || !Validate(false))
 		{
 			return false;
 		}
 	}
-	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	// No user callbacks occur between this final validation and silent commits.
+	if (!Validate(false))
 	{
-		IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Pending[Index]);
+		return false;
+	}
+	for (const FComponentPtr& Member : Pending)
+	{
+		IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Member.Get());
 		if (!ensureMsgf(Participant->CommitReadyWithoutNotification(),
 		                TEXT("Ready group member failed its silent commit.")))
 		{
+			InvalidateParticipants(Pending, true);
 			return false;
 		}
 	}
-	for (int32 Index = 0; Index < Pending.Num(); ++Index)
+	for (const FComponentPtr& Member : Pending)
 	{
-		Cast<IInitStateParticipantInterface>(Pending[Index])->NotifyReadyCommitted(BeforeReady[Index]);
+		if (!Validate(true))
+		{
+			break;
+		}
+		Cast<IInitStateParticipantInterface>(Member.Get())->NotifyReadyCommitted(BeforeReady.FindChecked(Member));
+	}
+	// Reset only surviving old rounds; preserve failures and newer attempts.
+	if (!Validate(true))
+	{
+		TArray<FComponentPtr> OldRoundMembers;
+		for (const auto& Pair : BeforeReady)
+		{
+			const IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Pair.Key.Get());
+			if (Participant && !Participant->HasTerminalInitFailure() &&
+			    Pair.Value.Generation == Participant->GetInitGeneration() &&
+			    Participant->GetInitState() == Nelaric::EInitState::Ready)
+			{
+				OldRoundMembers.Add(Pair.Key);
+			}
+		}
+		InvalidateParticipants(OldRoundMembers, true);
 	}
 	return true;
 }
@@ -492,9 +672,9 @@ void UInitStateWorldSubsystem::NotifyParticipantChanged(UActorComponent* Compone
 	                      Previous.bTerminallyFailed != Participant->HasTerminalInitFailure();
 	if (bChanged)
 	{
-		if (Previous.State == Nelaric::EInitState::Ready &&
-		    (Participant->GetInitState() != Nelaric::EInitState::Ready || Participant->HasTerminalInitFailure() ||
-		     !(Previous.Generation == Participant->GetInitGeneration())))
+		if (!(Previous.Generation == Participant->GetInitGeneration()) ||
+		    (!Previous.bTerminallyFailed && Participant->HasTerminalInitFailure()) ||
+		    (Previous.State == Nelaric::EInitState::Ready && Participant->GetInitState() != Nelaric::EInitState::Ready))
 		{
 			InvalidateConfiguredDependents(Component);
 		}
@@ -531,12 +711,31 @@ void UInitStateWorldSubsystem::ProcessParticipants()
 
 	const int32 MaxSteps = FMath::Max(64, (RegisteredComponents.Num() + GraphEdgeCount) * 8 + PendingQueue.Num() * 4);
 	int32 Steps = 0;
-	while ((!PendingQueue.IsEmpty() || !PendingOwners.IsEmpty()) && Steps < MaxSteps)
+	while (!bShuttingDown &&
+	       (!PendingQueue.IsEmpty() || !PendingOwners.IsEmpty() || !PendingInvalidationRoots.IsEmpty()) &&
+	       Steps < MaxSteps)
 	{
-		int32 Index = 0;
-		while (Index < PendingQueue.Num() && Steps < MaxSteps)
+		if (!PendingInvalidationRoots.IsEmpty())
 		{
-			const FComponentPtr ParticipantPtr = PendingQueue[Index++];
+			const TArray<FComponentPtr> Roots = PendingInvalidationRoots.Array();
+			PendingInvalidationRoots.Empty();
+			InvalidateParticipants(Roots, true);
+			++Steps;
+		}
+		// Callbacks can change the pending queue without invalidating this batch.
+		TArray<FComponentPtr> Batch = MoveTemp(PendingQueue);
+		PendingQueue.Empty();
+		for (int32 Index = 0; Index < Batch.Num(); ++Index)
+		{
+			const FComponentPtr ParticipantPtr = Batch[Index];
+			if (bShuttingDown || Steps >= MaxSteps)
+			{
+				if (!bShuttingDown)
+				{
+					PendingQueue.Append(Batch.GetData() + Index, Batch.Num() - Index);
+				}
+				break;
+			}
 			QueuedComponents.Remove(ParticipantPtr);
 			++Steps;
 			UActorComponent* Component = ParticipantPtr.Get();
@@ -551,9 +750,29 @@ void UInitStateWorldSubsystem::ProcessParticipants()
 			}
 
 			IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component);
-			if (!Participant || !Participant->IsInitApplicable() || Participant->HasTerminalInitFailure() ||
-			    Participant->GetInitState() == Nelaric::EInitState::Ready)
+			if (!Participant)
 			{
+				continue;
+			}
+			const bool bApplicable = Participant->IsInitApplicable();
+			bool& bObservedApplicable = ObservedApplicability.FindOrAdd(ParticipantPtr, bApplicable);
+			// Participation changes invalidate old preparation and dependent work.
+			if (bObservedApplicable != bApplicable)
+			{
+				bObservedApplicable = bApplicable;
+				InvalidateParticipants({ParticipantPtr}, true);
+				continue;
+			}
+			if (!bApplicable || Participant->HasTerminalInitFailure())
+			{
+				continue;
+			}
+			if (Participant->GetInitState() == Nelaric::EInitState::Ready)
+			{
+				if (ConfiguredComponents.Contains(ParticipantPtr) && !IsParticipantReady(Component))
+				{
+					InvalidateParticipants({ParticipantPtr}, true);
+				}
 				continue;
 			}
 
@@ -568,34 +787,29 @@ void UInitStateWorldSubsystem::ProcessParticipants()
 			{
 				bAdvanced = Participant->TryChangeInitState();
 			}
-			const bool bExactlyOneStep =
-			    Generation == Participant->GetInitGeneration() &&
-			    static_cast<uint8>(Participant->GetInitState()) == static_cast<uint8>(PreviousState) + 1;
-			if (bAdvanced)
+			// Callbacks may remove the component or invalidate its committed round.
+			Component = ParticipantPtr.Get();
+			Participant = Cast<IInitStateParticipantInterface>(Component);
+			if (!Participant || !RegisteredComponents.Contains(ParticipantPtr) ||
+			    !(Generation == Participant->GetInitGeneration()))
 			{
-				ensureMsgf(bExactlyOneStep,
-				           TEXT("Initialization transition must commit exactly one step in the same generation."));
-				if (bExactlyOneStep)
-				{
-					QueueParticipant(Component);
-					if (Participant->GetInitState() == Nelaric::EInitState::Ready)
-					{
-						QueueParticipantAndDependents(Component);
-					}
-				}
+				continue;
 			}
-			else
+			const bool bExactlyOneStep =
+			    static_cast<uint8>(Participant->GetInitState()) == static_cast<uint8>(PreviousState) + 1;
+			if (bAdvanced && bExactlyOneStep)
 			{
-				ensureMsgf(Generation == Participant->GetInitGeneration() &&
-				               PreviousState == Participant->GetInitState(),
-				           TEXT("Initialization transition returned false after changing state or generation."));
+				QueueParticipantAndDependents(Component);
 			}
 		}
-		PendingQueue.RemoveAt(0, Index, EAllowShrinking::No);
 		const TArray<TWeakObjectPtr<AActor>> Owners = PendingOwners.Array();
 		PendingOwners.Empty();
 		for (const TWeakObjectPtr<AActor>& OwnerPtr : Owners)
 		{
+			if (bShuttingDown)
+			{
+				break;
+			}
 			if (AActor* Owner = OwnerPtr.Get())
 			{
 				TArray<UPawnInitializationComponent*> Managers;
@@ -617,6 +831,9 @@ void UInitStateWorldSubsystem::Deinitialize()
 {
 	bShuttingDown = true;
 	RegisteredComponents.Empty();
+	ObservedApplicability.Empty();
+	PendingInvalidationRoots.Empty();
+	ActiveInvalidationMembers.Empty();
 	StoppedComponents.Empty();
 	ConfiguredComponents.Empty();
 	ForwardDependencies.Empty();

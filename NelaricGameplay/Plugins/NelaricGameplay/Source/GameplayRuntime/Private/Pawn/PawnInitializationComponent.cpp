@@ -16,58 +16,122 @@ UPawnInitializationComponent::UPawnInitializationComponent(const FObjectInitiali
 
 bool UPawnInitializationComponent::TryInitializePawn()
 {
+	if (bInitializationEnded || !bInitializationAllowed)
+	{
+		return false;
+	}
+	// Defer callback retries until the current initialization pass finishes.
+	bRefreshPending = true;
 	if (bInitializationInProgress)
 	{
 		return false;
 	}
-	if (bInitializationAllowed && ActiveConfig != InitializationConfig)
+	bInitializationInProgress = true;
+	int32 Passes = 0;
+	while (bRefreshPending && !bInitializationEnded && Passes++ < 8)
 	{
-		bInitializationInProgress = true;
+		bRefreshPending = false;
+		TryInitializationPass();
+	}
+	bInitializationInProgress = false;
+	ensureMsgf(!bRefreshPending || bInitializationEnded, TEXT("Pawn initialization requested too many retries."));
+	return IsPawnInitialized();
+}
+
+bool UPawnInitializationComponent::TryInitializationPass()
+{
+	// Clear old bindings before creating components for a replacement config.
+	if (bContextResetRequested && !bInitializationEnded)
+	{
+		bContextResetRequested = false;
+		RevokePawnReady();
+		if (UWorld* World = GetWorld())
+		{
+			if (UInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UInitStateWorldSubsystem>())
+			{
+				Subsystem->InvalidateActorContext(GetOwner());
+			}
+		}
+	}
+	if (ActiveConfig != InitializationConfig || !bConfiguredComponentsCreated)
+	{
 		RevokePawnReady();
 		DestroyConfiguredComponents();
+		if (bInitializationEnded || !GetPawn())
+		{
+			return false;
+		}
 		ActiveConfig = InitializationConfig;
 		bConfigValid = true;
 		CreateConfiguredComponents();
-		bInitializationInProgress = false;
 	}
-	if (!AreRequiredComponentsReady())
+	if (bInitializationEnded || !bInitializationAllowed || !GetPawn() || !AreRequiredComponentsReady())
 	{
 		RevokePawnReady();
 		return false;
 	}
-
-	if (!bInitializationAllowed || !bConfigValid || bInitializationInProgress || !GetPawn())
-	{
-		return false;
-	}
-
-	bInitializationInProgress = true;
 	const bool bReady = CanInitializePawn();
-	bInitializationInProgress = false;
-	if (bInitializationAllowed && ActiveConfig != InitializationConfig)
+	if (ActiveConfig != InitializationConfig)
 	{
-		return TryInitializePawn();
+		bRefreshPending = true;
 	}
-	if (!bReady || !bInitializationAllowed || !GetPawn() || !AreRequiredComponentsReady() ||
+	if (!bReady || bInitializationEnded || bContextResetRequested || !GetPawn() || !AreRequiredComponentsReady() ||
 	    ActiveConfig != InitializationConfig)
 	{
 		RevokePawnReady();
 		return false;
 	}
-	if (bPawnInitialized)
+	if (!bPawnInitialized)
 	{
-		return true;
+		bPawnInitialized = true;
+		OnPawnInitialized.Broadcast(this);
 	}
-
-	bPawnInitialized = true;
-	OnPawnInitialized.Broadcast(this);
 	return IsPawnInitialized();
+}
+
+void UPawnInitializationComponent::InvalidatePawnContext()
+{
+	if (bInitializationEnded)
+	{
+		return;
+	}
+	bContextResetRequested = true;
+	RevokePawnReady();
+	TryInitializePawn();
+}
+
+void UPawnInitializationComponent::RegisterAndCallPawnInitialized(FPawnInitializationCallback Callback)
+{
+	if (!Callback.IsBound())
+	{
+		return;
+	}
+	// Late subscribers also observe an already initialized pawn.
+	OnPawnInitialized.AddUnique(Callback);
+	if (IsPawnInitialized())
+	{
+		Callback.ExecuteIfBound(this);
+	}
+}
+
+void UPawnInitializationComponent::RegisterPawnInitializationRevoked(FPawnInitializationCallback Callback)
+{
+	if (Callback.IsBound())
+	{
+		OnPawnInitializationRevoked.AddUnique(Callback);
+	}
+}
+
+void UPawnInitializationComponent::UnregisterPawnInitializationCallback(FPawnInitializationCallback Callback)
+{
+	OnPawnInitialized.Remove(Callback);
+	OnPawnInitializationRevoked.Remove(Callback);
 }
 
 bool UPawnInitializationComponent::IsPawnInitialized() const
 {
-	return bPawnInitialized && bInitializationAllowed && ActiveConfig == InitializationConfig &&
-	       AreRequiredComponentsReady() && CanInitializePawn();
+	return bPawnInitialized && bInitializationAllowed && !bInitializationEnded && !bContextResetRequested &&
+	       ActiveConfig == InitializationConfig && AreRequiredComponentsReady() && CanInitializePawn();
 }
 
 void UPawnInitializationComponent::SetInitializationConfig(UPawnInitializationConfig* NewConfig)
@@ -107,8 +171,6 @@ void UPawnInitializationComponent::BeginPlay()
 	}
 	WorldBeginTearDownHandle =
 	    FWorldDelegates::OnWorldBeginTearDown.AddUObject(this, &UPawnInitializationComponent::HandleWorldBeginTearDown);
-	ActiveConfig = InitializationConfig;
-	CreateConfiguredComponents();
 	bInitializationAllowed = true;
 	TryInitializePawn();
 }
@@ -182,6 +244,10 @@ void UPawnInitializationComponent::DestroyConfiguredComponents()
 		if (IInitStateParticipantInterface* Participant = Cast<IInitStateParticipantInterface>(Component))
 		{
 			Participant->InvalidateInitGeneration();
+		}
+		if (!IsValid(Component))
+		{
+			continue;
 		}
 		// Release the stable name so the next round can create a new instance.
 		Component->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
@@ -307,7 +373,7 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 
 void UPawnInitializationComponent::CreateConfiguredComponents()
 {
-	if (bConfiguredComponentsCreated || !bConfigValid || !GetPawn())
+	if (bInitializationEnded || bConfiguredComponentsCreated || !bConfigValid || !GetPawn())
 	{
 		return;
 	}
@@ -332,7 +398,7 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 		return;
 	}
 
-	TArray<UActorComponent*> ToRegister;
+	TArray<TWeakObjectPtr<UActorComponent>> ToRegister;
 	// Build the entire ID table before resolving any dependencies or registering components.
 	for (const FPawnInitializationEntry& Entry : ActiveConfig->Components)
 	{
@@ -383,9 +449,17 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 		return;
 	}
 	bConfiguredComponentsCreated = true;
-	for (UActorComponent* Component : ToRegister)
+	for (const TWeakObjectPtr<UActorComponent>& ComponentPtr : ToRegister)
 	{
-		Component->RegisterComponent();
+		if (bInitializationEnded || ActiveConfig != InitializationConfig || !GetPawn())
+		{
+			bRefreshPending = !bInitializationEnded;
+			break;
+		}
+		if (UActorComponent* Component = ComponentPtr.Get())
+		{
+			Component->RegisterComponent();
+		}
 	}
 }
 
@@ -402,7 +476,7 @@ bool UPawnInitializationComponent::AreRequiredComponentsReady() const
 	}
 	const UWorld* World = GetWorld();
 	const UInitStateWorldSubsystem* Subsystem = World ? World->GetSubsystem<UInitStateWorldSubsystem>() : nullptr;
-	if (ActiveConfig && !Subsystem)
+	if ((ActiveConfig && !Subsystem) || (Subsystem && (Subsystem->bInvalidatingDependents || Subsystem->bShuttingDown)))
 	{
 		return false;
 	}

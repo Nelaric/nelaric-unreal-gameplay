@@ -36,6 +36,20 @@ public:
 	 */
 	GAMEPLAYRUNTIME_API ANelaricPawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** @brief Returns this pawn's local initialization coordinator.
+	 * @details The pawn owns the component. Use on the game thread to bind
+	 * Ready and revoked notifications or configure initialization.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Nelaric|Pawn|Initialization")
+	GAMEPLAYRUNTIME_API UPawnInitializationComponent* GetPawnInitializationComponent() const;
+
+public:
+	GAMEPLAYRUNTIME_API virtual void PossessedBy(AController* NewController) override;
+	GAMEPLAYRUNTIME_API virtual void UnPossessed() override;
+	GAMEPLAYRUNTIME_API virtual void OnRep_Controller() override;
+	GAMEPLAYRUNTIME_API virtual void OnRep_PlayerState() override;
+	GAMEPLAYRUNTIME_API virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+
 protected:
 	/// Initialization component owned by this pawn.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Nelaric|Pawn|Initialization")

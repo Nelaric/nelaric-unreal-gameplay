@@ -29,7 +29,10 @@ class IInitStateParticipantInterface
 	GENERATED_BODY()
 
 public:
-	/// Whether this component participates in its current context.
+	/** @brief Whether this component participates in its current context.
+	 * @details Keep this query free of side effects. Request a participant
+	 * refresh when applicability changes so old work and dependents reset.
+	 */
 	virtual bool IsInitApplicable() const = 0;
 
 	/** @brief Attempts one adjacent transition through DataInitialized.
@@ -51,16 +54,19 @@ public:
 	virtual bool CanEnterReady() = 0;
 
 	/** @brief Writes Ready without callbacks after group checks pass.
-	 * @details The coordinator calls this once per member, then notifies every
-	 * member after all commits. Implementations must not recheck dependencies or
-	 * broadcast, invoke delegates, or request coordinator progress here.
+	 * @details The coordinator commits the whole group before notifications.
+	 * Shared callable data must be prepared before this commit; peers may
+	 * not have received Ready callbacks yet. Implementations must not
+	 * recheck dependencies, broadcast, invoke delegates, or request progress.
 	 * @return True only if DataInitialized changed to Ready in this call.
 	 */
 	virtual bool CommitReadyWithoutNotification() = 0;
 
 	/** @brief Announces an already committed Ready transition.
-	 * @details Called after the entire readiness group is Ready. Notify the
-	 * world coordinator and any component observers only in this phase.
+	 * @details Called after the entire readiness group is Ready. The
+	 * coordinator rechecks the group and dependencies before each callback;
+	 * invalidation stops remaining old-round notifications. Publish this
+	 * Ready transition to the world and observers only in this phase.
 	 * @param Previous Snapshot captured before the Ready commit.
 	 */
 	virtual void NotifyReadyCommitted(const Nelaric::FInitStateSnapshot& Previous) = 0;

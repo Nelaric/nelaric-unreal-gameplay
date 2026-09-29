@@ -399,7 +399,6 @@ public:
 					               C->GetInitState() == Nelaric::EInitState::Ready);
 					bCheckedPendingClientContext = true;
 				}
-				C->RequestInitRefresh();
 			}
 		}
 		UPawnInitializationComponent* ClientManager =
@@ -540,7 +539,7 @@ void RunConfiguredNetworkInitializationTest()
 }
 
 FAutoConsoleCommand GRunConfiguredNetworkInitializationTest(
-    TEXT("Nelaric.TestPawnInitNetwork"),
+    TEXT("ng.test.pawn.initnetwork"),
     TEXT("Run configured pawn initialization in an existing one-process server/client PIE session."),
     FConsoleCommandDelegate::CreateStatic(&RunConfiguredNetworkInitializationTest));
 } // namespace

@@ -1,0 +1,6 @@
+<!-- Copyright (c) 2026 Nelaric -->
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Puerts Attach" type="ChromiumRemoteDebugType" factoryName="Chromium Remote" host="localhost" port="8080">
+    <method v="2" />
+  </configuration>
+</component>

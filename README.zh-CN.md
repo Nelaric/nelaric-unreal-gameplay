@@ -54,7 +54,9 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模
 
 ## API 文档
 
-[API 文档网站](https://docs.nelaric.com/nelaric-unreal-gameplay/API/)目前发布编码规范；加入公开头文件后，也会收录公开 C++ API。
+API 文档地址：[https://docs.nelaric.com/nelaric-unreal-gameplay/API/](https://docs.nelaric.com/nelaric-unreal-gameplay/API/)。
+
+网站包含公开 C++ API 参考、API 设计文档和项目编码规范。
 
 域名与发布配置见[组织文档托管说明](Docs/Hosting/README.zh-CN.md)。
 

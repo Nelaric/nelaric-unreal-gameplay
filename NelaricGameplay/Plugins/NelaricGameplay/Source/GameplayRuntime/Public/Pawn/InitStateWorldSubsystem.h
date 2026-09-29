@@ -69,8 +69,24 @@ public:
 	GAMEPLAYRUNTIME_API void NotifyParticipantChanged(UActorComponent* Component,
 	                                                  const Nelaric::FInitStateSnapshot& Previous);
 
+	/** @brief Starts a new attempt for a participant and its dependents.
+	 * @details Call on the game thread after required context changes.
+	 * Revokes affected pawn Ready before cleanup, then cancels old work and
+	 * retries registered participants. Reentrant requests are deferred.
+	 * @param Component Registered participant whose context changed.
+	 */
+	GAMEPLAYRUNTIME_API void InvalidateParticipantContext(UActorComponent* Component);
+
+	/** @brief Restarts all registered participants owned by an actor.
+	 * @details Call on the game thread after actor-wide context changes.
+	 * Revokes pawn Ready before cleanup and retries after batch invalidation.
+	 * @param Owner Actor owning the participants; does not transfer ownership.
+	 */
+	GAMEPLAYRUNTIME_API void InvalidateActorContext(AActor* Owner);
+
 	/** @brief Rechecks a registered participant after its context changes.
-	 * @details Call when a declared dependency reference becomes available.
+	 * @details Retries pending stages and detects applicability changes.
+	 * Ready context changes require InvalidateParticipantContext instead.
 	 * @param Component Registered component requesting another progress pass.
 	 */
 	GAMEPLAYRUNTIME_API void RequestParticipantRefresh(UActorComponent* Component);
@@ -124,6 +140,9 @@ private:
 	using FComponentPtr = TWeakObjectPtr<UActorComponent>;
 	TSet<FComponentPtr> RegisteredComponents;
 	TSet<FComponentPtr> StoppedComponents;
+	TMap<FComponentPtr, bool> ObservedApplicability;
+	TSet<FComponentPtr> PendingInvalidationRoots;
+	TSet<FComponentPtr> ActiveInvalidationMembers;
 	bool bShuttingDown = false;
 	struct FConfiguredParticipant
 	{
@@ -152,4 +171,5 @@ private:
 	void ProcessParticipants();
 	bool TryCommitReadyGroup(UActorComponent* Root);
 	void InvalidateConfiguredDependents(UActorComponent* Component);
+	void InvalidateParticipants(const TArray<FComponentPtr>& Roots, bool bIncludeRoots);
 };

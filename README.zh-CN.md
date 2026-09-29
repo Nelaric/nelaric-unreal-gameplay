@@ -46,6 +46,8 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模
 
 模块职责和依赖见 [GameplayRuntime](Docs/Modules/Plugins/NelaricGameplay/GameplayRuntime.zh-CN.md) 模块说明；玩法模型、网络拓扑和内容更新边界见[基础架构约束](Docs/FoundationArchitectureConstraints.zh-CN.md)。
 
+需要 Rider 的 TypeScript 静态分析和调试时，在 Setup 命令后加上 `--Rider`。它会安装项目工具并准备编译、调试和打包配置。生成文件及后续编辑器、玩法入口接入步骤见 [Rider 配置说明](Setup/README.zh-CN.md)。
+
 ## 参与贡献
 
 所有参与本项目的开发者都必须遵守 [Epic Games 的 Unreal Engine C++ 编码规范](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine) 和[项目编码规范](Docs/CodingStandards/README.zh-CN.md)。项目规范定义了模块边界、API 契约、审查规则和必要的自动检查。

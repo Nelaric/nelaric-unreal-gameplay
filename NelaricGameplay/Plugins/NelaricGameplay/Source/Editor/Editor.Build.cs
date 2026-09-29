@@ -8,6 +8,8 @@ public class Editor : ModuleRules
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PrivateDependencyModuleNames.AddRange(new string[] { "Core" });
+		PrivateDependencyModuleNames.AddRange(
+			new string[] { "Core", "CoreUObject", "Engine", "GameplayRuntime", "UnrealEd" }
+		);
 	}
 }

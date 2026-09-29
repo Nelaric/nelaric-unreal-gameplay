@@ -65,6 +65,14 @@ protected:
 		bPeerCallSucceededAfterReady = Peer && Peer->TouchPreparedObject();
 	}
 
+	virtual void OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot&) override
+	{
+		PreparedObject = nullptr;
+		PreparedObjectCallCount = 0;
+		bPeerObjectExistedBeforePreparation = false;
+		bPeerCallSucceededAfterReady = false;
+	}
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UObject> PreparedObject;
@@ -98,6 +106,13 @@ public:
 protected:
 	virtual bool CanEntryReady() override;
 	virtual void OnInitReady() override;
+	virtual void OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot&) override
+	{
+		ReadyController.Reset();
+		ReadyPlayerState.Reset();
+		ReadyCallCount = 0;
+		bControllerAndPlayerStateUsableAfterReady = false;
+	}
 };
 
 UCLASS(MinimalAPI)
@@ -121,6 +136,11 @@ public:
 
 protected:
 	virtual void OnInitReady() override;
+	virtual void OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot&) override
+	{
+		ReadyCallCount = 0;
+		bAllDependenciesUsableAfterReady = false;
+	}
 };
 
 UCLASS(MinimalAPI)
@@ -155,6 +175,14 @@ protected:
 	}
 
 	virtual void OnInitReady() override;
+	virtual void OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot&) override
+	{
+		PreparedObject = nullptr;
+		bReadyCallbackRan = false;
+		bAllTargetCallsSucceeded = false;
+		CalledTargetIds.Empty();
+		ReceivedCallerIds.Empty();
+	}
 
 private:
 	UPROPERTY(Transient)

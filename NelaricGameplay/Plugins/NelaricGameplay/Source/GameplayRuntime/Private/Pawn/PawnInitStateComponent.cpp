@@ -30,7 +30,7 @@ bool UPawnInitStateComponent::TryChangeInitState()
 	if (!bPrepared || !(Generation == InitGeneration) || PreviousState != InitState || bTerminalInitFailure ||
 	    bLeavingWorld)
 	{
-		bRefreshRequestedDuringTransition = false;
+		FlushDeferredInitRefresh();
 		return false;
 	}
 	return CommitInitState(static_cast<Nelaric::EInitState>(static_cast<uint8>(PreviousState) + 1));
@@ -72,11 +72,11 @@ bool UPawnInitStateComponent::CanEnterReady()
 		bCommittingInitState = true;
 		const bool bPrepared = CanEntryReady();
 		bCommittingInitState = false;
-		bRefreshRequestedDuringTransition = false;
 		bLocalReadyPrepared = bPrepared && Generation == InitGeneration &&
 		                      InitState == Nelaric::EInitState::DataInitialized && !bTerminalInitFailure &&
 		                      !bLeavingWorld;
 	}
+	FlushDeferredInitRefresh();
 	return bLocalReadyPrepared;
 }
 
@@ -103,6 +103,7 @@ void UPawnInitStateComponent::NotifyReadyCommitted(const Nelaric::FInitStateSnap
 	bCommittingInitState = true;
 	OnInitReady();
 	bCommittingInitState = false;
+	FlushDeferredInitRefresh();
 	if (!(Previous.Generation == InitGeneration) || InitState != Nelaric::EInitState::Ready || bTerminalInitFailure)
 	{
 		FlushDeferredInitRefresh();
@@ -110,6 +111,26 @@ void UPawnInitStateComponent::NotifyReadyCommitted(const Nelaric::FInitStateSnap
 	}
 	NotifyInitChanged(Previous);
 	FlushDeferredInitRefresh();
+}
+
+void UPawnInitStateComponent::InvalidateInitContext()
+{
+	if (bLeavingWorld)
+	{
+		return;
+	}
+	if (bCommittingInitState)
+	{
+		bContextInvalidationRequested = true;
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (UInitStateWorldSubsystem* Subsystem = World->GetSubsystem<UInitStateWorldSubsystem>())
+		{
+			Subsystem->InvalidateParticipantContext(this);
+		}
+	}
 }
 
 void UPawnInitStateComponent::RequestInitRefresh()
@@ -181,8 +202,15 @@ bool UPawnInitStateComponent::CommitInitState(Nelaric::EInitState NextState)
 
 void UPawnInitStateComponent::InvalidateInitGeneration()
 {
+	if (bInvalidatingGeneration)
+	{
+		return;
+	}
+	bInvalidatingGeneration = true;
 	const Nelaric::FInitStateSnapshot Previous{InitGeneration, InitState, bTerminalInitFailure};
+	const bool bWasCommitting = bCommittingInitState;
 	bCommittingInitState = true;
+	// Reject old asynchronous results before cancelling their work.
 	++InitGeneration.Value;
 	OnInitGenerationInvalidated(Previous);
 	CancelInitGenerationWork();
@@ -190,8 +218,10 @@ void UPawnInitStateComponent::InvalidateInitGeneration()
 	bTerminalInitFailure = false;
 	bReadyNotificationPending = false;
 	bLocalReadyPrepared = false;
+	bRefreshRequestedDuringTransition = !bLeavingWorld;
 	NotifyInitChanged(Previous);
-	bCommittingInitState = false;
+	bCommittingInitState = bWasCommitting;
+	bInvalidatingGeneration = false;
 	FlushDeferredInitRefresh();
 }
 
@@ -224,6 +254,14 @@ void UPawnInitStateComponent::NotifyInitChanged(const Nelaric::FInitStateSnapsho
 
 void UPawnInitStateComponent::FlushDeferredInitRefresh()
 {
+	// A context reset supersedes a retry of the previous attempt.
+	if (bContextInvalidationRequested && !bCommittingInitState)
+	{
+		bContextInvalidationRequested = false;
+		bRefreshRequestedDuringTransition = false;
+		InvalidateInitContext();
+		return;
+	}
 	if (bRefreshRequestedDuringTransition && !bCommittingInitState)
 	{
 		bRefreshRequestedDuringTransition = false;

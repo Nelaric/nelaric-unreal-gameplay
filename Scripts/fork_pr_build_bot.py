@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Trigger a trusted CircleCI build and report its result to the PR commit."""
 
 from __future__ import annotations

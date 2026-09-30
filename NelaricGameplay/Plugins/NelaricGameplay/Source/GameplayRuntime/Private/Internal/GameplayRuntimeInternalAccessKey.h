@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file GameplayRuntimeInternalAccessKey.h
  * Declares the passkey used to identify internal C++ integration calls.

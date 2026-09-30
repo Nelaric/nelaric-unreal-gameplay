@@ -1,4 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
+﻿<!-- Copyright (c) 2026 Nelaric Contributors -->
 
 English | [简体中文](CONTRIBUTING.zh-CN.md)
 

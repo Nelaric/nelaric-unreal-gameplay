@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 /** @file NelaricInputModifiers.h
  * Declares settings-driven input modifiers.
  */

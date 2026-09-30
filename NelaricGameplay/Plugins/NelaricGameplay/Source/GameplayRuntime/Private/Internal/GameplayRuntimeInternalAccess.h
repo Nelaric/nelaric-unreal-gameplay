@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file GameplayRuntimeInternalAccess.h
  * Provides the shared key for internal C++ integration calls.

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Nelaric
+// Copyright (c) 2026 Nelaric Contributors
 "use strict";
 
 const fs = require("node:fs");
@@ -91,7 +91,7 @@ if (!fs.existsSync(configFile)) {
 }
 
 createMissing("TypeScript/Entry.ts",
-  '// Copyright (c) 2026 Nelaric\nconsole.log("Nelaric TypeScript entry started.");\nexport {};\n');
+  '// Copyright (c) 2026 Nelaric Contributors\nconsole.log("Nelaric TypeScript entry started.");\nexport {};\n');
 
 const iniFile = path.join(project, "Config/DefaultPuerts.ini");
 let ini = fs.readFileSync(iniFile, "utf8");
@@ -111,7 +111,7 @@ if (!portMatch || Number(portMatch[1]) < 1 || Number(portMatch[1]) > 65535) {
 const port = portMatch[1];
 const gameIniFile = path.join(project, "Config/DefaultGame.ini");
 let gameIni = fs.existsSync(gameIniFile) ? fs.readFileSync(gameIniFile, "utf8") :
-  "; Copyright (c) 2026 Nelaric\n";
+  "; Copyright (c) 2026 Nelaric Contributors\n";
 if (!/^\+?DirectoriesToAlwaysStageAsUFS\s*=\s*\(Path="JavaScript"\)/mi.test(gameIni)) {
   const packaging = /^\[\/Script\/UnrealEd\.ProjectPackagingSettings\][^\r\n]*\r?\n/m;
   const entry = '+DirectoriesToAlwaysStageAsUFS=(Path="JavaScript")\n';
@@ -119,7 +119,7 @@ if (!/^\+?DirectoriesToAlwaysStageAsUFS\s*=\s*\(Path="JavaScript"\)/mi.test(game
     gameIni.trimEnd() + "\n\n[/Script/UnrealEd.ProjectPackagingSettings]\n" + entry;
   fs.writeFileSync(gameIniFile, gameIni, "utf8");
 }
-createMissing(".run/Puerts Attach.run.xml", `<!-- Copyright (c) 2026 Nelaric -->
+createMissing(".run/Puerts Attach.run.xml", `<!-- Copyright (c) 2026 Nelaric Contributors -->
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Puerts Attach" type="ChromiumRemoteDebugType" factoryName="Chromium Remote" host="localhost" port="${port}">
     <method v="2" />

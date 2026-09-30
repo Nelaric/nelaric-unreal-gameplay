@@ -1,4 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
+﻿<!-- Copyright (c) 2026 Nelaric Contributors -->
 
 English | [简体中文](BuildAndReview.zh-CN.md)
 
@@ -6,15 +6,15 @@ English | [简体中文](BuildAndReview.zh-CN.md)
 
 ## Copyright notices
 
-Every project-authored file must carry a Nelaric copyright notice when its format permits one. In a text file that supports comments, the notice must be the first logical line, before a heading, code, configuration entry, or other prose. A UTF-8 BOM does not count as a line. Use `Copyright (c) <year> Nelaric`, where `<year>` is the file's first publication year; do not update it merely because the file changes.
+Every project-authored file must carry a Nelaric copyright notice when its format permits one. In a text file that supports comments, the notice must be the first logical line, before a heading, code, configuration entry, or other prose. A UTF-8 BOM does not count as a line. Use `Copyright (c) <year> Nelaric Contributors`, where `<year>` is the file's first publication year; do not update it merely because the file changes.
 
 Use the format's native comment syntax:
 
 | File format | First line |
 | --- | --- |
-| C++, C#, and JavaScript source | `// Copyright (c) 2026 Nelaric` |
-| Markdown and HTML | `<!-- Copyright (c) 2026 Nelaric -->` |
-| Python, shell, YAML, and hash-comment configuration | `# Copyright (c) 2026 Nelaric` |
+| C++, C#, and JavaScript source | `// Copyright (c) 2026 Nelaric Contributors` |
+| Markdown and HTML | `<!-- Copyright (c) 2026 Nelaric Contributors -->` |
+| Python, shell, YAML, and hash-comment configuration | `# Copyright (c) 2026 Nelaric Contributors` |
 
 If an executable script needs a shebang, keep `#!...` on line one and put the copyright notice immediately on line two. If a format requires another first-line directive, put the notice at the first legal comment position. Do not add comments to strict JSON or another format that forbids them. Do not prepend a comment to `LICENSE` or alter its license text; its existing copyright line is authoritative. Binary assets, generated files, and unmodified third-party files retain their own applicable attribution and are exempt from an in-file Nelaric header. Record ownership for project-authored files that cannot carry a notice in the repository license or a nearby notice file rather than breaking the file format.
 

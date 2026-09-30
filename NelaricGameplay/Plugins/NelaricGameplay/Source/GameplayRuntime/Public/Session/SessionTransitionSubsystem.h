@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file SessionTransitionSubsystem.h
  * Declares requests for an observed game-world network mode.

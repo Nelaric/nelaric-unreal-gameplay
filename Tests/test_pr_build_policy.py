@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Behavioral checks for authenticated fork PR build policy."""
 
 from __future__ import annotations

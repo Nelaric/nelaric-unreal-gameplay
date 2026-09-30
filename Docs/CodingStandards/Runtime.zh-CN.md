@@ -1,4 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
+﻿<!-- Copyright (c) 2026 Nelaric Contributors -->
 
 [English](Runtime.md) | 简体中文
 

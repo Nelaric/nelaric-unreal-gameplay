@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 

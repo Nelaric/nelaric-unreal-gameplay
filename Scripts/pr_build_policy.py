@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Validate a pull request before a privileged CircleCI build."""
 
 from __future__ import annotations

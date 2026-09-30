@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file PawnInitializationHelper.h
  * Declares shared access to project pawn initialization components.

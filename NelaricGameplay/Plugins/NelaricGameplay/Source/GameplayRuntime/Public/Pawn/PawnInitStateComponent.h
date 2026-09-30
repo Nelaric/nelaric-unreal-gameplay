@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file PawnInitStateComponent.h
  * Declares an optional state-owning base for pawn participants.

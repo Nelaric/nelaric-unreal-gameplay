@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file InitStateWorldSubsystem.h
  * Declares the world coordinator for component-owned initialization.

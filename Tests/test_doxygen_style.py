@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Exercise the Doxygen style gate at its length and syntax boundaries."""
 
 from __future__ import annotations

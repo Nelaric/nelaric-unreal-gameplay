@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Check the result of the project's Unreal automation run."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Validate pull request and commit names against the project standard."""
 
 from __future__ import annotations

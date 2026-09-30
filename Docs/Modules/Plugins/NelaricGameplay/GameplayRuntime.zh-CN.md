@@ -16,6 +16,8 @@
 
 本项目的玩法 World Settings 类必须继承 `ANelaricWorldSettings`。项目配置将这一空基类设为默认 World Settings 类；玩法地图需要附加设置时，应使用它的子类。世界启动配置通过软引用在地图加载前选择地图，地图不通过 World Settings 选择启动策略。独立接入插件的其他项目可以自行选择 World Settings 类。
 
-模块公开依赖 Unreal 的 `Core`、`CoreUObject`、`Engine` 和 `OnlineSubsystemUtils`。模块的内部集成 Passkey 位于 `Private/Internal/`。公开头文件仅在 C++ 内部集成方法签名需要时前置声明 Key；玩法模块无法通过插件公开 API 包含或构造它。项目配置直接使用 `/Script/GameplayRuntime` 类路径。
+模块公开依赖 Unreal 的 `Core`、`CoreUObject`、`Engine`、`OnlineSubsystemUtils`、`EnhancedInput` 和 `GameplayTags`。模块的内部集成 Passkey 位于 `Private/Internal/`。公开头文件仅在 C++ 内部集成方法签名需要时前置声明 Key；玩法模块无法通过插件公开 API 包含或构造它。项目配置直接使用 `/Script/GameplayRuntime` 类路径。
 
 模块、文件、全局作用域类型和日志类别不强制使用 `Nelaric` 项目前缀，也不禁止使用；名称须避免与已有名称冲突。`Nelaric::` 及其子命名空间内的类型不得带此前缀，保留 Unreal 必需的类型前缀。`ANelaricCharacter`、`ANelaricPawn`、`ANelaricGameModeBase`、`ANelaricPlayerController`、`ANelaricWorldSettings` 和 `UNelaricPawnComponent` 保留前缀，因为 Unreal 已定义对应的无前缀类型和头文件。模块入口文件使用 `GameplayRuntimeModule.h` 和 `GameplayRuntimeModule.cpp`。`Nelaric::` C++ 命名空间和 `Nelaric.*` 自动化测试分组保持稳定。
+
+模块公开依赖 `EnhancedInput` 和 `GameplayTags`，提供原生输入配置、Tag 绑定、映射管理和玩家输入偏好。具体动作 Tag 与输入处理函数由游戏定义，框架 Pawn 和 Character 基类不绑定玩法控制。Enhanced Input 负责动作分发与按键重映射；Gameplay Tag 独立于能力系统标识原生动作。配置与生命周期约束见[原生输入](../../../API/Input/NativeInput.zh-CN.md)。

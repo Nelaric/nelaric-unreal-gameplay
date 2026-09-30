@@ -11,3 +11,4 @@ Public APIs follow the [project coding standards](../CodingStandards/README.md),
 ## Design
 
 - [Network sessions and authority transitions](Core/NetWork/NetworkSessionTransitions.md)
+- [Native input](Input/NativeInput.md)

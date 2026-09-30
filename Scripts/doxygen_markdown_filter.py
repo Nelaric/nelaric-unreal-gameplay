@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Resolve source-relative Markdown navigation for Doxygen's root-based links."""
 
 from __future__ import annotations

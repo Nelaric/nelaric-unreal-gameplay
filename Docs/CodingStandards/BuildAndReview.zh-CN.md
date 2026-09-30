@@ -1,4 +1,4 @@
-﻿<!-- Copyright (c) 2026 Nelaric -->
+﻿<!-- Copyright (c) 2026 Nelaric Contributors -->
 
 [English](BuildAndReview.md) | 简体中文
 
@@ -6,15 +6,15 @@
 
 ## 版权声明
 
-只要文件格式允许，所有项目自有文件都必须包含 Nelaric 版权声明。对于支持注释的文本文件，版权声明必须是第一个逻辑行，位于标题、代码、配置项或其他正文之前。UTF-8 BOM 不算一行。使用 `Copyright (c) <year> Nelaric`，其中 `<year>` 为文件首次发布的年份；不要仅因修改文件就更新年份。
+只要文件格式允许，所有项目自有文件都必须包含 Nelaric 版权声明。对于支持注释的文本文件，版权声明必须是第一个逻辑行，位于标题、代码、配置项或其他正文之前。UTF-8 BOM 不算一行。使用 `Copyright (c) <year> Nelaric Contributors`，其中 `<year>` 为文件首次发布的年份；不要仅因修改文件就更新年份。
 
 使用文件格式原生的注释语法：
 
 | 文件格式 | 首行示例 |
 | --- | --- |
-| C++、C# 和 JavaScript 源码 | `// Copyright (c) 2026 Nelaric` |
-| Markdown 和 HTML | `<!-- Copyright (c) 2026 Nelaric -->` |
-| Python、Shell、YAML 和使用 `#` 注释的配置 | `# Copyright (c) 2026 Nelaric` |
+| C++、C# 和 JavaScript 源码 | `// Copyright (c) 2026 Nelaric Contributors` |
+| Markdown 和 HTML | `<!-- Copyright (c) 2026 Nelaric Contributors -->` |
+| Python、Shell、YAML 和使用 `#` 注释的配置 | `# Copyright (c) 2026 Nelaric Contributors` |
 
 若可执行脚本需要 shebang，则将 `#!...` 保留在第一行，版权声明紧接在第二行。若某格式要求其他首行指令，则把声明放在第一个合法的注释位置。不要向严格 JSON 或其他不允许注释的格式添加注释。不要在 `LICENSE` 前添加注释或修改许可文本；其中现有的版权行是权威声明。二进制资源、生成文件和未修改的第三方文件保留各自适用的归属说明，不要求文件内的 Nelaric 声明。对于无法在文件内写入声明的项目自有文件，应通过仓库许可证或邻近的声明文件记录所有权，而不是破坏文件格式。
 

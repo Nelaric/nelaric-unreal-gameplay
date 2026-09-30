@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Regression checks for documentation on wrapped exported declarations."""
 
 import sys

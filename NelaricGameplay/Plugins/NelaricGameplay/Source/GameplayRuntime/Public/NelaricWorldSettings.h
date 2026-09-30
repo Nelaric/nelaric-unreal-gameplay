@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file NelaricWorldSettings.h
  * Declares the project World Settings base class.

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Nelaric
+// Copyright (c) 2026 Nelaric Contributors
 "use strict";
 
 const fs = require("node:fs");

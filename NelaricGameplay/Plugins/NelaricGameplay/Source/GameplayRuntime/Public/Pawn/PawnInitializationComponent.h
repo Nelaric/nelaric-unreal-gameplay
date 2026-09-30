@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file PawnInitializationComponent.h
  * Declares a reversible readiness gate for pawn gameplay components.

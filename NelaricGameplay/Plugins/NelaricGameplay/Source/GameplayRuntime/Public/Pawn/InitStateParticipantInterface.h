@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file InitStateParticipantInterface.h
  * Declares the reflected component initialization contract.

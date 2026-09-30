@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file WorldStartupConfig.h
  * Declares the map and authored policy selected before starting a world.

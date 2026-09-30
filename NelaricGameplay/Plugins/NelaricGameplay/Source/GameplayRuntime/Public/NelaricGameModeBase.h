@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file NelaricGameModeBase.h
  * Declares the project's default server-side game mode.

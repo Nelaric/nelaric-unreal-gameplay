@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 set -eu
 
 platform=$1

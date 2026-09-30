@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file TransitionBeaconClient.h
  * Declares the destination server's pre-travel approval channel.

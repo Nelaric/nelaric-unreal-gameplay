@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Behavioral checks for pull request naming validation."""
 
 from __future__ import annotations

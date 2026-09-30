@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file NelaricPlayerController.h
  * Declares the project's player-owned network endpoint.

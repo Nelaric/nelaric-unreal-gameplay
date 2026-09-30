@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Check the repository's explicit UTF-8 and newline rules without rewriting files."""
 
 from __future__ import annotations

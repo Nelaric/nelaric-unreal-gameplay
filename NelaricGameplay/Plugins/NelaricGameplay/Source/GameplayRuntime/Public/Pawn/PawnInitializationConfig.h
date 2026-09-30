@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file PawnInitializationConfig.h
  * Declares an authored configuration asset for pawn initialization.

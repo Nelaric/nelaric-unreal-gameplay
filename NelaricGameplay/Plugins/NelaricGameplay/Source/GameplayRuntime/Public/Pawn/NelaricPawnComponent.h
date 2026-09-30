@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file NelaricPawnComponent.h
  * Declares a base component for querying its owning pawn's context.

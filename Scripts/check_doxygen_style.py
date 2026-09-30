@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Nelaric
+# Copyright (c) 2026 Nelaric Contributors
 """Check mechanical style rules for project-authored C++ Doxygen comments."""
 
 from __future__ import annotations

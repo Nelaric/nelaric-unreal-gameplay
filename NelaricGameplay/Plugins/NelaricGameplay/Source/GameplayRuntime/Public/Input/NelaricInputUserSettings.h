@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Nelaric
+﻿// Copyright (c) 2026 Nelaric Contributors
 /** @file NelaricInputUserSettings.h
  * Defines per-local-player native input preferences.
  */

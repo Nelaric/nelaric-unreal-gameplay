@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "Net/UnrealNetwork.h"
 #include "Pawn/PawnInitializationComponent.h"
 #include "Pawn/PawnInitializationConfig.h"
 
@@ -20,6 +21,12 @@ AInitNetworkEventPawn::AInitNetworkEventPawn(const FObjectInitializer& ObjectIni
 	Config->Components.Add(Entry);
 	// Every peer gets this static fixture through its class defaults.
 	GetPawnInitializationComponent()->InitializationConfig = Config;
+}
+
+void AInitNetworkEventPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AInitNetworkEventPawn, TestPawnId);
 }
 
 bool UInitNetworkEventComponent::CanEntryReady()
@@ -179,6 +186,8 @@ public:
 			SecondController = RemoteControllers[1];
 			ServerPawn = Server->SpawnActor<AInitNetworkEventPawn>();
 			LocalPawn = Server->SpawnActor<AInitNetworkEventPawn>();
+			ServerPawn->TestPawnId = 1;
+			LocalPawn->TestPawnId = 2;
 			FirstController->Possess(ServerPawn.Get());
 			LocalController->Possess(LocalPawn.Get());
 			Advance();
@@ -189,7 +198,7 @@ public:
 		{
 			for (TActorIterator<AInitNetworkEventPawn> It(World); It; ++It)
 			{
-				if (It->GetFName() == ServerPawn->GetFName())
+				if (It->TestPawnId == ServerPawn->TestPawnId)
 				{
 					Copies.Add(*It);
 				}
@@ -203,7 +212,17 @@ public:
 		{
 			for (AInitNetworkEventPawn* Copy : Copies)
 			{
-				if (Copy->GetPawnInitializationComponent()->IsPawnInitialized())
+				const FPeerSnapshot& Previous = Before.FindChecked(Copy);
+				const UInitNetworkEventComponent* Component = Copy->FindComponentByClass<UInitNetworkEventComponent>();
+				if (Copy->HasAuthority() || Previous.Controller.IsValid())
+				{
+					if (Copy->GetController() || Previous.Generation == Component->GetInitGeneration() ||
+					    Component->CleanupCalls <= Previous.CleanupCalls)
+					{
+						return false;
+					}
+				}
+				if (Copy->HasAuthority() && Copy->GetPawnInitializationComponent()->IsPawnInitialized())
 				{
 					return false;
 				}
@@ -211,10 +230,19 @@ public:
 			for (AInitNetworkEventPawn* Copy : Copies)
 			{
 				UInitNetworkEventComponent* Component = Copy->FindComponentByClass<UInitNetworkEventComponent>();
-				Test.TestFalse(TEXT("Unpossession invalidates each peer generation"),
-				               Before.FindChecked(Copy).Generation == Component->GetInitGeneration());
-				Test.TestFalse(TEXT("Unpossession clears old player state bindings"),
-				               Component->ReadyPlayerState.IsValid());
+				Test.TestFalse(TEXT("Unpossession clears old controller bindings"),
+				               Component->ReadyController.IsValid());
+				// Simulated proxies may retain PlayerState and remain ready without a controller.
+				if (Copy->GetPawnInitializationComponent()->IsPawnInitialized())
+				{
+					Test.TestTrue(TEXT("Unpossessed simulated proxy binds its current player state"),
+					              Component->ReadyPlayerState == Copy->GetPlayerState());
+				}
+				else
+				{
+					Test.TestFalse(TEXT("Invalidated peer clears old player state bindings"),
+					               Component->ReadyPlayerState.IsValid());
+				}
 			}
 			FirstController->Possess(ServerPawn.Get());
 			Advance();
@@ -255,7 +283,7 @@ public:
 				Test.TestTrue(TEXT("Owning client binds its controller"),
 				              Component->ReadyController == Copy->GetController());
 			}
-			if (Phase > 1)
+			if (Phase > 1 && (Phase == 4 || Copy->HasAuthority() || Before.FindChecked(Copy).Controller.IsValid()))
 			{
 				Test.TestFalse(TEXT("Context replacement creates new local generations"),
 				               Before.FindChecked(Copy).Generation == Component->GetInitGeneration());
@@ -275,7 +303,8 @@ public:
 		for (AInitNetworkEventPawn* Copy : Copies)
 		{
 			UInitNetworkEventComponent* Component = Copy->FindComponentByClass<UInitNetworkEventComponent>();
-			Before.Add(Copy, {Component->GetInitGeneration(), Component->ReadyPlayerState});
+			Before.Add(Copy, {Component->GetInitGeneration(), Component->ReadyPlayerState, Component->ReadyController,
+			                  Component->CleanupCalls});
 		}
 		if (Phase == 1)
 		{
@@ -299,6 +328,8 @@ private:
 	{
 		FInitGeneration Generation;
 		TWeakObjectPtr<APlayerState> PlayerState;
+		TWeakObjectPtr<AController> Controller;
+		int32 CleanupCalls;
 	};
 
 	void Advance()
@@ -326,8 +357,8 @@ private:
 			for (TActorIterator<AInitNetworkEventPawn> It(World); It; ++It)
 			{
 				AInitNetworkEventPawn* Pawn = *It;
-				const bool bIsPawnCopy = ServerPawn.IsValid() && Pawn->GetFName() == ServerPawn->GetFName();
-				const bool bIsLocalPawnCopy = LocalPawn.IsValid() && Pawn->GetFName() == LocalPawn->GetFName();
+				const bool bIsPawnCopy = ServerPawn.IsValid() && Pawn->TestPawnId == ServerPawn->TestPawnId;
+				const bool bIsLocalPawnCopy = LocalPawn.IsValid() && Pawn->TestPawnId == LocalPawn->TestPawnId;
 				if (!bIsPawnCopy && !bIsLocalPawnCopy)
 				{
 					continue;

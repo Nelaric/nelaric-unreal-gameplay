@@ -20,4 +20,4 @@
 
 模块、文件、全局作用域类型和日志类别不强制使用 `Nelaric` 项目前缀，也不禁止使用；名称须避免与已有名称冲突。`Nelaric::` 及其子命名空间内的类型不得带此前缀，保留 Unreal 必需的类型前缀。`ANelaricCharacter`、`ANelaricPawn`、`ANelaricGameModeBase`、`ANelaricPlayerController`、`ANelaricWorldSettings` 和 `UNelaricPawnComponent` 保留前缀，因为 Unreal 已定义对应的无前缀类型和头文件。模块入口文件使用 `GameplayRuntimeModule.h` 和 `GameplayRuntimeModule.cpp`。`Nelaric::` C++ 命名空间和 `Nelaric.*` 自动化测试分组保持稳定。
 
-模块公开依赖 `EnhancedInput` 和 `GameplayTags`，提供原生输入配置、Tag 绑定、映射管理和玩家输入偏好。具体动作 Tag 与输入处理函数由游戏定义，框架 Pawn 和 Character 基类不绑定玩法控制。Enhanced Input 负责动作分发与按键重映射；Gameplay Tag 独立于能力系统标识原生动作。配置与生命周期约束见[原生输入](../../../API/Input/NativeInput.zh-CN.md)。
+模块公开依赖 `EnhancedInput` 和 `GameplayTags`，提供原生输入配置、Tag 绑定、映射管理和玩家输入偏好。可选的 `UPlayerInputComponent` 继承 `UPawnInitStateComponent`，按初始化代际协调本地映射与绑定清理。具体动作 Tag 与输入处理函数由游戏定义，框架 Pawn 和 Character 基类不绑定玩法控制。Enhanced Input 负责动作分发与按键重映射；Gameplay Tag 独立于能力系统标识原生动作。配置与生命周期约束见[原生输入](../../../API/Input/NativeInput.zh-CN.md)。

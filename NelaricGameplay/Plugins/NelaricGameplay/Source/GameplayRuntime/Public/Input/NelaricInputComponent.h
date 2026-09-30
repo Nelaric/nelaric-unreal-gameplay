@@ -50,8 +50,9 @@ public:
 	 * @return Whether a binding was created.
 	 */
 	template <class UserClass, typename FuncType>
-	bool BindNativeAction(const UNelaricInputConfig* InputConfig, const FGameplayTag& InputTag,
-	                      ETriggerEvent TriggerEvent, UserClass* Object, FuncType Func, TArray<uint32>& BindHandles)
+	FORCEINLINE bool BindNativeAction(const UNelaricInputConfig* InputConfig, const FGameplayTag& InputTag,
+	                                  ETriggerEvent TriggerEvent, UserClass* Object, FuncType Func,
+	                                  TArray<uint32>& BindHandles)
 	{
 		if (InputConfig && Object && Func)
 		{
@@ -71,7 +72,7 @@ public:
 	GAMEPLAYRUNTIME_API void RemoveBinds(TArray<uint32>& BindHandles);
 
 public:
-	GAMEPLAYRUNTIME_API virtual void OnUnregister() override;
+	virtual void OnUnregister() override;
 
 private:
 	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> MappingSubsystem;

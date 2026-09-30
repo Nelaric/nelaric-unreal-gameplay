@@ -7,6 +7,8 @@ import json
 import os
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -45,8 +47,19 @@ def github_json(path: str, token: str | None = None) -> object:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(f"{_API_ROOT}{path}", headers=headers)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code not in {429, 500, 502, 503, 504} or attempt == 4:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == 4:
+                raise
+        print(f"Transient GitHub API read failure; retry {attempt + 1}/4", flush=True)
+        time.sleep(2 ** (attempt + 1))
+    raise RuntimeError("GitHub API read retry limit exceeded")
 
 
 def get_pull_request(number: int, token: str | None = None) -> dict:

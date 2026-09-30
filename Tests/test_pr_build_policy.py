@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import sys
+import http.client
+import io
+import urllib.error
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,13 +14,47 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Scripts"))
 
 from fork_pr_build_bot import find_pipeline  # noqa: E402
-from pr_build_policy import PolicyError, changed_paths, is_protected_path, verify_pull_request  # noqa: E402
+from pr_build_policy import PolicyError, changed_paths, github_json, is_protected_path, verify_pull_request  # noqa: E402
 
 
 SHA = "a" * 40
 
 
 class PullRequestBuildPolicyTests(unittest.TestCase):
+    def test_retries_disconnected_pr_read_before_returning_current_head(self) -> None:
+        response = io.BytesIO(b'{"head":{"sha":"current-head"}}')
+        with (
+            patch("pr_build_policy.urllib.request.urlopen", side_effect=[http.client.RemoteDisconnected(), response]) as read,
+            patch("pr_build_policy.time.sleep") as sleep,
+        ):
+            self.assertEqual("current-head", github_json("/pulls/70")["head"]["sha"])
+        self.assertEqual(2, read.call_count)
+        sleep.assert_called_once_with(2)
+
+    def test_stops_retrying_disconnected_pr_reads(self) -> None:
+        with (
+            patch("pr_build_policy.urllib.request.urlopen", side_effect=http.client.RemoteDisconnected()) as read,
+            patch("pr_build_policy.time.sleep") as sleep,
+        ):
+            with self.assertRaises(http.client.RemoteDisconnected):
+                github_json("/pulls/70")
+        self.assertEqual(5, read.call_count)
+        self.assertEqual([2, 4, 8, 16], [call.args[0] for call in sleep.call_args_list])
+
+    def test_retries_transient_http_errors_but_preserves_authorization_failures(self) -> None:
+        for status in (429, 500, 502, 503, 504, 401, 403):
+            with self.subTest(status=status):
+                error = urllib.error.HTTPError("https://api.github.test", status, "error", {}, None)
+                with (
+                    patch("pr_build_policy.urllib.request.urlopen", side_effect=error) as read,
+                    patch("pr_build_policy.time.sleep") as sleep,
+                ):
+                    with self.assertRaises(urllib.error.HTTPError):
+                        github_json("/pulls/70")
+                transient = status in {429, 500, 502, 503, 504}
+                self.assertEqual(5 if transient else 1, read.call_count)
+                self.assertEqual(4 if transient else 0, sleep.call_count)
+
     def setUp(self) -> None:
         self.pull = {
             "state": "open",

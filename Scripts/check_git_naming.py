@@ -30,7 +30,13 @@ SUBJECT_PATTERN = re.compile(
 BRANCH_PATTERN = re.compile(rf"{PREFIX_PATTERN}/[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
-def validate(title: str, branch: str, commits: list[str]) -> list[str]:
+def validate(
+    title: str,
+    branch: str,
+    commits: list[str],
+    *,
+    parent_counts: list[int] | None = None,
+) -> list[str]:
     """Return human-readable violations for one pull request."""
     errors = []
     if SUBJECT_PATTERN.fullmatch(title) is None:
@@ -39,7 +45,17 @@ def validate(title: str, branch: str, commits: list[str]) -> list[str]:
         errors.append(f"Source branch: {branch!r}")
     if not commits:
         errors.append("PR has no commits to check")
+    if parent_counts is not None and len(parent_counts) != len(commits):
+        errors.append("Commit parent metadata does not match the commit count")
+    sync_subject = f"Merge branch 'main' into {branch}"
     for index, subject in enumerate(commits, start=1):
+        if (
+            parent_counts is not None
+            and len(parent_counts) == len(commits)
+            and parent_counts[index - 1] == 2
+            and subject == sync_subject
+        ):
+            continue
         if SUBJECT_PATTERN.fullmatch(subject) is None:
             errors.append(f"Commit {index}: {subject!r}")
     return errors
@@ -58,13 +74,17 @@ def github_json(url: str, token: str) -> object:
         return json.load(response)
 
 
-def pull_request_commits(pull_url: str, token: str) -> list[str]:
+def pull_request_commits(
+    pull_url: str, token: str, *, parent_counts: list[int] | None = None
+) -> list[str]:
     """Read PR commits through GitHub's paginated REST endpoint."""
     subjects = []
     page = 1
     while True:
         commits = github_json(f"{pull_url}/commits?per_page=100&page={page}", token)
         subjects.extend(commit["commit"]["message"].splitlines()[0] for commit in commits)
+        if parent_counts is not None:
+            parent_counts.extend(len(commit.get("parents", [])) for commit in commits)
         if len(commits) < 100:
             return subjects
         page += 1
@@ -81,7 +101,8 @@ def main() -> int:
     )
     token = os.environ["GITHUB_TOKEN"]
     pull_request = github_json(pull_url, token)
-    commits = pull_request_commits(pull_url, token)
+    parent_counts = []
+    commits = pull_request_commits(pull_url, token, parent_counts=parent_counts)
     if len(commits) != pull_request["commits"]:
         print(
             f"Expected {pull_request['commits']} PR commit(s), but the GitHub API returned "
@@ -90,7 +111,9 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    errors = validate(pull_request["title"], pull_request["head"]["ref"], commits)
+    errors = validate(
+        pull_request["title"], pull_request["head"]["ref"], commits, parent_counts=parent_counts
+    )
     if errors:
         print("Naming check failed:", file=sys.stderr)
         for error in errors:
@@ -103,6 +126,11 @@ def main() -> int:
         print(
             "Expected branch: <prefix>/<lowercase-kebab-case-description>. "
             f"Allowed prefixes: {', '.join(PREFIXES)}.",
+            file=sys.stderr,
+        )
+        print(
+            "A two-parent merge commit may also use GitHub's branch synchronization "
+            "subject: Merge branch 'main' into <current PR source branch>.",
             file=sys.stderr,
         )
         return 1

@@ -9,6 +9,17 @@
 #include "Pawn/InitStateParticipantInterface.h"
 #include "Pawn/InitStateWorldSubsystem.h"
 
+namespace Nelaric::Pawn
+{
+static bool ShouldCreateComponent(const APawn* Owner, const FPawnInitializationEntry& Entry)
+{
+	const bool bCreateOnAuthority = Owner->HasAuthority() && Entry.bCreateOnAuthority;
+	// Listen servers and standalone worlds also run client-side components.
+	const bool bCreateOnClient = Owner->GetNetMode() != NM_DedicatedServer && Entry.bCreateOnClient;
+	return bCreateOnAuthority || bCreateOnClient;
+}
+} // namespace Nelaric::Pawn
+
 UPawnInitializationComponent::UPawnInitializationComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
@@ -353,7 +364,7 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 	for (int32 Index = 0; Index < ActiveConfig->Components.Num(); ++Index)
 	{
 		const FPawnInitializationEntry& Entry = ActiveConfig->Components[Index];
-		if (Owner->HasAuthority() ? !Entry.bCreateOnAuthority : !Entry.bCreateOnClient)
+		if (!Nelaric::Pawn::ShouldCreateComponent(Owner, Entry))
 		{
 			continue;
 		}
@@ -423,7 +434,7 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 	// Build the entire ID table before resolving any dependencies or registering components.
 	for (const FPawnInitializationEntry& Entry : ActiveConfig->Components)
 	{
-		if (Owner->HasAuthority() ? !Entry.bCreateOnAuthority : !Entry.bCreateOnClient)
+		if (!Nelaric::Pawn::ShouldCreateComponent(Owner, Entry))
 		{
 			continue;
 		}

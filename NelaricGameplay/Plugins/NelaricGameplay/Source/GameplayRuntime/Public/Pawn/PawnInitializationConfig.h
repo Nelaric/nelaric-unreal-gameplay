@@ -15,9 +15,11 @@
  * @details IDs are unique within the asset and remain stable across edits.
  * Dependencies name other entries in this asset, including cyclic groups.
  * Authority and clients independently create selected entries under the
- * same ID. Configured dynamic instances, Init State, and Generation remain
- * local; replicate gameplay data through separate UE paths. A component
- * requiring dynamic instance replication needs a separate creation path.
+ * same ID. Listen servers and standalone worlds create the union of both
+ * creation flags, with one instance per ID. Configured dynamic instances,
+ * Init State, and Generation remain local; replicate gameplay data through
+ * separate UE paths. A component requiring dynamic instance replication
+ * needs a separate creation path.
  */
 USTRUCT(BlueprintType)
 struct FPawnInitializationEntry
@@ -36,7 +38,7 @@ struct FPawnInitializationEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
 	bool bCreateOnAuthority = true;
 
-	/// Create this component on non-authority peers.
+	/// Create on clients, listen servers, and standalone worlds.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Initialization")
 	bool bCreateOnClient = true;
 

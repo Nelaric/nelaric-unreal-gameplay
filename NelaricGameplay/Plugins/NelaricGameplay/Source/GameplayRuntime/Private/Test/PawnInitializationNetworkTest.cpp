@@ -230,7 +230,8 @@ bool CheckPawnRound(FInitNetworkResult& Test, AInitNetworkTestPawn* Pawn, const 
 		const FString Prefix = Label + TEXT(" ") + Entry.ComponentId.ToString();
 		UInitNetworkTestGraphNode* Node =
 		    FindObject<UInitNetworkTestGraphNode>(Pawn, *(TEXT("Init_") + Entry.ComponentId.ToString()));
-		const bool bCreatedOnThisSide = Pawn->HasAuthority() ? Entry.bCreateOnAuthority : Entry.bCreateOnClient;
+		const bool bCreatedOnThisSide = (Pawn->HasAuthority() && Entry.bCreateOnAuthority) ||
+		                                (Pawn->GetNetMode() != NM_DedicatedServer && Entry.bCreateOnClient);
 		if (!bCreatedOnThisSide)
 		{
 			Test.TestTrue(*(Prefix + TEXT(" absent on excluded network side")), Node == nullptr);
@@ -253,7 +254,8 @@ bool CheckPawnRound(FInitNetworkResult& Test, AInitNetworkTestPawn* Pawn, const 
 		int32 ExpectedIncomingCalls = 0;
 		for (const FPawnInitializationEntry& Caller : Manager->InitializationConfig->Components)
 		{
-			const bool bCallerCreated = Pawn->HasAuthority() ? Caller.bCreateOnAuthority : Caller.bCreateOnClient;
+			const bool bCallerCreated = (Pawn->HasAuthority() && Caller.bCreateOnAuthority) ||
+			                            (Pawn->GetNetMode() != NM_DedicatedServer && Caller.bCreateOnClient);
 			if (bCallerCreated && Caller.DependencyIds.Contains(Entry.ComponentId))
 			{
 				++ExpectedIncomingCalls;

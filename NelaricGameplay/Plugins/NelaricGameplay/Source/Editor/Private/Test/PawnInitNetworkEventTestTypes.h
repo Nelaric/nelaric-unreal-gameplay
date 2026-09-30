@@ -32,4 +32,8 @@ class AInitNetworkEventPawn final : public ANelaricPawn
 
 public:
 	AInitNetworkEventPawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UPROPERTY(Replicated)
+	int32 TestPawnId = 0;
 };

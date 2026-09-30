@@ -178,45 +178,44 @@ public:
 	 * @param Target Begins approval by the target authority.
 	 * @param Terminated Releases transport state after a terminal result.
 	 */
-	GAMEPLAYRUNTIME_API void InternalConfigureApprovalTransport(const Nelaric::FGameplayRuntimeInternalAccessKey& Key,
-	                                                            const Nelaric::FStartTransitionApproval& Source,
-	                                                            const Nelaric::FStartTransitionApproval& Target,
-	                                                            const Nelaric::FOnTransitionTerminated& Terminated);
+	void InternalConfigureApprovalTransport(const Nelaric::FGameplayRuntimeInternalAccessKey& Key,
+	                                        const Nelaric::FStartTransitionApproval& Source,
+	                                        const Nelaric::FStartTransitionApproval& Target,
+	                                        const Nelaric::FOnTransitionTerminated& Terminated);
 
 	/** @brief Removes the internal approval transport on the game thread.
 	 * @param Key Internal access for the transport subsystem.
 	 */
-	GAMEPLAYRUNTIME_API void InternalClearApprovalTransport(const Nelaric::FGameplayRuntimeInternalAccessKey& Key);
+	void InternalClearApprovalTransport(const Nelaric::FGameplayRuntimeInternalAccessKey& Key);
 
 	/** @brief Reports the source authority's decision.
 	 * @param Key Internal access for the transport subsystem.
 	 * @param RequestId Identity of the request being approved.
 	 * @param bApproved Whether the source authority approved departure.
 	 */
-	GAMEPLAYRUNTIME_API void InternalReportSourceApproval(const Nelaric::FGameplayRuntimeInternalAccessKey& Key,
-	                                                      uint64 RequestId, bool bApproved);
+	void InternalReportSourceApproval(const Nelaric::FGameplayRuntimeInternalAccessKey& Key, uint64 RequestId,
+	                                  bool bApproved);
 
 	/** @brief Reports the target authority's decision.
 	 * @param Key Internal access for the transport subsystem.
 	 * @param RequestId Identity of the request being approved.
 	 * @param bApproved Whether the target authority approved arrival.
 	 */
-	GAMEPLAYRUNTIME_API void InternalReportTargetApproval(const Nelaric::FGameplayRuntimeInternalAccessKey& Key,
-	                                                      uint64 RequestId, bool bApproved);
+	void InternalReportTargetApproval(const Nelaric::FGameplayRuntimeInternalAccessKey& Key, uint64 RequestId,
+	                                  bool bApproved);
 
 	/** @brief Reports that the target authority could not be reached.
 	 * @param Key Internal access for the transport subsystem.
 	 * @param RequestId Identity of the request awaiting approval.
 	 */
-	GAMEPLAYRUNTIME_API void InternalReportTargetUnavailable(const Nelaric::FGameplayRuntimeInternalAccessKey& Key,
-	                                                         uint64 RequestId);
+	void InternalReportTargetUnavailable(const Nelaric::FGameplayRuntimeInternalAccessKey& Key, uint64 RequestId);
 
 protected:
 	/// Registers the coordinator's tick while its game instance lives.
-	GAMEPLAYRUNTIME_API virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	/// Ends active work before the game instance subsystem is destroyed.
-	GAMEPLAYRUNTIME_API virtual void Deinitialize() override;
+	virtual void Deinitialize() override;
 
 private:
 	struct FActiveTransition

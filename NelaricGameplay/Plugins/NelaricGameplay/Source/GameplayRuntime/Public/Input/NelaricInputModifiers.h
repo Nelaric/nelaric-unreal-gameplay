@@ -16,9 +16,8 @@ class UNelaricInputModifierMouseSensitivity : public UInputModifier
 	GENERATED_BODY()
 public:
 public:
-	GAMEPLAYRUNTIME_API virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
-	                                                                       FInputActionValue CurrentValue,
-	                                                                       float DeltaTime) override;
+	virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
+	                                                   FInputActionValue CurrentValue, float DeltaTime) override;
 };
 
 /** @brief Applies a gamepad sensitivity multiplier from local preferences.
@@ -35,9 +34,8 @@ public:
 	bool bUseTargetingSensitivity = false;
 
 public:
-	GAMEPLAYRUNTIME_API virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
-	                                                                       FInputActionValue CurrentValue,
-	                                                                       float DeltaTime) override;
+	virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
+	                                                   FInputActionValue CurrentValue, float DeltaTime) override;
 };
 
 /** @brief Removes a settings-driven movement or look stick dead zone.
@@ -61,9 +59,8 @@ public:
 	float UpperThreshold = 1.0f;
 
 public:
-	GAMEPLAYRUNTIME_API virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
-	                                                                       FInputActionValue CurrentValue,
-	                                                                       float DeltaTime) override;
+	virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
+	                                                   FInputActionValue CurrentValue, float DeltaTime) override;
 };
 
 /** @brief Inverts look axes according to local player preferences.
@@ -76,7 +73,6 @@ class UNelaricInputModifierAimInversion : public UInputModifier
 	GENERATED_BODY()
 public:
 public:
-	GAMEPLAYRUNTIME_API virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
-	                                                                       FInputActionValue CurrentValue,
-	                                                                       float DeltaTime) override;
+	virtual FInputActionValue ModifyRaw_Implementation(const UEnhancedPlayerInput* PlayerInput,
+	                                                   FInputActionValue CurrentValue, float DeltaTime) override;
 };

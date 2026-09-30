@@ -8,6 +8,8 @@ public class DemoGame : ModuleRules
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PrivateDependencyModuleNames.Add("Core");
+		PublicDependencyModuleNames.AddRange(
+			new string[] { "Core", "CoreUObject", "Engine", "GameplayRuntime", "EnhancedInput", "GameplayTags" }
+		);
 	}
 }

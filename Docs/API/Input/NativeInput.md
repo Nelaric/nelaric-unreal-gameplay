@@ -8,7 +8,15 @@ GameplayRuntime provides native input configuration, tag bindings, mapping manag
 
 ## Responsibility
 
-The framework provides action lookup, binding/removal helpers, mapping activation/removal, and input preferences. The consuming game defines action tags, action value types, trigger events, input callbacks, movement rules, camera controls, crouch, jump, and automatic movement. Framework Pawn and Character bases contain no concrete input handlers and do not automatically create an input gameplay component or bind actions.
+The framework provides action lookup, binding/removal helpers, mapping activation/removal, and input preferences. The consuming game defines action tags, action value types, trigger events, input callbacks, movement rules, camera controls, crouch, jump, and automatic movement. Framework Pawn and Character bases contain no concrete input handlers and do not automatically create or bind the optional input lifecycle component.
+
+## Pawn input lifecycle component
+
+`UPlayerInputComponent` derives from `UPawnInitStateComponent` and provides the Hero-style input lifecycle without gameplay handlers. Add it to a pawn's `UPawnInitializationConfig` as a component entry, with creation on both authority and clients when the pawn may be locally controlled on either side. Assign `InputConfig` on the component or call `SetInputConfig` to replace it during play. Configure it as required for pawn Ready only when input availability should gate that pawn's readiness.
+
+The participant advances on remote pawns and AI without local input work. When a locally controlled player's configuration and Enhanced Input objects are available, it waits for the owning local player, `UNelaricInputComponent`, and `UEnhancedInputLocalPlayerSubsystem`. After its initialization group commits Ready, it activates mapping contexts and calls `BindInputActions`. Derive a game-specific C++ component and override this hook to bind game-defined actions with the protected `BindNativeAction` helper. Override `UnbindInputActions` to release game state. The component removes tracked action handles and owned mappings when its initialization generation is invalidated, including controller replacement and teardown. `OnPlayerInputReady()` and `OnPlayerInputRevoked()` expose native C++ multicast notifications for lifecycle observers; they do not define gameplay callbacks or Blueprint-assignable delegates.
+
+A null `InputConfig` leaves the participant Ready without installing mappings or announcing local input readiness. `SetInputConfig` invalidates the current generation so the coordinator can retry. A game that uses the component should avoid separately calling `AddInputMappings` for the same input component, since that method replaces its previous mappings. The game still owns action tags, callback logic, and content assets.
 
 ## Configure and bind
 
@@ -16,7 +24,7 @@ The framework provides action lookup, binding/removal helpers, mapping activatio
 2. Define the game's action tags. Create a `UNelaricInputConfig` data asset with `NativeInputActions` and `MappingContexts`. Duplicate action tags resolve to the first non-null action; null entries are skipped. No concrete action tags are predefined by the framework.
 3. In the game's input setup code, obtain the pawn's `UNelaricInputComponent` and the owning local player's `UEnhancedInputLocalPlayerSubsystem`. Do not use a global player index for this lookup.
 4. Call `AddInputMappings` with the configuration and local subsystem, then `BindNativeAction` for each game callback and trigger event. Store the returned binding handles in the consuming game's owner.
-5. During input replacement or teardown, call `RemoveBinds` on the component that created those handles and `RemoveInputMappings`. Repeat input setup when the game's required context is ready. Existing `UPawnInitializationComponent` readiness/revocation notifications are available for the game to coordinate this lifecycle.
+5. Without `UPlayerInputComponent`, remove bindings on the creating component and call `RemoveInputMappings` during input replacement or teardown. With the lifecycle component, its init-state invalidation performs that cleanup and reinitialization.
 
 All APIs and callbacks run on the game thread. The game owns configuration lifetime and callback behavior. `BindNativeAction` returns false for missing config, action, or callback target without adding a handle. UObject callback targets are weakly bound. Only the game's specified actions are bound; the framework never calls movement, camera, crouch, or jump APIs.
 

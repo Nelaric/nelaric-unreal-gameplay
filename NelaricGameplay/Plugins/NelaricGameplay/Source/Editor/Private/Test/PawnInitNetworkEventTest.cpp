@@ -2,6 +2,8 @@
 
 #include "Test/PawnInitNetworkEventTestTypes.h"
 
+#include "Components/InputComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Pawn/PawnInitializationComponent.h"
@@ -46,11 +48,28 @@ void UInitNetworkEventComponent::OnInitReady()
 	ReadyController = GetController();
 	ReadyPlayerState = GetPlayerState();
 	bHadLocalInput = GetPawn()->InputComponent != nullptr;
+	const APawn* Pawn = GetPawn();
+	UE_LOG(LogTemp, Display,
+	       TEXT("NetworkEvents Ready: world=%s pawn=%s role=%d generation=%llu controller=%s playerState=%s "
+	            "readyCalls=%d cleanupCalls=%d"),
+	       *GetNameSafe(GetWorld()), *GetNameSafe(Pawn), Pawn ? static_cast<int32>(Pawn->GetLocalRole()) : ROLE_None,
+	       static_cast<unsigned long long>(GetInitGeneration().Value), *GetNameSafe(ReadyController.Get()),
+	       *GetNameSafe(ReadyPlayerState.Get()), ReadyCalls, CleanupCalls);
 }
 
 void UInitNetworkEventComponent::OnInitGenerationInvalidated(const Nelaric::FInitStateSnapshot& Previous)
 {
 	++CleanupCalls;
+	const APawn* Pawn = GetPawn();
+	UE_LOG(LogTemp, Display,
+	       TEXT("NetworkEvents Invalidate: world=%s pawn=%s role=%d previousGeneration=%llu generation=%llu "
+	            "previousState=%d controller=%s playerState=%s boundController=%s boundPlayerState=%s "
+	            "readyCalls=%d cleanupCalls=%d"),
+	       *GetNameSafe(GetWorld()), *GetNameSafe(Pawn), Pawn ? static_cast<int32>(Pawn->GetLocalRole()) : ROLE_None,
+	       static_cast<unsigned long long>(Previous.Generation.Value),
+	       static_cast<unsigned long long>(GetInitGeneration().Value), static_cast<int32>(Previous.State),
+	       *GetNameSafe(GetController()), *GetNameSafe(GetPlayerState()), *GetNameSafe(ReadyController.Get()),
+	       *GetNameSafe(ReadyPlayerState.Get()), ReadyCalls, CleanupCalls);
 	ReadyController.Reset();
 	ReadyPlayerState.Reset();
 	bHadLocalInput = false;
@@ -61,7 +80,6 @@ void UInitNetworkEventComponent::OnInitGenerationInvalidated(const Nelaric::FIni
 #include "Editor.h"
 #include "Engine/Engine.h"
 #include "Engine/NetDriver.h"
-#include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "HAL/PlatformTime.h"
@@ -104,11 +122,18 @@ public:
 			}
 			Clients += World->GetNetMode() == NM_Client ? 1 : 0;
 		}
-		if (FPlatformTime::Seconds() - StartedAt > 60.0)
+		const double Now = FPlatformTime::Seconds();
+		if (Now - StartedAt > 60.0)
 		{
+			LogDiagnostics(TEXT("Timeout"), Worlds);
 			Test.AddError(
 			    FString::Printf(TEXT("Network context phase %d timed out without polling initialization."), Phase));
 			return true;
+		}
+		if (Now - LastDiagnosticAt >= 10.0)
+		{
+			LogDiagnostics(TEXT("Waiting"), Worlds);
+			LastDiagnosticAt = Now;
 		}
 		if (!Server || Clients != 2)
 		{
@@ -280,11 +305,81 @@ private:
 	{
 		++Phase;
 		StartedAt = FPlatformTime::Seconds();
+		LastDiagnosticAt = StartedAt;
+		LogDiagnostics(TEXT("PhaseStarted"), NetworkWorlds());
+	}
+
+	void LogDiagnostics(const TCHAR* Reason, const TArray<UWorld*>& Worlds) const
+	{
+		UE_LOG(LogTemp, Display, TEXT("NetworkEvents Snapshot: reason=%s phase=%d elapsed=%.2f worlds=%d"), Reason,
+		       Phase, FPlatformTime::Seconds() - StartedAt, Worlds.Num());
+		int32 ListenServers = 0;
+		int32 Clients = 0;
+		int32 PawnCopies = 0;
+		int32 ReadyPawnCopies = 0;
+		for (UWorld* World : Worlds)
+		{
+			ListenServers += World->GetNetMode() == NM_ListenServer ? 1 : 0;
+			Clients += World->GetNetMode() == NM_Client ? 1 : 0;
+			UE_LOG(LogTemp, Display, TEXT("NetworkEvents World: world=%s netMode=%d netDriver=%s"), *GetNameSafe(World),
+			       static_cast<int32>(World->GetNetMode()), *GetNameSafe(World->GetNetDriver()));
+			for (TActorIterator<AInitNetworkEventPawn> It(World); It; ++It)
+			{
+				AInitNetworkEventPawn* Pawn = *It;
+				const bool bIsPawnCopy = ServerPawn.IsValid() && Pawn->GetFName() == ServerPawn->GetFName();
+				const bool bIsLocalPawnCopy = LocalPawn.IsValid() && Pawn->GetFName() == LocalPawn->GetFName();
+				if (!bIsPawnCopy && !bIsLocalPawnCopy)
+				{
+					continue;
+				}
+				const UPawnInitializationComponent* Manager = Pawn->GetPawnInitializationComponent();
+				const UInitNetworkEventComponent* Component = Pawn->FindComponentByClass<UInitNetworkEventComponent>();
+				const APlayerController* Controller = Cast<APlayerController>(Pawn->GetController());
+				const FPeerSnapshot* Previous = Before.Find(Pawn);
+				const bool bPawnReady = Manager && Manager->IsPawnInitialized();
+				PawnCopies += bIsPawnCopy ? 1 : 0;
+				ReadyPawnCopies += bIsPawnCopy && bPawnReady ? 1 : 0;
+				UE_LOG(LogTemp, Display,
+				       TEXT("NetworkEvents Pawn: world=%s pawn=%s localFixture=%d role=%d locallyControlled=%d "
+				            "controller=%s controllerPawn=%s playerState=%s controllerPlayerState=%s input=%s "
+				            "pawnReady=%d"),
+				       *GetNameSafe(World), *GetNameSafe(Pawn), bIsLocalPawnCopy,
+				       static_cast<int32>(Pawn->GetLocalRole()), Pawn->IsLocallyControlled(),
+				       *GetNameSafe(Pawn->GetController()), *GetNameSafe(Controller ? Controller->GetPawn() : nullptr),
+				       *GetNameSafe(Pawn->GetPlayerState()),
+				       *GetNameSafe(Controller ? Controller->PlayerState.Get() : nullptr),
+				       *GetNameSafe(Pawn->InputComponent), bPawnReady);
+				if (Component)
+				{
+					UE_LOG(LogTemp, Display,
+					       TEXT("NetworkEvents Participant: world=%s pawn=%s initState=%d generation=%llu "
+					            "hasPrevious=%d previousGeneration=%llu previousPlayerState=%s "
+					            "boundController=%s boundPlayerState=%s readyCalls=%d cleanupCalls=%d "
+					            "hadLocalInput=%d terminalFailure=%d"),
+					       *GetNameSafe(World), *GetNameSafe(Pawn), static_cast<int32>(Component->GetInitState()),
+					       static_cast<unsigned long long>(Component->GetInitGeneration().Value), Previous != nullptr,
+					       static_cast<unsigned long long>(Previous ? Previous->Generation.Value : 0),
+					       *GetNameSafe(Previous ? Previous->PlayerState.Get() : nullptr),
+					       *GetNameSafe(Component->ReadyController.Get()),
+					       *GetNameSafe(Component->ReadyPlayerState.Get()), Component->ReadyCalls,
+					       Component->CleanupCalls, Component->bHadLocalInput, Component->HasTerminalInitFailure());
+				}
+				else
+				{
+					UE_LOG(LogTemp, Display, TEXT("NetworkEvents Participant: world=%s pawn=%s missing=1"),
+					       *GetNameSafe(World), *GetNameSafe(Pawn));
+				}
+			}
+		}
+		UE_LOG(LogTemp, Display,
+		       TEXT("NetworkEvents Summary: phase=%d listenServers=%d clients=%d pawnCopies=%d readyPawnCopies=%d"),
+		       Phase, ListenServers, Clients, PawnCopies, ReadyPawnCopies);
 	}
 
 	FAutomationTestBase& Test;
 	int32 Phase = 0;
 	double StartedAt = FPlatformTime::Seconds();
+	double LastDiagnosticAt = 0.0;
 	TWeakObjectPtr<APlayerController> FirstController;
 	TWeakObjectPtr<APlayerController> SecondController;
 	TWeakObjectPtr<AInitNetworkEventPawn> ServerPawn;

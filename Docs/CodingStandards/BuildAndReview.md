@@ -64,6 +64,8 @@ Commit subjects must use `<prefix>: <short English summary>` or `<prefix>(<scope
 
 PR titles must follow the same format as commit subjects. CI checks the PR title, source branch, and every commit subject in the PR. It checks the allowed prefix, structure, and an English summary beginning with a lowercase letter; reviewers confirm that the first word is a verb and that the summary describes the change.
 
+GitHub branch synchronization commits are a limited exception: a commit with exactly two parents may use the exact subject `Merge branch 'main' into <current PR source branch>`. The naming checker reads parent counts from the GitHub API and matches the destination to the current PR source branch. Missing parent metadata, ordinary commits with the same text, merges from other branches, and merges into a different destination do not qualify. PR titles, branch names, ordinary commits, and squash-merge titles must still follow the standard format.
+
 Working branches must use `<prefix>/<lowercase-kebab-case-description>`, for example `fix/admission-timeout`. The prefix must come from the table above; `main` is the reserved default-branch exception. Do not introduce another prefix without first updating this standard.
 
 ## Text-file exceptions

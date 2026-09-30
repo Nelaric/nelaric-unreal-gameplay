@@ -38,6 +38,10 @@
 	],
 	"Plugins": [
 		{
+			"Name": "EnhancedInput",
+			"Enabled": true
+		},
+		{
 			"Name": "OnlineSubsystemUtils",
 			"Enabled": true
 		}

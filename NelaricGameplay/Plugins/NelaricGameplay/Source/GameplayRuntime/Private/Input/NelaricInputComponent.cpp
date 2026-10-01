@@ -20,6 +20,7 @@ bool UNelaricInputComponent::AddInputMappings(const UNelaricInputConfig* InputCo
 	{
 		return false;
 	}
+	ActiveInputConfig = InputConfig;
 	MappingSubsystem = InputSubsystem;
 	for (const FNelaricInputMapping& Mapping : InputConfig->MappingContexts)
 	{
@@ -38,13 +39,62 @@ bool UNelaricInputComponent::AddInputMappings(const UNelaricInputConfig* InputCo
 				}
 			}
 		}
-		if (!InputSubsystem->HasMappingContext(Context))
+		if (Mapping.bActivateOnStart)
 		{
-			FModifyContextOptions Options;
-			Options.bIgnoreAllPressedKeysUntilRelease = true;
-			InputSubsystem->AddMappingContext(Context, Mapping.Priority, Options);
-			OwnedMappingContexts.Add(Context);
+			ActivateMapping(Mapping, InputSubsystem);
 		}
+	}
+	return true;
+}
+
+bool UNelaricInputComponent::AddInputMappingByTag(const FGameplayTag& MappingTag)
+{
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = MappingSubsystem.Get();
+	const FNelaricInputMapping* Mapping =
+	    ActiveInputConfig ? ActiveInputConfig->FindInputMappingForTag(MappingTag) : nullptr;
+	return Subsystem && Mapping && ActivateMapping(*Mapping, Subsystem);
+}
+
+bool UNelaricInputComponent::RemoveInputMappingByTag(const FGameplayTag& MappingTag)
+{
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = MappingSubsystem.Get();
+	const FNelaricInputMapping* Mapping =
+	    ActiveInputConfig ? ActiveInputConfig->FindInputMappingForTag(MappingTag) : nullptr;
+	if (!Subsystem || !Mapping)
+	{
+		return false;
+	}
+	UInputMappingContext* Context = Mapping->MappingContext;
+	for (int32 Index = 0; Index < OwnedMappingContexts.Num(); ++Index)
+	{
+		if (OwnedMappingContexts[Index] == Context)
+		{
+			const bool bWasActive = Subsystem->HasMappingContext(Context);
+			if (bWasActive)
+			{
+				Subsystem->RemoveMappingContext(Context);
+			}
+			OwnedMappingContexts.RemoveAtSwap(Index);
+			return bWasActive;
+		}
+	}
+	return false;
+}
+
+bool UNelaricInputComponent::ActivateMapping(const FNelaricInputMapping& Mapping,
+                                             UEnhancedInputLocalPlayerSubsystem* InputSubsystem)
+{
+	UInputMappingContext* Context = Mapping.MappingContext;
+	if (!Context)
+	{
+		return false;
+	}
+	if (!InputSubsystem->HasMappingContext(Context))
+	{
+		FModifyContextOptions Options;
+		Options.bIgnoreAllPressedKeysUntilRelease = true;
+		InputSubsystem->AddMappingContext(Context, Mapping.Priority, Options);
+		OwnedMappingContexts.AddUnique(Context);
 	}
 	return true;
 }
@@ -59,6 +109,7 @@ void UNelaricInputComponent::RemoveInputMappings()
 		}
 	}
 	OwnedMappingContexts.Reset();
+	ActiveInputConfig = nullptr;
 	MappingSubsystem.Reset();
 }
 

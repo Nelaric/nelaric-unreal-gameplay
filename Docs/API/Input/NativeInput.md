@@ -21,20 +21,22 @@ A null `InputConfig` leaves the participant Ready without installing mappings or
 ## Configure and bind
 
 1. Create Input Action and Input Mapping Context assets in the consuming game. Select action value types and triggers according to game behavior.
-2. Define the game's action tags. Create a `UNelaricInputConfig` data asset with `NativeInputActions` and `MappingContexts`. Duplicate action tags resolve to the first non-null action; null entries are skipped. No concrete action tags are predefined by the framework.
+2. Define the game's action tags and mapping tags under `InputMapping.*`. Create a `UNelaricInputConfig` data asset with `NativeInputActions` and `MappingContexts`. Duplicate action tags resolve to the first non-null action; by-tag mapping lookup uses the first non-null matching context. Null entries are skipped. No concrete tags are predefined by the framework.
 3. In the game's input setup code, obtain the pawn's `UNelaricInputComponent` and the owning local player's `UEnhancedInputLocalPlayerSubsystem`. Do not use a global player index for this lookup.
 4. Call `AddInputMappings` with the configuration and local subsystem, then `BindNativeAction` for each game callback and trigger event. Store the returned binding handles in the consuming game's owner.
 5. Without `UPlayerInputComponent`, remove bindings on the creating component and call `RemoveInputMappings` during input replacement or teardown. With the lifecycle component, its init-state invalidation performs that cleanup and reinitialization.
 
-All APIs and callbacks run on the game thread. The game owns configuration lifetime and callback behavior. `BindNativeAction` returns false for missing config, action, or callback target without adding a handle. UObject callback targets are weakly bound. Only the game's specified actions are bound; the framework never calls movement, camera, crouch, or jump APIs.
+All APIs and callbacks run on the game thread. The game authors the configuration and callbacks; the input component retains its installed config until mapping removal or replacement. `BindNativeAction` returns false for missing config, action, or callback target without adding a handle. UObject callback targets are weakly bound. Only the game's specified actions are bound; the framework never calls movement, camera, crouch, or jump APIs.
 
 `DefaultInput.ini` selects `UEnhancedPlayerInput` and `UNelaricInputComponent`, enables Enhanced Input user settings, and selects `UNelaricInputUserSettings`. Other consuming projects must apply these settings and enable the `NelaricGameplay` plugin. No custom local player class is required. Action, mapping, and configuration assets are authored by the game.
 
 ## Mapping lifetime
 
-`AddInputMappings` replaces this input component's previous mapping configuration. Passing null config or subsystem releases old mappings and returns false. Registration with user settings is optional and independent of activation. Registered remapping rows persist for the local player across pawn replacement.
+Each mapping entry has an optional `MappingTag` and a `bActivateOnStart` flag, which defaults to true for existing assets. Give an entry a valid mapping tag if the game needs to control it later. `AddInputMappings` replaces this input component's previous mapping configuration and activates entries marked for startup. Passing null config or subsystem releases old mappings and returns false. Registration with user settings is optional and independent of activation, including for mappings that start inactive. Registered remapping rows persist for the local player across pawn replacement.
 
-Contexts already active are borrowed with their existing priority. The component records only contexts it newly activates and removes them on `RemoveInputMappings` or `OnUnregister`. Duplicate context entries use the first active priority. No global `ClearAllMappings` or `ClearActionBindings` is used.
+After installing a configuration, call `AddInputMappingByTag` to activate a configured context at its priority, or `RemoveInputMappingByTag` to remove one activated by this component. Both use exact tags; an invalid or missing tag returns false. Adding an already active context succeeds without changing its priority. Removing a borrowed context returns false and leaves it active. The component retains the installed config until `RemoveInputMappings` or replacement. For independent toggling, use a distinct context for each tag.
+
+Contexts already active are borrowed with their existing priority. The component records only contexts it newly activates and removes them on `RemoveInputMappings` or `OnUnregister`. Duplicate context entries use the first active priority. By-tag operations on duplicate mapping tags select the first non-null context; startup activation still processes every marked entry. Untagged entries may activate at startup but cannot be toggled by tag. No global `ClearAllMappings` or `ClearActionBindings` is used.
 
 Use distinct mapping contexts for independently managed systems. Another system must not concurrently claim a context owned by this component, because Enhanced Input does not provide reference-counted activation ownership. Mapping removal does not remove game callback bindings; `RemoveBinds` handles those separately.
 

@@ -19,20 +19,43 @@ class UNelaricInputComponent : public UEnhancedInputComponent
 {
 	GENERATED_BODY()
 public:
-	/** @brief Replaces this component's active mapping configuration.
-	 * @details Call on the game thread. Releases previously owned contexts.
-	 * Contexts already active are borrowed with their current priority;
-	 * only newly activated contexts are removed by RemoveInputMappings.
-	 * Registered remapping rows persist for the local player.
-	 * @param InputConfig Asset describing mappings; null leaves no mappings.
-	 * @param InputSubsystem Local player's subsystem; null leaves no mappings.
-	 * @return Whether a non-null config and subsystem were accepted.
+	/** @brief Installs the input mapping config.
+	 * @details On the game thread, replace owned contexts; activate
+	 * entries
+	 * marked bActivateOnStart; borrow already active contexts
+	 * @param InputConfig Asset or null to
+	 * clear
+	 * @param InputSubsystem Local subsystem or null to clear
+	 * @return True when both inputs are
+	 * present
 	 */
 	GAMEPLAYRUNTIME_API bool AddInputMappings(const UNelaricInputConfig* InputConfig,
 	                                          UEnhancedInputLocalPlayerSubsystem* InputSubsystem);
-	/** @brief Releases only mapping contexts activated by this component.
-	 * @details Call on the game thread. Safe to repeat. Does not alter action
-	 * bindings or unregister persistent player remapping rows.
+	/** @brief Activates a mapping by exact tag.
+	 * @details Call on the game thread after setup.
+	 * An active
+	 * context keeps its priority.
+	 * A new context is owned until removal or reset.
+	 * @param MappingTag Exact tag
+	 * to resolve.
+	 * @return True when the context is active.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Nelaric|Input")
+	GAMEPLAYRUNTIME_API bool AddInputMappingByTag(const FGameplayTag& MappingTag);
+	/** @brief Removes an owned context by exact tag.
+	 * @details Call on the game thread.
+	 * Borrowed contexts and
+	 * remapping rows remain.
+	 * @param MappingTag Exact tag to resolve.
+	 * @return True when an active owned context
+	 * was removed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Nelaric|Input")
+	GAMEPLAYRUNTIME_API bool RemoveInputMappingByTag(const FGameplayTag& MappingTag);
+	/** @brief Releases mapping contexts owned by this component.
+	 * @details Call on the game thread. Safe to
+	 * repeat.
+	 * Action bindings and player remapping rows remain.
 	 */
 	GAMEPLAYRUNTIME_API void RemoveInputMappings();
 
@@ -75,6 +98,9 @@ public:
 	virtual void OnUnregister() override;
 
 private:
+	bool ActivateMapping(const FNelaricInputMapping& Mapping, UEnhancedInputLocalPlayerSubsystem* InputSubsystem);
+	UPROPERTY(Transient)
+	TObjectPtr<const UNelaricInputConfig> ActiveInputConfig;
 	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> MappingSubsystem;
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInputMappingContext>> OwnedMappingContexts;

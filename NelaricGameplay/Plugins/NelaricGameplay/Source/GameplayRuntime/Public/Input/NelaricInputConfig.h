@@ -23,17 +23,23 @@ struct FNelaricInputAction
 	FGameplayTag InputTag;
 };
 
-/// Describes an active mapping context and optional remapping registration.
+/// Describes a mapping context and its activation policy.
 USTRUCT(BlueprintType)
 struct FNelaricInputMapping
 {
 	GENERATED_BODY()
+	/// Identifier used to activate or remove this context on demand.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (Categories = "InputMapping"))
+	FGameplayTag MappingTag;
 	/// Loaded context retained by the configuration; null entries are skipped.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> MappingContext = nullptr;
 	/// Higher priorities win conflicting mappings.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	int32 Priority = 0;
+	/// Activates the context when AddInputMappings installs this configuration.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	bool bActivateOnStart = true;
 	/// Registers player mappable keys with Enhanced Input user settings.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	bool bRegisterWithSettings = true;
@@ -55,10 +61,20 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Nelaric|Input")
 	GAMEPLAYRUNTIME_API const UInputAction* FindNativeInputActionForTag(const FGameplayTag& InputTag) const;
+	/** @brief Finds the first usable mapping with an exact tag.
+	 * @details Call on the game thread. Invalid or
+	 * absent tags return null.
+	 * The pointer is non-owning and remains valid until this asset changes.
+	 *
+	 * @param MappingTag Exact identifier for a mapping context.
+	 * @return Matching entry with a non-null context,
+	 * or null.
+	 */
+	GAMEPLAYRUNTIME_API const FNelaricInputMapping* FindInputMappingForTag(const FGameplayTag& MappingTag) const;
 	/// Manually bound actions; duplicate tags resolve to the first valid action.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (TitleProperty = "InputTag"))
 	TArray<FNelaricInputAction> NativeInputActions;
-	/// Contexts activated while the owning pawn has local input.
+	/// Contexts available to the local player while this config is installed.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (TitleProperty = "MappingContext"))
 	TArray<FNelaricInputMapping> MappingContexts;
 };

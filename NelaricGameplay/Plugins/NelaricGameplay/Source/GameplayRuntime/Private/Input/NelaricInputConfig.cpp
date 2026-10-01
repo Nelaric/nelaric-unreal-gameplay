@@ -14,3 +14,18 @@ const UInputAction* UNelaricInputConfig::FindNativeInputActionForTag(const FGame
 	}
 	return nullptr;
 }
+
+const FNelaricInputMapping* UNelaricInputConfig::FindInputMappingForTag(const FGameplayTag& MappingTag) const
+{
+	if (MappingTag.IsValid())
+	{
+		for (const FNelaricInputMapping& Mapping : MappingContexts)
+		{
+			if (Mapping.MappingContext && Mapping.MappingTag == MappingTag)
+			{
+				return &Mapping;
+			}
+		}
+	}
+	return nullptr;
+}

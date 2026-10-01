@@ -1,0 +1,562 @@
+﻿// Copyright (c) 2026 Nelaric Contributors
+
+#include "Player/DemoPlayerController.h"
+
+#include "DemoControlGameMode.h"
+#include "Character/DemoCharacter.h"
+#include "Player/DemoOverviewPawn.h"
+#include "Camera/CameraComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerState.h"
+#include "Input/PlayerInputComponent.h"
+#include "Pawn/PawnControlComponent.h"
+#include "PawnGasBindingComponent.h"
+#include "Player/ControlSwitchSubsystem.h"
+#include "Net/UnrealNetwork.h"
+#include "Templates/UnrealTemplate.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogDemoControl, Log, All);
+
+ADemoPlayerController::ADemoPlayerController()
+{
+	bAutoManageActiveCameraTarget = false;
+}
+
+APawn* ADemoPlayerController::GetSelectedBot() const
+{
+	return SelectedBot.Get();
+}
+
+ADemoOverviewPawn* ADemoPlayerController::GetOverviewPawn() const
+{
+	if (IsValid(OverviewPawn) && !OverviewPawn->IsActorBeingDestroyed())
+	{
+		return OverviewPawn;
+	}
+	return Cast<ADemoOverviewPawn>(GetPawn());
+}
+
+UCameraComponent* ADemoPlayerController::GetOverviewCamera() const
+{
+	const ADemoOverviewPawn* Overview = GetOverviewPawn();
+	return IsValid(Overview) && !Overview->IsActorBeingDestroyed() ? Overview->GetCameraComponent() : nullptr;
+}
+
+void ADemoPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+	InitializeLocalDemo();
+}
+
+void ADemoPlayerController::ReceivedPlayer()
+{
+	Super::ReceivedPlayer();
+	if (HasActorBegunPlay())
+	{
+		InitializeLocalDemo();
+	}
+}
+
+void ADemoPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+	InitializeLocalDemo();
+	if (bLocalInitialized && !bEndingPlay && IsLocalPlayerController())
+	{
+		UpdateLocalControl();
+	}
+}
+
+void ADemoPlayerController::TickActor(float DeltaTime, ELevelTick TickType, FActorTickFunction& ThisTickFunction)
+{
+	Super::TickActor(DeltaTime, TickType, ThisTickFunction);
+	// Remote server controllers do not run PlayerTick without local input.
+	RestoreAuthorityOverview();
+}
+
+void ADemoPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	if (GetPawn() == InPawn)
+	{
+		bRestoreOverviewRequested = false;
+		if (ADemoOverviewPawn* Overview = Cast<ADemoOverviewPawn>(InPawn))
+		{
+			if (IsValid(OverviewPawn) && OverviewPawn != Overview && !OverviewPawn->GetController())
+			{
+				OverviewPawn->Destroy();
+			}
+			OverviewPawn = Overview;
+			ForceNetUpdate();
+		}
+	}
+}
+
+void ADemoPlayerController::OnUnPossess()
+{
+	const bool bHadPawn = GetPawn() != nullptr;
+	Super::OnUnPossess();
+	if (HasAuthority() && bHadPawn && !bEndingPlay)
+	{
+		bRestoreOverviewRequested = true;
+	}
+}
+
+void ADemoPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(ADemoPlayerController, OverviewPawn, COND_OwnerOnly);
+}
+
+void ADemoPlayerController::InitializeLocalDemo()
+{
+	if (bLocalInitialized || bEndingPlay || !IsLocalPlayerController() || !HasActorBegunPlay() || !GetWorld() ||
+	    GetWorld()->bIsTearingDown || !IsValid(PlayerState) || !IsValid(GetPawn()))
+	{
+		return;
+	}
+	DecisionHandle = OnControlSwitchDecision().AddUObject(this, &ThisClass::HandleControlDecision);
+	bLocalInitialized = true;
+	ReconcilePossession();
+}
+
+bool ADemoPlayerController::EnsureAuthorityOverviewPawn()
+{
+	if (IsValid(OverviewPawn) && !OverviewPawn->IsActorBeingDestroyed())
+	{
+		return OverviewPawn->GetOwner() == this;
+	}
+	UWorld* World = GetWorld();
+	ADemoControlGameMode* Mode = World ? World->GetAuthGameMode<ADemoControlGameMode>() : nullptr;
+	if (!HasAuthority() || bEndingPlay || !Mode || World->bIsTearingDown)
+	{
+		return false;
+	}
+	APawn* SpawnedPawn = Mode->SpawnDefaultPawnAtTransform(this, FTransform(GetSpawnLocation()));
+	OverviewPawn = Cast<ADemoOverviewPawn>(SpawnedPawn);
+	if (!IsValid(OverviewPawn) || OverviewPawn->IsActorBeingDestroyed())
+	{
+		if (IsValid(SpawnedPawn))
+		{
+			SpawnedPawn->Destroy();
+		}
+		OverviewPawn = nullptr;
+		return false;
+	}
+	OverviewPawn->SetOwner(this);
+	ForceNetUpdate();
+	return true;
+}
+
+void ADemoPlayerController::RestoreAuthorityOverview()
+{
+	UWorld* World = GetWorld();
+	if (!bRestoreOverviewRequested || !HasAuthority() || bEndingPlay || !World || World->bIsTearingDown || GetPawn() ||
+	    !IsValid(PlayerState) || PlayerState->IsOnlyASpectator() || !IsInState(NAME_Playing))
+	{
+		return;
+	}
+	UControlSwitchSubsystem* Coordinator = World->GetSubsystem<UControlSwitchSubsystem>();
+	if (!Coordinator || Coordinator->IsControlTransitionInProgress(this) ||
+	    Coordinator->IsControlTransitionInProgress(PlayerState))
+	{
+		return;
+	}
+	if (!EnsureAuthorityOverviewPawn())
+	{
+		bRestoreOverviewRequested = false;
+		UE_LOG(LogDemoControl, Warning, TEXT("Could not restore the overview pawn for %s."), *GetName());
+		return;
+	}
+	if (OverviewPawn->GetControlPolicy()->GetInitState() != Nelaric::EInitState::Ready)
+	{
+		return;
+	}
+	const EControlSwitchResult Result =
+	    Coordinator->ExecuteControlSwitch(this, EControlSwitchAction::TakeControl, OverviewPawn);
+	if (Result != EControlSwitchResult::Busy && Result != EControlSwitchResult::ControlTransitionInProgress)
+	{
+		bRestoreOverviewRequested = false;
+		if (Result != EControlSwitchResult::Succeeded)
+		{
+			UE_LOG(LogDemoControl, Warning, TEXT("Overview restoration failed for %s: %s."), *GetName(),
+			       *UEnum::GetValueAsString(Result));
+		}
+	}
+}
+
+EControlSwitchResult ADemoPlayerController::HandleControlSwitchRequest_Implementation(EControlSwitchAction Action,
+                                                                                      APawn* TargetPawn)
+{
+	if (Action != EControlSwitchAction::ReturnControl)
+	{
+		return Super::HandleControlSwitchRequest_Implementation(Action, TargetPawn);
+	}
+	if (!HasAuthority() || !GetWorld() || GetWorld()->bIsTearingDown || bEndingPlay)
+	{
+		return EControlSwitchResult::WorldUnavailable;
+	}
+	if (!GetPawn() || GetPawn()->IsA<ADemoOverviewPawn>())
+	{
+		return EControlSwitchResult::NoCurrentPawn;
+	}
+	if (!EnsureAuthorityOverviewPawn())
+	{
+		return EControlSwitchResult::ReplacementUnavailable;
+	}
+	UControlSwitchSubsystem* Coordinator = GetWorld()->GetSubsystem<UControlSwitchSubsystem>();
+	// A single coordinated switch releases the character, transfers GAS and
+	// possesses the camera pawn. The transport still reports ReturnControl.
+	return Coordinator ? Coordinator->ExecuteControlSwitch(this, EControlSwitchAction::TakeControl, OverviewPawn)
+	                   : EControlSwitchResult::NotHandled;
+}
+
+void ADemoPlayerController::SetMode(EDemoControlMode NewMode)
+{
+	if (bEndingPlay || !GetWorld() || GetWorld()->bIsTearingDown)
+	{
+		return;
+	}
+	const EDemoControlMode PreviousMode = ControlMode;
+	const bool bInitialPresentation = !bPresentationApplied;
+	ControlMode = NewMode;
+	const bool bCharacterView =
+	    NewMode == EDemoControlMode::ControllingCharacter || NewMode == EDemoControlMode::ReturningControl;
+	if (bCharacterView)
+	{
+		APawn* ControlledPawn = GetPawn();
+		if (IsValid(ControlledPawn) && (GetViewTarget() != ControlledPawn || !bPresentationApplied))
+		{
+			SetViewTargetWithBlend(ControlledPawn, FMath::Max(0.0f, CameraBlendTime), VTBlend_Cubic, 0.0f, true);
+		}
+	}
+	else
+	{
+		ADemoOverviewPawn* Overview = GetOverviewPawn();
+		const bool bHasCamera = IsValid(Overview) && !Overview->IsActorBeingDestroyed() && GetOverviewCamera();
+		if (bHasCamera && (GetViewTarget() != Overview || !bPresentationApplied))
+		{
+			const float Duration = bPresentationApplied ? FMath::Max(0.0f, CameraBlendTime) : 0.0f;
+			SetViewTargetWithBlend(Overview, Duration, VTBlend_Cubic, 0.0f, true);
+			bCameraUnavailableReported = false;
+		}
+		if (!bHasCamera && !bCameraUnavailableReported)
+		{
+			bCameraUnavailableReported = true;
+			UE_LOG(LogDemoControl, Warning, TEXT("No overview camera is available for %s."), *GetName());
+			OnOverviewCameraUnavailable();
+		}
+	}
+	bPresentationApplied = true;
+	if (!bEndingPlay && (PreviousMode != NewMode || bInitialPresentation))
+	{
+		UE_LOG(LogDemoControl, Verbose, TEXT("Local control mode: %s"), *UEnum::GetValueAsString(NewMode));
+		OnDemoModeChanged(PreviousMode, NewMode);
+	}
+}
+
+void ADemoPlayerController::SetSelectedBot(APawn* NewBot)
+{
+	APawn* PreviousBot = SelectedBot.Get();
+	if (PreviousBot != NewBot)
+	{
+		SelectedBot = NewBot;
+		OnSelectedTargetChanged(PreviousBot, NewBot);
+	}
+}
+
+bool ADemoPlayerController::IsSelectableBot(APawn* ControlledPawn) const
+{
+	if (!IsValid(ControlledPawn) || ControlledPawn->IsActorBeingDestroyed() ||
+	    ControlledPawn->GetWorld() != GetWorld() || !ControlledPawn->IsA<ADemoCharacter>() ||
+	    ControlledPawn->IsPlayerControlled())
+	{
+		return false;
+	}
+	const UPawnControlComponent* Policy = ControlledPawn->FindComponentByClass<UPawnControlComponent>();
+	return Policy && Policy->bAllowPlayerControl;
+}
+
+bool ADemoPlayerController::TakeControlOfBot(APawn* TargetPawn)
+{
+	InitializeLocalDemo();
+	if (!bLocalInitialized || bEndingPlay || !IsLocalPlayerController() || bSendingRequest || bPendingRequest ||
+	    ControlMode != EDemoControlMode::Overview || !IsOverviewReady(GetPawn()))
+	{
+		return false;
+	}
+	if (!IsSelectableBot(TargetPawn))
+	{
+		OnControlRequestFailed(EControlSwitchAction::TakeControl, EControlSwitchResult::InvalidTarget);
+		return false;
+	}
+	return BeginControlRequest(EControlSwitchAction::TakeControl, TargetPawn);
+}
+
+bool ADemoPlayerController::ReturnToOverview()
+{
+	if (!bLocalInitialized || bEndingPlay || !IsLocalPlayerController() || bSendingRequest || !IsValid(GetPawn()) ||
+	    !GetPawn()->IsA<ADemoCharacter>())
+	{
+		return false;
+	}
+	if (bPendingRequest)
+	{
+		// An approved possession may lack configured character input. Returning
+		// remains available without cancelling unresolved authority work.
+		if (!bHasDecision || PendingDecision != EControlSwitchResult::Succeeded ||
+		    PendingAction != EControlSwitchAction::TakeControl || GetPawn() != PendingTarget.Get())
+		{
+			return false;
+		}
+		ClearPendingRequest();
+	}
+	return BeginControlRequest(EControlSwitchAction::ReturnControl, nullptr);
+}
+
+bool ADemoPlayerController::BeginControlRequest(EControlSwitchAction Action, APawn* Target)
+{
+	TGuardValue<bool> SendingGuard(bSendingRequest, true);
+	bPendingRequest = true;
+	bHasDecision = false;
+	bWaitTimeoutReported = false;
+	PendingRequestId = 0;
+	PendingAction = Action;
+	PendingTarget = Target;
+	WaitStartedAt = GetWorld()->GetRealTimeSeconds();
+	if (Action == EControlSwitchAction::TakeControl)
+	{
+		SetSelectedBot(Target);
+	}
+	if (bEndingPlay || IsActorBeingDestroyed() || GetWorld()->bIsTearingDown)
+	{
+		ClearPendingRequest();
+		return false;
+	}
+	SetMode(Action == EControlSwitchAction::TakeControl ? EDemoControlMode::TakingControl
+	                                                    : EDemoControlMode::ReturningControl);
+	if (bEndingPlay || IsActorBeingDestroyed() || GetWorld()->bIsTearingDown)
+	{
+		ClearPendingRequest();
+		return false;
+	}
+	const int32 RequestId =
+	    Action == EControlSwitchAction::TakeControl ? RequestTakeControl(Target) : RequestReturnControl();
+	if (RequestId == 0)
+	{
+		ClearPendingRequest();
+		ReconcilePossession();
+		OnControlRequestFailed(Action, EControlSwitchResult::InvalidRequest);
+		return false;
+	}
+	// A standalone decision can arrive inside RequestTakeControl, before it
+	// returns its ID. The handler accepts that ID only during this send.
+	PendingRequestId = RequestId;
+	return true;
+}
+
+void ADemoPlayerController::HandleControlDecision(int32 RequestId, EControlSwitchAction Action, APawn* Target,
+                                                  EControlSwitchResult Result)
+{
+	if (bEndingPlay || !GetWorld() || GetWorld()->bIsTearingDown || !bPendingRequest || bHasDecision ||
+	    Action != PendingAction || (PendingRequestId != RequestId && !(bSendingRequest && PendingRequestId == 0)))
+	{
+		return;
+	}
+	PendingRequestId = RequestId;
+	PendingDecision = Result;
+	bHasDecision = true;
+	UE_LOG(LogDemoControl, Verbose, TEXT("Control request %d: %s"), RequestId, *UEnum::GetValueAsString(Result));
+	WaitStartedAt = GetWorld()->GetRealTimeSeconds();
+	bWaitTimeoutReported = false;
+}
+
+void ADemoPlayerController::ClearPendingRequest()
+{
+	bPendingRequest = false;
+	bHasDecision = false;
+	PendingRequestId = 0;
+	PendingTarget.Reset();
+	bWaitTimeoutReported = false;
+}
+
+bool ADemoPlayerController::IsOverviewReady(APawn* ControlledPawn) const
+{
+	const ADemoOverviewPawn* Overview = Cast<ADemoOverviewPawn>(ControlledPawn);
+	return IsValid(Overview) && !Overview->IsActorBeingDestroyed() && Overview == GetOverviewPawn() &&
+	       Overview->GetController() == this && IsValid(PlayerState) && Overview->GetPlayerState() == PlayerState &&
+	       IsPawnInputReady(ControlledPawn) &&
+	       Overview->GetControlPolicy()->GetInitState() == Nelaric::EInitState::Ready &&
+	       IsValid(Overview->GetCameraComponent()) && Overview->GetCameraComponent()->IsActive();
+}
+
+bool ADemoPlayerController::IsCharacterReady(APawn* ControlledPawn) const
+{
+	if (!IsValid(ControlledPawn) || ControlledPawn->IsActorBeingDestroyed() ||
+	    ControlledPawn->GetController() != this || !IsValid(PlayerState) ||
+	    ControlledPawn->GetPlayerState() != PlayerState)
+	{
+		return false;
+	}
+	const UPawnGasBindingComponent* Binding = ControlledPawn->FindComponentByClass<UPawnGasBindingComponent>();
+	if (!Binding || !Binding->IsReadyForActions())
+	{
+		return false;
+	}
+	return IsPawnInputReady(ControlledPawn);
+}
+
+bool ADemoPlayerController::IsPawnInputReady(APawn* ControlledPawn) const
+{
+	if (!IsValid(ControlledPawn) || !ControlledPawn->InputComponent)
+	{
+		return false;
+	}
+	TInlineComponentArray<UPlayerInputComponent*> Inputs(ControlledPawn);
+	for (const UPlayerInputComponent* Input : Inputs)
+	{
+		if (Input->InputConfig)
+		{
+			if (!Input->GetBoundInputComponent() || Input->GetBoundInputComponent() != ControlledPawn->InputComponent)
+			{
+				return false;
+			}
+		}
+	}
+	// An absent input configuration intentionally supplies no native bindings.
+	return true;
+}
+
+void ADemoPlayerController::ReportWaitTimeout()
+{
+	if (!bWaitTimeoutReported &&
+	    GetWorld()->GetRealTimeSeconds() - WaitStartedAt >= FMath::Max(0.1f, ControlWaitTimeout))
+	{
+		bWaitTimeoutReported = true;
+		UE_LOG(LogDemoControl, Warning, TEXT("Control wait timed out for %s; reconciling without resending."),
+		       *GetName());
+		OnControlWaitTimedOut(PendingAction, bPendingRequest && !bHasDecision);
+	}
+}
+
+void ADemoPlayerController::UpdateLocalControl()
+{
+	if (bSendingRequest)
+	{
+		return;
+	}
+	if (!bPendingRequest)
+	{
+		ReconcilePossession();
+		return;
+	}
+	if (!bHasDecision)
+	{
+		ReportWaitTimeout();
+		return;
+	}
+	if (PendingDecision != EControlSwitchResult::Succeeded)
+	{
+		const EControlSwitchAction Action = PendingAction;
+		const EControlSwitchResult Result = PendingDecision;
+		ClearPendingRequest();
+		ReconcilePossession();
+		OnControlRequestFailed(Action, Result);
+		return;
+	}
+	if (PendingAction == EControlSwitchAction::ReturnControl && IsOverviewReady(GetPawn()))
+	{
+		ClearPendingRequest();
+		PresentedPawn.Reset();
+		SetSelectedBot(nullptr);
+		SetMode(EDemoControlMode::Overview);
+		return;
+	}
+	if (PendingAction == EControlSwitchAction::TakeControl)
+	{
+		APawn* Target = PendingTarget.Get();
+		if (!IsValid(Target) || Target->IsActorBeingDestroyed())
+		{
+			ClearPendingRequest();
+			ReconcilePossession();
+			OnControlRequestFailed(EControlSwitchAction::TakeControl, EControlSwitchResult::InvalidTarget);
+			return;
+		}
+		if (GetPawn() == Target && IsCharacterReady(Target))
+		{
+			ClearPendingRequest();
+			PresentedPawn = Target;
+			SetMode(EDemoControlMode::ControllingCharacter);
+			if (!bEndingPlay && !bPendingRequest && ControlMode == EDemoControlMode::ControllingCharacter &&
+			    GetPawn() == Target && IsValid(Target) && !Target->IsActorBeingDestroyed())
+			{
+				OnControlledCharacterReady(Target);
+			}
+			return;
+		}
+	}
+	ReportWaitTimeout();
+}
+
+void ADemoPlayerController::ReconcilePossession()
+{
+	APawn* ControlledPawn = GetPawn();
+	if (!IsValid(ControlledPawn) || ControlledPawn->IsActorBeingDestroyed())
+	{
+		PresentedPawn.Reset();
+		SetSelectedBot(nullptr);
+		if (ControlMode != EDemoControlMode::Overview || !bPresentationApplied || GetViewTarget() != GetOverviewPawn())
+		{
+			SetMode(EDemoControlMode::Overview);
+		}
+		return;
+	}
+	if (ControlledPawn->IsA<ADemoOverviewPawn>())
+	{
+		PresentedPawn.Reset();
+		SetSelectedBot(nullptr);
+		if (ControlMode != EDemoControlMode::Overview || !bPresentationApplied || GetViewTarget() != ControlledPawn)
+		{
+			SetMode(EDemoControlMode::Overview);
+		}
+		return;
+	}
+	if (!IsCharacterReady(ControlledPawn))
+	{
+		PresentedPawn.Reset();
+		if (ControlMode != EDemoControlMode::TakingControl)
+		{
+			PendingAction = EControlSwitchAction::TakeControl;
+			WaitStartedAt = GetWorld()->GetRealTimeSeconds();
+			bWaitTimeoutReported = false;
+			SetMode(EDemoControlMode::TakingControl);
+		}
+		ReportWaitTimeout();
+		return;
+	}
+	if (PresentedPawn.Get() != ControlledPawn || ControlMode != EDemoControlMode::ControllingCharacter)
+	{
+		PresentedPawn = ControlledPawn;
+		SetMode(EDemoControlMode::ControllingCharacter);
+		if (!bEndingPlay && !bPendingRequest && ControlMode == EDemoControlMode::ControllingCharacter &&
+		    GetPawn() == ControlledPawn && IsValid(ControlledPawn) && !ControlledPawn->IsActorBeingDestroyed())
+		{
+			OnControlledCharacterReady(ControlledPawn);
+		}
+	}
+}
+
+void ADemoPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	bEndingPlay = true;
+	OnControlSwitchDecision().Remove(DecisionHandle);
+	ClearPendingRequest();
+	if (HasAuthority() && IsValid(OverviewPawn))
+	{
+		OverviewPawn->Destroy();
+	}
+	OverviewPawn = nullptr;
+	SelectedBot.Reset();
+	PresentedPawn.Reset();
+	Super::EndPlay(EndPlayReason);
+}

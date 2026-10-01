@@ -10,6 +10,7 @@
 #include "Containers/Map.h"
 #include "Containers/Set.h"
 #include "Misc/Guid.h"
+#include "Player/ControlStateTransfer.h"
 #include "Player/NelaricPlayerController.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "UObject/WeakObjectPtrTemplates.h"
@@ -22,7 +23,9 @@ class AController;
 namespace Nelaric::Control
 {
 struct FSwitchPlan;
-}
+struct FStateTransferBatch;
+struct FContextChange;
+} // namespace Nelaric::Control
 
 /** @brief Validates and executes pawn control changes on the authority.
  *
@@ -42,6 +45,21 @@ class UControlSwitchSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	/** @brief Reads a complete export for a reserved pawn.
+	 *
+	 * @details Call on the authority game thread from association callbacks
+	 * or during failed recovery. Returns null before export completes and
+	 * after the transition is released. Retaining the immutable value keeps
+	 * snapshots alive but does not retain actors. This data is not
+	 * replicated.
+	 *
+	 * @param Pawn Exported pawn in this world.
+	 *
+	 * @return Complete export, or null when unavailable.
+	 */
+	GAMEPLAYRUNTIME_API TSharedPtr<const Nelaric::Control::FControlStateExport>
+	GetExportedControlState(const APawn* Pawn) const;
+
 	/** @brief Checks whether an actor is reserved by a control transition.
 	 *
 	 * @details Call on the authority game thread. Includes preparation,
@@ -108,6 +126,7 @@ private:
 	bool bShuttingDown = false;
 	TMap<TWeakObjectPtr<const AActor>, FGuid> ControlTransitions;
 	TSet<FGuid> RecoveryRequiredTransitions;
+	TMap<FGuid, TSharedPtr<Nelaric::Control::FStateTransferBatch>> StateTransfers;
 	bool HasConflictingTransition(const AActor* Actor, const FGuid& TransitionId) const;
 	EControlSwitchResult ReserveParticipants(const TArray<TWeakObjectPtr<const AActor>>& Participants,
 	                                         const FGuid& TransitionId);
@@ -115,6 +134,11 @@ private:
 	                               Nelaric::Control::FSwitchPlan& Plan) const;
 	EControlSwitchResult ValidatePlan(const Nelaric::Control::FSwitchPlan& Plan, bool bRequireReservation = true) const;
 	EControlSwitchResult PreparePlan(Nelaric::Control::FSwitchPlan& Plan);
+	EControlSwitchResult ExportPlan(Nelaric::Control::FSwitchPlan& Plan);
+	EControlSwitchResult SwitchAssociations(const Nelaric::Control::FSwitchPlan& Plan,
+	                                        Nelaric::Control::FContextChange& ContextChange);
+	bool ValidateStateAssociations(const Nelaric::Control::FStateTransferBatch& Batch,
+	                               Nelaric::Control::EAssociationEndpoint Endpoint) const;
 	void DiscardPreparedController(const Nelaric::Control::FSwitchPlan& Plan);
 	void ReleaseTransition(const FGuid& TransitionId);
 	void PruneDestroyedParticipants();

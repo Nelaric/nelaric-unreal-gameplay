@@ -8,6 +8,53 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "Player/ControlSwitchSubsystem.h"
+#include "Templates/UnrealTemplate.h"
+
+bool UPawnControlComponent::RegisterStateTransferParticipant(
+    FName Id, TSharedRef<Nelaric::Control::IStateTransferParticipant> Participant)
+{
+	check(IsInGameThread());
+	if (Id.IsNone() || bStateTransferRegistrationEnded || bChangingStateTransferParticipants ||
+	    IsControlTransitionInProgress() ||
+	    StateTransferParticipants.ContainsByPredicate([Id](const auto& Entry) { return Entry.Id == Id; }))
+	{
+		return false;
+	}
+	TGuardValue<bool> RegistrationGuard(bChangingStateTransferParticipants, true);
+	StateTransferParticipants.Add({Id, Participant});
+	++StateTransferRevision;
+	return true;
+}
+
+bool UPawnControlComponent::UnregisterStateTransferParticipant(FName Id)
+{
+	check(IsInGameThread());
+	if (bStateTransferRegistrationEnded || bChangingStateTransferParticipants || IsControlTransitionInProgress())
+	{
+		return false;
+	}
+	const int32 Index =
+	    StateTransferParticipants.IndexOfByPredicate([Id](const auto& Entry) { return Entry.Id == Id; });
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	TGuardValue<bool> RegistrationGuard(bChangingStateTransferParticipants, true);
+	++StateTransferRevision;
+	StateTransferParticipants.RemoveAt(Index);
+	return true;
+}
+
+const TArray<Nelaric::Control::FStateParticipantRegistration>&
+UPawnControlComponent::GetStateTransferParticipants() const
+{
+	return StateTransferParticipants;
+}
+
+uint64 UPawnControlComponent::GetStateTransferRevision() const
+{
+	return StateTransferRevision;
+}
 
 bool UPawnControlComponent::IsControlTransitionInProgress() const
 {
@@ -112,6 +159,7 @@ void UPawnControlComponent::RememberController(AAIController* Controller)
 
 void UPawnControlComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	bStateTransferRegistrationEnded = true;
 	// Destroy callbacks can reenter component teardown; detach ownership first.
 	const auto OwnedControllers = MoveTemp(SpawnedControllers);
 	RememberedController = nullptr;

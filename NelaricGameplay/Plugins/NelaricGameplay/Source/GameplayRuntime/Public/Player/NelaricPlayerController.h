@@ -74,6 +74,12 @@ enum class EControlSwitchResult : uint8
 
 	/// A related pawn or participant is reserved by a control transition.
 	ControlTransitionInProgress,
+
+	/// A state integration failed to produce a complete immutable export.
+	StateExportFailed,
+
+	/// An integration binding failed and original associations were restored.
+	StateAssociationFailed,
 };
 
 /// Reports a player control decision on the owning client's game thread.

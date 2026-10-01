@@ -57,6 +57,7 @@ static FPolicySnapshot CapturePolicy(UPawnControlComponent* Policy)
 	{
 		Snapshot.Component = Policy;
 		Snapshot.Generation = Policy->GetInitGeneration();
+		Snapshot.StateTransferRevision = Policy->GetStateTransferRevision();
 		Snapshot.ReturnControllerClass = Policy->ReturnControllerClass.Get();
 		Snapshot.bAllowPlayerControl = Policy->bAllowPlayerControl;
 		Snapshot.bAllowReturnControl = Policy->bAllowReturnControl;
@@ -75,7 +76,7 @@ static bool MatchesPolicy(const FPolicySnapshot& Snapshot, const APawn* Pawn)
 	}
 	return IsValid(Policy) && Policy == FindPolicy(Pawn) && Policy->IsRegistered() && Policy->GetOwner() == Pawn &&
 	       Policy->GetInitGeneration() == Snapshot.Generation && Policy->GetInitState() == EInitState::Ready &&
-	       !Policy->HasTerminalInitFailure() &&
+	       Policy->GetStateTransferRevision() == Snapshot.StateTransferRevision && !Policy->HasTerminalInitFailure() &&
 	       Policy->ReturnControllerClass.Get() == Snapshot.ReturnControllerClass.Get() &&
 	       Policy->bAllowPlayerControl == Snapshot.bAllowPlayerControl &&
 	       Policy->bAllowReturnControl == Snapshot.bAllowReturnControl &&
@@ -104,6 +105,101 @@ static bool Restore(AController* Controller, APawn* Pawn, UWorld* World)
 	}
 	Controller->Possess(Pawn);
 	return Matches(Controller, Pawn, World);
+}
+
+static bool MatchesAssociation(const FStateTransferContext& Context, EAssociationEndpoint Endpoint, const UWorld* World)
+{
+	const FStateAssociation& Association =
+	    Endpoint == EAssociationEndpoint::Source ? Context.Source : Context.Destination;
+	const APawn* Pawn = Context.Pawn.Get();
+	const AController* Controller = Association.Controller.Get();
+	const APlayerState* State = Association.PlayerState.Get();
+	if (!IsLive(Pawn, World) || (!Association.Controller.IsExplicitlyNull() && !HasPlayerState(Controller, World)) ||
+	    (!Association.PlayerState.IsExplicitlyNull() && !IsLive(State, World)))
+	{
+		return false;
+	}
+	return Pawn->GetController() == Controller && Pawn->GetPlayerState() == State &&
+	       (!Controller || (Controller->PlayerState == State && Controller->GetPawn() == Pawn));
+}
+
+static bool MatchesAssociations(const FStateTransferBatch& Batch, EAssociationEndpoint Endpoint, const UWorld* World)
+{
+	if (!World || World->bIsTearingDown)
+	{
+		return false;
+	}
+	for (const FPawnStateTransfer& Transfer : Batch.Pawns)
+	{
+		if (!MatchesAssociation(Transfer.Export->Context, Endpoint, World))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool MatchesPlanAssociations(const FSwitchPlan& Plan, EAssociationEndpoint Endpoint, const UWorld* World)
+{
+	if (!World || World->bIsTearingDown)
+	{
+		return false;
+	}
+	for (const auto& Participant : Plan.Participants)
+	{
+		if (!IsLive(Participant.Get(), World))
+		{
+			return false;
+		}
+	}
+	const AController* Requester = Plan.Requester.Get();
+	const AController* PreviousController = Plan.PreviousTargetController.Get();
+	const AController* ReturnController = Plan.ReturnController.Get();
+	const bool bOriginal = Endpoint == EAssociationEndpoint::Source;
+	const ANelaricGameModeBase* GameMode = Plan.GameMode.Get();
+	if (!IsLive(GameMode, World) || World->GetAuthGameMode() != GameMode ||
+	    GameMode->PlayerStateClass.Get() != Plan.PlayerStateClass.Get())
+	{
+		return false;
+	}
+	if (!HasPlayerState(Requester, World) || Requester->PlayerState != Plan.RequesterState.Get() ||
+	    Requester->GetPawn() != (bOriginal ? Plan.OldPawn.Get() : Plan.TargetPawn.Get()) ||
+	    (PreviousController && (!HasPlayerState(PreviousController, World) ||
+	                            PreviousController->PlayerState != Plan.PreviousTargetState.Get() ||
+	                            PreviousController->GetPawn() != (bOriginal ? Plan.TargetPawn.Get() : nullptr))) ||
+	    (ReturnController &&
+	     (!HasPlayerState(ReturnController, World) || ReturnController->PlayerState != Plan.ReturnState.Get() ||
+	      ReturnController->GetPawn() != (bOriginal ? nullptr : Plan.OldPawn.Get()))))
+	{
+		return false;
+	}
+	for (const FPolicySnapshot* Policy : {&Plan.OldPolicy, &Plan.TargetPolicy})
+	{
+		if (!Policy->Component.IsExplicitlyNull())
+		{
+			const UPawnControlComponent* Component = Policy->Component.Get();
+			if (!IsValid(Component) || !Component->IsRegistered() || FindPolicy(Component->GetPawn()) != Component ||
+			    Component->GetStateTransferRevision() != Policy->StateTransferRevision ||
+			    Component->ReturnControllerClass.Get() != Policy->ReturnControllerClass.Get() ||
+			    Component->bAllowPlayerControl != Policy->bAllowPlayerControl ||
+			    Component->bAllowReturnControl != Policy->bAllowReturnControl ||
+			    Component->bReturnToBot != Policy->bReturnToBot ||
+			    Component->bStartBotLogicOnReady != Policy->bStartBotLogicOnReady)
+			{
+				return false;
+			}
+		}
+	}
+	if (Plan.StateTransfers)
+	{
+		return MatchesAssociations(*Plan.StateTransfers, Endpoint, World);
+	}
+	// Before publication, only original possession can be validated.
+	const APawn* OldPawn = Plan.OldPawn.Get();
+	const APawn* TargetPawn = Plan.TargetPawn.Get();
+	return bOriginal && (!OldPawn || Matches(Requester, OldPawn, World)) &&
+	       (!TargetPawn || (TargetPawn->GetController() == PreviousController &&
+	                        TargetPawn->GetPlayerState() == Plan.TargetPawnState.Get()));
 }
 
 struct FContextChange
@@ -184,7 +280,31 @@ void UControlSwitchSubsystem::Deinitialize()
 	bShuttingDown = true;
 	ControlTransitions.Reset();
 	RecoveryRequiredTransitions.Reset();
+	StateTransfers.Reset();
 	Super::Deinitialize();
+}
+
+TSharedPtr<const Nelaric::Control::FControlStateExport>
+UControlSwitchSubsystem::GetExportedControlState(const APawn* Pawn) const
+{
+	check(IsInGameThread());
+	if (!Nelaric::Control::IsLive(Pawn, GetWorld()))
+	{
+		return nullptr;
+	}
+	const FGuid* TransitionId = ControlTransitions.Find(Pawn);
+	const auto* Batch = TransitionId ? StateTransfers.Find(*TransitionId) : nullptr;
+	if (Batch)
+	{
+		for (const auto& Transfer : (*Batch)->Pawns)
+		{
+			if (Transfer.Export->Context.Pawn.Get() == Pawn)
+			{
+				return Transfer.Export;
+			}
+		}
+	}
+	return nullptr;
 }
 
 bool UControlSwitchSubsystem::IsControlTransitionInProgress(const AActor* Actor) const
@@ -229,52 +349,103 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 		}
 	}
 	// Repairs may settle into new relationships; never force possession here.
-	for (const auto& WeakParticipant : Participants)
+	auto IsSettled = [&]()
 	{
-		const AActor* Participant = WeakParticipant.Get();
-		if (!Nelaric::Control::IsLive(Participant, World))
+		if (bShuttingDown || World->bIsTearingDown)
 		{
 			return false;
 		}
-		if (const APawn* ReservedPawn = Cast<APawn>(Participant))
+		for (const auto& WeakParticipant : Participants)
 		{
-			const AController* Controller = ReservedPawn->GetController();
-			if (Controller && (!Nelaric::Control::Matches(Controller, ReservedPawn, World) ||
-			                   !Nelaric::Control::IsLive(Controller->PlayerState, World) ||
-			                   HasConflictingTransition(Controller, TransitionId) ||
-			                   HasConflictingTransition(Controller->PlayerState, TransitionId)))
+			const AActor* Participant = WeakParticipant.Get();
+			if (!Nelaric::Control::IsLive(Participant, World))
 			{
 				return false;
 			}
-			const UPawnControlComponent* Policy = ReservedPawn->FindComponentByClass<UPawnControlComponent>();
-			if (!IsValid(Policy) || !Policy->IsRegistered() || Policy->GetInitState() != Nelaric::EInitState::Ready ||
-			    Policy->HasTerminalInitFailure() || !Policy->IsInitApplicable())
+			if (const APawn* ReservedPawn = Cast<APawn>(Participant))
 			{
-				return false;
+				const AController* Controller = ReservedPawn->GetController();
+				if (Controller && (!Nelaric::Control::Matches(Controller, ReservedPawn, World) ||
+				                   !Nelaric::Control::IsLive(Controller->PlayerState, World) ||
+				                   HasConflictingTransition(Controller, TransitionId) ||
+				                   HasConflictingTransition(Controller->PlayerState, TransitionId)))
+				{
+					return false;
+				}
+				const UPawnControlComponent* Policy = ReservedPawn->FindComponentByClass<UPawnControlComponent>();
+				if (!IsValid(Policy) || !Policy->IsRegistered() ||
+				    Policy->GetInitState() != Nelaric::EInitState::Ready || Policy->HasTerminalInitFailure() ||
+				    !Policy->IsInitApplicable())
+				{
+					return false;
+				}
+			}
+			else if (const AController* ReservedController = Cast<AController>(Participant))
+			{
+				const APawn* Pawn = ReservedController->GetPawn();
+				if (!Nelaric::Control::IsLive(ReservedController->PlayerState, World) ||
+				    HasConflictingTransition(ReservedController->PlayerState, TransitionId) ||
+				    (Pawn && (!Nelaric::Control::Matches(ReservedController, Pawn, World) ||
+				              HasConflictingTransition(Pawn, TransitionId))))
+				{
+					return false;
+				}
+			}
+			else if (const APlayerState* PlayerState = Cast<APlayerState>(Participant))
+			{
+				const AController* Controller = Cast<AController>(PlayerState->GetOwner());
+				if (!Nelaric::Control::IsLive(Controller, World) || Controller->PlayerState != PlayerState ||
+				    HasConflictingTransition(Controller, TransitionId))
+				{
+					return false;
+				}
 			}
 		}
-		else if (const AController* ReservedController = Cast<AController>(Participant))
+		return true;
+	};
+	if (!IsSettled())
+	{
+		return false;
+	}
+	if (World->bIsTearingDown || !RecoveryRequiredTransitions.Contains(TransitionId))
+	{
+		return false;
+	}
+	if (const auto* Batch = StateTransfers.Find(TransitionId))
+	{
+		// Keep a local owner: validation callbacks can tear down the subsystem.
+		const auto Exports = *Batch;
+		for (const auto& Transfer : Exports->Pawns)
 		{
-			const APawn* Pawn = ReservedController->GetPawn();
-			if (!Nelaric::Control::IsLive(ReservedController->PlayerState, World) ||
-			    HasConflictingTransition(ReservedController->PlayerState, TransitionId) ||
-			    (Pawn && (!Nelaric::Control::Matches(ReservedController, Pawn, World) ||
-			              HasConflictingTransition(Pawn, TransitionId))))
+			if (Transfer.Participants.IsEmpty())
+			{
+				continue;
+			}
+			if (!Transfer.Export->Context.Pawn.IsValid())
+			{
+				continue;
+			}
+			const auto& Context = Transfer.Export->Context;
+			const auto Endpoint =
+			    Nelaric::Control::MatchesAssociation(Context, Nelaric::Control::EAssociationEndpoint::Source, World)
+			        ? Nelaric::Control::EAssociationEndpoint::Source
+			        : Nelaric::Control::EAssociationEndpoint::Destination;
+			if (!Nelaric::Control::MatchesAssociation(Context, Endpoint, World))
 			{
 				return false;
 			}
-		}
-		else if (const APlayerState* PlayerState = Cast<APlayerState>(Participant))
-		{
-			const AController* Controller = Cast<AController>(PlayerState->GetOwner());
-			if (!Nelaric::Control::IsLive(Controller, World) || Controller->PlayerState != PlayerState ||
-			    HasConflictingTransition(Controller, TransitionId))
+			for (const auto& Participant : Transfer.Participants)
 			{
-				return false;
+				if (!Participant.Participant->IsAssociationValid(Context, Endpoint, *Participant.Snapshot) ||
+				    bShuttingDown || World->bIsTearingDown ||
+				    !Nelaric::Control::MatchesAssociation(Context, Endpoint, World))
+				{
+					return false;
+				}
 			}
 		}
 	}
-	if (World->bIsTearingDown || !RecoveryRequiredTransitions.Contains(TransitionId))
+	if (!IsSettled() || bShuttingDown || World->bIsTearingDown || !RecoveryRequiredTransitions.Contains(TransitionId))
 	{
 		return false;
 	}
@@ -331,6 +502,7 @@ void UControlSwitchSubsystem::ReleaseTransition(const FGuid& TransitionId)
 		}
 	}
 	RecoveryRequiredTransitions.Remove(TransitionId);
+	StateTransfers.Remove(TransitionId);
 }
 
 void UControlSwitchSubsystem::PruneDestroyedParticipants()
@@ -350,6 +522,13 @@ void UControlSwitchSubsystem::PruneDestroyedParticipants()
 	for (auto It = RecoveryRequiredTransitions.CreateIterator(); It; ++It)
 	{
 		if (!SurvivingTransitions.Contains(*It))
+		{
+			It.RemoveCurrent();
+		}
+	}
+	for (auto It = StateTransfers.CreateIterator(); It; ++It)
+	{
+		if (!SurvivingTransitions.Contains(It.Key()))
 		{
 			It.RemoveCurrent();
 		}
@@ -738,71 +917,130 @@ void UControlSwitchSubsystem::DiscardPreparedController(const Nelaric::Control::
 	Controller->Destroy();
 }
 
-EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* Requester, EControlSwitchAction Action,
-                                                                   APawn* TargetPawn)
+EControlSwitchResult UControlSwitchSubsystem::ExportPlan(Nelaric::Control::FSwitchPlan& Plan)
 {
-	check(IsInGameThread());
-	if (bExecutingControlSwitch)
-	{
-		if (IsControlTransitionInProgress(Requester) || IsControlTransitionInProgress(TargetPawn) ||
-		    (IsValid(Requester) && (IsControlTransitionInProgress(Requester->PlayerState) ||
-		                            IsControlTransitionInProgress(Requester->GetPawn()))) ||
-		    (IsValid(TargetPawn) && IsControlTransitionInProgress(TargetPawn->GetController())))
-		{
-			return EControlSwitchResult::ControlTransitionInProgress;
-		}
-		return EControlSwitchResult::Busy;
-	}
-	TGuardValue<bool> OperationGuard(bExecutingControlSwitch, true);
-	PruneDestroyedParticipants();
-	Nelaric::Control::FSwitchPlan Plan;
-	EControlSwitchResult Result = BuildPlan(Requester, Action, TargetPawn, Plan);
+	using namespace Nelaric::Control;
+	EControlSwitchResult Result = ValidatePlan(Plan);
 	if (Result != EControlSwitchResult::Succeeded)
 	{
 		return Result;
 	}
-	const FGuid TransitionId = Plan.TransitionId;
-	ON_SCOPE_EXIT
+	const auto Batch = MakeShared<FStateTransferBatch>();
+	TArray<TArray<FStateParticipantRegistration>> Registrations;
+	auto Include = [&](APawn* Pawn, const FPolicySnapshot& Policy, AController* SourceController,
+	                   APlayerState* SourceState, AController* DestinationController, APlayerState* DestinationState)
 	{
-		DiscardPreparedController(Plan);
-		if (!RecoveryRequiredTransitions.Contains(TransitionId))
+		if (!Pawn)
 		{
-			ReleaseTransition(TransitionId);
+			return;
 		}
+		FPawnStateTransfer& Transfer = Batch->Pawns.AddDefaulted_GetRef();
+		Transfer.Export = MakeShared<FControlStateExport>();
+		Transfer.Export->ExportWorldTime = GetWorld()->GetTimeSeconds();
+		Transfer.Export->Context = {
+		    Plan.TransitionId, Pawn, {SourceController, SourceState}, {DestinationController, DestinationState}};
+		Registrations.Add(Policy.Component->GetStateTransferParticipants());
 	};
-	Result = ReserveParticipants(Plan.Participants, TransitionId);
-	if (Result != EControlSwitchResult::Succeeded)
+	Include(Plan.OldPawn.Get(), Plan.OldPolicy, Plan.Requester.Get(), Plan.RequesterState.Get(),
+	        Plan.ReturnController.Get(), Plan.ReturnState.Get());
+	Include(Plan.TargetPawn.Get(), Plan.TargetPolicy, Plan.PreviousTargetController.Get(), Plan.TargetPawnState.Get(),
+	        Plan.Requester.Get(), Plan.RequesterState.Get());
+	// Copy both registries before invoking a participant. No partial export is
+	// published, and possession remains unchanged until the whole set succeeds.
+	for (int32 Index = 0; Index < Batch->Pawns.Num(); ++Index)
 	{
-		return Result;
+		FPawnStateTransfer& Transfer = Batch->Pawns[Index];
+		for (const auto& Registration : Registrations[Index])
+		{
+			TSharedPtr<const FStateSnapshot> Snapshot;
+			const bool bExported = Registration.Participant->ExportState(Transfer.Export->Context, Snapshot);
+			Result = ValidatePlan(Plan);
+			if (Result != EControlSwitchResult::Succeeded)
+			{
+				return Result;
+			}
+			if (!bExported || !Snapshot || Snapshot->SchemaId.IsNone() || Snapshot->SchemaVersion == 0)
+			{
+				return EControlSwitchResult::StateExportFailed;
+			}
+			Transfer.Export->States.Add({Registration.Id, Snapshot});
+			Transfer.Participants.Add({Registration.Participant, Snapshot});
+		}
 	}
-	Result = PreparePlan(Plan);
-	if (Result != EControlSwitchResult::Succeeded)
+	Plan.StateTransfers = Batch;
+	StateTransfers.Add(Plan.TransitionId, Batch);
+	return EControlSwitchResult::Succeeded;
+}
+
+bool UControlSwitchSubsystem::ValidateStateAssociations(const Nelaric::Control::FStateTransferBatch& Batch,
+                                                        Nelaric::Control::EAssociationEndpoint Endpoint) const
+{
+	using namespace Nelaric::Control;
+	const UWorld* World = GetWorld();
+	if (bShuttingDown || !MatchesAssociations(Batch, Endpoint, World))
 	{
-		return Result;
+		return false;
 	}
-	Result = ValidatePlan(Plan);
-	if (Result != EControlSwitchResult::Succeeded)
+	for (const auto& Transfer : Batch.Pawns)
 	{
-		return Result;
+		for (const auto& Participant : Transfer.Participants)
+		{
+			const bool bValid =
+			    Participant.Participant->IsAssociationValid(Transfer.Export->Context, Endpoint, *Participant.Snapshot);
+			if (!bValid || bShuttingDown || !MatchesAssociations(Batch, Endpoint, World))
+			{
+				return false;
+			}
+		}
 	}
+	return true;
+}
+
+EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::Control::FSwitchPlan& Plan,
+                                                                 Nelaric::Control::FContextChange& ContextChange)
+{
+	AController* Requester = Plan.Requester.Get();
+	APawn* TargetPawn = Plan.TargetPawn.Get();
 	UWorld* World = GetWorld();
 	APawn* OldPawn = Plan.OldPawn.Get();
 	AController* PreviousTargetController = Plan.PreviousTargetController.Get();
 	AAIController* ReturnController = Plan.ReturnController.Get();
-	if (OldPawn == TargetPawn)
+	const FGuid TransitionId = Plan.TransitionId;
+	const auto Batch = Plan.StateTransfers;
+	auto Recover = [&](EControlSwitchResult Failure = EControlSwitchResult::ExecutionFailed)
 	{
-		return EControlSwitchResult::Succeeded;
-	}
-
-	Nelaric::Control::FContextChange ContextChange(OldPawn, TargetPawn);
-	Nelaric::Control::StopContext(Requester, OldPawn);
-	if (PreviousTargetController)
-	{
-		Nelaric::Control::StopContext(PreviousTargetController, TargetPawn);
-	}
-	auto Recover = [&]()
-	{
+		if (bShuttingDown || World->bIsTearingDown)
+		{
+			ContextChange.Finish();
+			return EControlSwitchResult::WorldUnavailable;
+		}
 		Nelaric::Control::FContextChange RecoveryContext(OldPawn, TargetPawn);
+		bool bBindingsRestored = true;
+		// Undo every attempted destination attach, including a partial failure.
+		for (auto& Transfer : Batch->Pawns)
+		{
+			for (auto& Participant : Transfer.Participants)
+			{
+				if (Participant.bDestinationAttachAttempted)
+				{
+					if (bShuttingDown || World->bIsTearingDown)
+					{
+						bBindingsRestored = false;
+						continue;
+					}
+					const bool bDetached = Participant.Participant->DetachAssociation(
+					    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Destination,
+					    *Participant.Snapshot);
+					bBindingsRestored = bDetached && bBindingsRestored;
+				}
+			}
+		}
+		if (bShuttingDown || World->bIsTearingDown)
+		{
+			RecoveryContext.Finish();
+			ContextChange.Finish();
+			return EControlSwitchResult::WorldUnavailable;
+		}
 		if (Nelaric::Control::IsLive(Requester, World) && TargetPawn && Requester->GetPawn() == TargetPawn)
 		{
 			Requester->UnPossess();
@@ -813,8 +1051,45 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 		}
 		Nelaric::Control::Restore(PreviousTargetController, TargetPawn, World);
 		Nelaric::Control::Restore(Requester, OldPawn, World);
+		// Native unpossession clears PlayerState; preserve an unpossessed source.
+		if (TargetPawn && Plan.PreviousTargetController.IsExplicitlyNull() &&
+		    Nelaric::Control::IsLive(TargetPawn, World) && !TargetPawn->GetController() &&
+		    (Plan.TargetPawnState.IsExplicitlyNull() || Nelaric::Control::IsLive(Plan.TargetPawnState.Get(), World)))
+		{
+			TargetPawn->SetPlayerState(Plan.TargetPawnState.Get());
+		}
+		for (auto& Transfer : Batch->Pawns)
+		{
+			if (!Nelaric::Control::MatchesAssociation(Transfer.Export->Context,
+			                                          Nelaric::Control::EAssociationEndpoint::Source, World))
+			{
+				bBindingsRestored = false;
+				continue;
+			}
+			for (auto& Participant : Transfer.Participants)
+			{
+				if (Participant.bSourceDetachAttempted)
+				{
+					if (bShuttingDown ||
+					    !Nelaric::Control::MatchesAssociation(Transfer.Export->Context,
+					                                          Nelaric::Control::EAssociationEndpoint::Source, World))
+					{
+						bBindingsRestored = false;
+						continue;
+					}
+					const bool bAttached = Participant.Participant->AttachAssociation(
+					    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Source,
+					    *Participant.Snapshot);
+					bBindingsRestored = bAttached && bBindingsRestored;
+				}
+			}
+		}
 		RecoveryContext.Finish();
 		ContextChange.Finish();
+		if (bShuttingDown || World->bIsTearingDown)
+		{
+			return EControlSwitchResult::WorldUnavailable;
+		}
 		// Ready callbacks may change relationships after Restore returned.
 		const bool bTargetRestored =
 		    !TargetPawn ||
@@ -822,14 +1097,32 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 		                              : Nelaric::Control::IsLive(TargetPawn, World) && !TargetPawn->GetController());
 		const bool bRequesterRestored = OldPawn ? Nelaric::Control::Matches(Requester, OldPawn, World)
 		                                        : Nelaric::Control::IsLive(Requester, World) && !Requester->GetPawn();
-		if (!bTargetRestored || !bRequesterRestored ||
+		if (!bBindingsRestored || !ValidateStateAssociations(*Batch, Nelaric::Control::EAssociationEndpoint::Source) ||
+		    !Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Source, World) ||
+		    !bTargetRestored || !bRequesterRestored ||
 		    (ReturnController && (!Nelaric::Control::IsLive(ReturnController, World) || ReturnController->GetPawn())))
 		{
 			RecoveryRequiredTransitions.Add(TransitionId);
 			return EControlSwitchResult::RecoveryFailed;
 		}
-		return EControlSwitchResult::ExecutionFailed;
+		return Failure;
 	};
+	// Detach the complete source set before one ASC can acquire a new avatar.
+	for (auto& Transfer : Batch->Pawns)
+	{
+		for (auto& Participant : Transfer.Participants)
+		{
+			Participant.bSourceDetachAttempted = true;
+			const bool bDetached = Participant.Participant->DetachAssociation(
+			    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Source, *Participant.Snapshot);
+			const EControlSwitchResult Validation = ValidatePlan(Plan);
+			if (!bDetached || Validation != EControlSwitchResult::Succeeded)
+			{
+				return Recover(bDetached ? EControlSwitchResult::ExecutionFailed
+				                         : EControlSwitchResult::StateAssociationFailed);
+			}
+		}
+	}
 	if (World->bIsTearingDown || !Nelaric::Control::IsLive(Requester, World) || Requester->GetPawn() != OldPawn ||
 	    (OldPawn && !Nelaric::Control::Matches(Requester, OldPawn, World)) ||
 	    (TargetPawn &&
@@ -889,12 +1182,45 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 	{
 		return Recover();
 	}
+	if (!Nelaric::Control::MatchesAssociations(*Batch, Nelaric::Control::EAssociationEndpoint::Destination, World))
+	{
+		return Recover();
+	}
+	for (auto& Transfer : Batch->Pawns)
+	{
+		for (auto& Participant : Transfer.Participants)
+		{
+			if (bShuttingDown || !Nelaric::Control::MatchesPlanAssociations(
+			                         Plan, Nelaric::Control::EAssociationEndpoint::Destination, World))
+			{
+				return Recover();
+			}
+			Participant.bDestinationAttachAttempted = true;
+			const bool bAttached = Participant.Participant->AttachAssociation(
+			    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Destination, *Participant.Snapshot);
+			if (!bAttached || bShuttingDown || World->bIsTearingDown ||
+			    !Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Destination,
+			                                               World))
+			{
+				return Recover(bAttached ? EControlSwitchResult::ExecutionFailed
+				                         : EControlSwitchResult::StateAssociationFailed);
+			}
+		}
+	}
 	// Ready callbacks can destroy actors or attempt direct possession.
 	ContextChange.Finish();
 	if ((TargetPawn && !Nelaric::Control::Matches(Requester, TargetPawn, World)) ||
 	    (!TargetPawn && (!Nelaric::Control::IsLive(Requester, World) || Requester->GetPawn())) ||
 	    (ReturnController && !Nelaric::Control::Matches(ReturnController, OldPawn, World)) ||
 	    (OldPawn && !ReturnController && (!Nelaric::Control::IsLive(OldPawn, World) || OldPawn->GetController())))
+	{
+		return Recover();
+	}
+	if (!ValidateStateAssociations(*Batch, Nelaric::Control::EAssociationEndpoint::Destination))
+	{
+		return Recover(EControlSwitchResult::StateAssociationFailed);
+	}
+	if (!Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Destination, World))
 	{
 		return Recover();
 	}
@@ -908,4 +1234,82 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 	}
 	Requester->ForceNetUpdate();
 	return EControlSwitchResult::Succeeded;
+}
+
+EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* Requester, EControlSwitchAction Action,
+                                                                   APawn* TargetPawn)
+{
+	check(IsInGameThread());
+	if (bExecutingControlSwitch)
+	{
+		if (IsControlTransitionInProgress(Requester) || IsControlTransitionInProgress(TargetPawn) ||
+		    (IsValid(Requester) && (IsControlTransitionInProgress(Requester->PlayerState) ||
+		                            IsControlTransitionInProgress(Requester->GetPawn()))) ||
+		    (IsValid(TargetPawn) && IsControlTransitionInProgress(TargetPawn->GetController())))
+		{
+			return EControlSwitchResult::ControlTransitionInProgress;
+		}
+		return EControlSwitchResult::Busy;
+	}
+	TGuardValue<bool> OperationGuard(bExecutingControlSwitch, true);
+	PruneDestroyedParticipants();
+	Nelaric::Control::FSwitchPlan Plan;
+	EControlSwitchResult Result = BuildPlan(Requester, Action, TargetPawn, Plan);
+	if (Result != EControlSwitchResult::Succeeded)
+	{
+		return Result;
+	}
+	const FGuid TransitionId = Plan.TransitionId;
+	ON_SCOPE_EXIT
+	{
+		if (!RecoveryRequiredTransitions.Contains(TransitionId))
+		{
+			DiscardPreparedController(Plan);
+			ReleaseTransition(TransitionId);
+		}
+	};
+	Result = ReserveParticipants(Plan.Participants, TransitionId);
+	if (Result != EControlSwitchResult::Succeeded)
+	{
+		return Result;
+	}
+	Result = PreparePlan(Plan);
+	if (Result != EControlSwitchResult::Succeeded)
+	{
+		return Result;
+	}
+	Result = ValidatePlan(Plan);
+	if (Result != EControlSwitchResult::Succeeded)
+	{
+		return Result;
+	}
+	APawn* OldPawn = Plan.OldPawn.Get();
+	if (OldPawn == TargetPawn)
+	{
+		return EControlSwitchResult::Succeeded;
+	}
+	Nelaric::Control::FContextChange ContextChange(OldPawn, TargetPawn);
+	Nelaric::Control::StopContext(Requester, OldPawn);
+	if (Plan.PreviousTargetController.IsValid())
+	{
+		Nelaric::Control::StopContext(Plan.PreviousTargetController.Get(), TargetPawn);
+	}
+	Result = ExportPlan(Plan);
+	if (Result != EControlSwitchResult::Succeeded)
+	{
+		ContextChange.Finish();
+		if (bShuttingDown || !GetWorld() || GetWorld()->bIsTearingDown)
+		{
+			return EControlSwitchResult::WorldUnavailable;
+		}
+		if (!Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Source,
+		                                               GetWorld()))
+		{
+			// Export is read-only; retain reservations if a callback violated it.
+			RecoveryRequiredTransitions.Add(TransitionId);
+			return EControlSwitchResult::RecoveryFailed;
+		}
+		return Result;
+	}
+	return SwitchAssociations(Plan, ContextChange);
 }

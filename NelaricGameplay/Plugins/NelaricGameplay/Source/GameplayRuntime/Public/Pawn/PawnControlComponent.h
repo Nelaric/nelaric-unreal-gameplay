@@ -8,6 +8,7 @@
 
 #include "Containers/Array.h"
 #include "Pawn/PawnInitStateComponent.h"
+#include "Player/ControlStateTransfer.h"
 #include "Templates/SubclassOf.h"
 
 #include "PawnControlComponent.generated.h"
@@ -38,6 +39,33 @@ public:
 	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category = "Nelaric|Control")
 	GAMEPLAYRUNTIME_API bool IsControlTransitionInProgress() const;
 
+	/** @brief Adds an optional state export and association integration.
+	 *
+	 * @details Call on the game thread before control changes. This
+	 * component shares ownership until removal or destruction. Duplicate IDs
+	 * and changes during a reserved transition or registration callback are
+	 * rejected.
+	 *
+	 * @param Id Unique, non-empty identity within this pawn.
+	 *
+	 * @param Participant Integration with lifetime-safe UObject references.
+	 *
+	 * @return Whether the participant was registered.
+	 */
+	GAMEPLAYRUNTIME_API bool
+	RegisterStateTransferParticipant(FName Id, TSharedRef<Nelaric::Control::IStateTransferParticipant> Participant);
+
+	/** @brief Removes an optional state transfer integration.
+	 *
+	 * @details Call on the game thread. Reserved transitions retain their
+	 * registrations until completion or explicit recovery resolution.
+	 *
+	 * @param Id Identity supplied at registration.
+	 *
+	 * @return True if removed; false if absent or a change is prohibited.
+	 */
+	GAMEPLAYRUNTIME_API bool UnregisterStateTransferParticipant(FName Id);
+
 	/// Whether authority requests may take control of this pawn.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nelaric|Control")
 	bool bAllowPlayerControl = true;
@@ -65,6 +93,8 @@ public:
 	void TrackSpawnedController(AAIController* Controller);
 	void ForgetSpawnedController(AAIController* Controller);
 	void RememberController(AAIController* Controller);
+	const TArray<Nelaric::Control::FStateParticipantRegistration>& GetStateTransferParticipants() const;
+	uint64 GetStateTransferRevision() const;
 
 protected:
 	/** @brief Requires a usable player state for a locally present controller.
@@ -83,6 +113,11 @@ protected:
 	GAMEPLAYRUNTIME_API virtual void OnInitReady() override;
 
 private:
+	TArray<Nelaric::Control::FStateParticipantRegistration> StateTransferParticipants;
+	uint64 StateTransferRevision = 0;
+	bool bChangingStateTransferParticipants = false;
+	bool bStateTransferRegistrationEnded = false;
+
 	UPROPERTY(Transient)
 	TObjectPtr<AAIController> RememberedController;
 

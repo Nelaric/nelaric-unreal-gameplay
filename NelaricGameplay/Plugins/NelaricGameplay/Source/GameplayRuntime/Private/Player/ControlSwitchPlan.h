@@ -6,6 +6,7 @@
 #include "Misc/Guid.h"
 #include "Pawn/InitStateTypes.h"
 #include "Player/NelaricPlayerController.h"
+#include "Player/ControlStateTransfer.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
 class AActor;
@@ -25,11 +26,31 @@ struct FPolicySnapshot
 {
 	TWeakObjectPtr<UPawnControlComponent> Component;
 	FInitGeneration Generation;
+	uint64 StateTransferRevision = 0;
 	TWeakObjectPtr<UClass> ReturnControllerClass;
 	bool bAllowPlayerControl = false;
 	bool bAllowReturnControl = false;
 	bool bReturnToBot = false;
 	bool bStartBotLogicOnReady = false;
+};
+
+struct FParticipantTransfer
+{
+	TSharedPtr<IStateTransferParticipant> Participant;
+	TSharedPtr<const FStateSnapshot> Snapshot;
+	bool bSourceDetachAttempted = false;
+	bool bDestinationAttachAttempted = false;
+};
+
+struct FPawnStateTransfer
+{
+	TSharedPtr<FControlStateExport> Export;
+	TArray<FParticipantTransfer> Participants;
+};
+
+struct FStateTransferBatch
+{
+	TArray<FPawnStateTransfer> Pawns;
 };
 
 // Weak references preserve the validated identities without extending actor
@@ -54,5 +75,6 @@ struct FSwitchPlan
 	TWeakObjectPtr<AAIController> SpawnedReturnController;
 	TArray<TWeakObjectPtr<const AActor>> Participants;
 	bool bNeedsReturnController = false;
+	TSharedPtr<FStateTransferBatch> StateTransfers;
 };
 } // namespace Nelaric::Control

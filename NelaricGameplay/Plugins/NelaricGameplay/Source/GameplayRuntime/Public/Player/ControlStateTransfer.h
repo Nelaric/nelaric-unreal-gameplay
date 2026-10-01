@@ -12,6 +12,7 @@
 #include "UObject/NameTypes.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
+class AActor;
 class AController;
 class APawn;
 class APlayerState;
@@ -81,18 +82,27 @@ struct FStateSnapshot
 /** @brief Exports pawn state and rebinds an optional gameplay
  * integration.
  *
- * @details Register with the pawn's control component before switching.
- * All calls run synchronously on the authority game thread under
- * complete reservations. Export is read-only. Association methods change
- * bindings, not attributes, effects or grants; state import is a
- * separate operation. Calls must not possess actors, replace
- * registrations or publish gameplay. Store UObject references weakly or
- * with GC-safe ownership. Failed calls may have partially changed a
- * binding and must support source restoration.
+ * @details Register with the pawn before switching. Calls run on the
+ * authority game thread. Discovery precedes reservations; state and
+ * association work runs under complete reservations. Export is read-only.
+ * Association methods change bindings only. Import precedes Ready and
+ * commit follows complete validation. Calls must not possess actors,
+ * replace registrations or publish gameplay. Store UObject references
+ * weakly or with GC-safe ownership. Failed calls may partially change
+ * state or bindings and must support restoration.
  */
 class IStateTransferParticipant
 {
 public:
+	/** @brief Includes integration actors in the complete reservation set.
+	 * @details Read-only on the authority game thread before policy approval.
+	 * @param Pawn Pawn whose integration is preparing a control change.
+	 * @param OutActors Extra state carriers; do not include stale actors.
+	 */
+	virtual void GetReservationActors(APawn* Pawn, TArray<TWeakObjectPtr<const AActor>>& OutActors) const
+	{
+	}
+
 	/// Releases the integration when its registration and transfers end.
 	virtual ~IStateTransferParticipant() = default;
 
@@ -162,6 +172,59 @@ public:
 	 */
 	virtual bool IsAssociationValid(const FStateTransferContext& Context, EAssociationEndpoint Endpoint,
 	                                const FStateSnapshot& Snapshot) const = 0;
+	/** @brief Removes state owned by the selected endpoint before import.
+	 * @details Runs for every source before any destination state imports.
+	 * Recovery also releases attempted destination imports. Must be
+	 * idempotent and remove only this pawn's state, never participant state.
+	 * @param Context Fixed transfer endpoints.
+	 * @param Endpoint Endpoint whose state is being removed.
+	 * @param Snapshot Original immutable export used for recovery.
+	 * @return Whether removal completed safely.
+	 */
+	virtual bool ReleaseState(const FStateTransferContext& Context, EAssociationEndpoint Endpoint,
+	                          const FStateSnapshot& Snapshot)
+	{
+		return true;
+	}
+
+	/** @brief Restores exported state after the selected binding is attached.
+	 * @details Source restores recovery; destination imports forward state.
+	 * Must support retry after partial import without duplicating grants.
+	 * Runs before Ready callbacks. Defaults to an association-only no-op.
+	 * @param Context Fixed transfer endpoints.
+	 * @param Endpoint Endpoint receiving the exported pawn state.
+	 * @param Snapshot Complete export captured before any state release.
+	 * @return Whether the complete state was restored.
+	 */
+	virtual bool ImportState(const FStateTransferContext& Context, EAssociationEndpoint Endpoint,
+	                         const FStateSnapshot& Snapshot)
+	{
+		return true;
+	}
+
+	/** @brief Checks imported state without changing gameplay.
+	 * @details Runs before and after Ready and during recovery resolution.
+	 * @param Context Fixed transfer endpoints.
+	 * @param Endpoint Expected state owner.
+	 * @param Snapshot Original exported state.
+	 * @return Whether state is complete at this endpoint.
+	 */
+	virtual bool IsStateValid(const FStateTransferContext& Context, EAssociationEndpoint Endpoint,
+	                          const FStateSnapshot& Snapshot) const
+	{
+		return true;
+	}
+
+	/** @brief Publishes a settled import after all integrations validate.
+	 * @details Must not fail or change control. Also runs after recovery.
+	 * @param Context Fixed transfer endpoints.
+	 * @param Endpoint Endpoint that successfully acquired the state.
+	 * @param Snapshot Original immutable export.
+	 */
+	virtual void CommitState(const FStateTransferContext& Context, EAssociationEndpoint Endpoint,
+	                         const FStateSnapshot& Snapshot)
+	{
+	}
 };
 
 /// Named integration registered with a pawn's control component.

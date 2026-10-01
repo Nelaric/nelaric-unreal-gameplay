@@ -13,6 +13,7 @@
 #include "Pawn/PawnControlComponent.h"
 #include "Pawn/PawnInitializationComponent.h"
 #include "Templates/UnrealTemplate.h"
+#include "TimerManager.h"
 
 namespace Nelaric::Control
 {
@@ -394,6 +395,12 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 			else if (const APlayerState* PlayerState = Cast<APlayerState>(Participant))
 			{
 				const AController* Controller = Cast<AController>(PlayerState->GetOwner());
+				const APawn* CustodyPawn = Cast<APawn>(PlayerState->GetOwner());
+				if (CustodyPawn && Nelaric::Control::IsLive(CustodyPawn, World) &&
+				    ControlTransitions.FindRef(CustodyPawn) == TransitionId)
+				{
+					continue;
+				}
 				if (!Nelaric::Control::IsLive(Controller, World) || Controller->PlayerState != PlayerState ||
 				    HasConflictingTransition(Controller, TransitionId))
 				{
@@ -437,8 +444,8 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 			for (const auto& Participant : Transfer.Participants)
 			{
 				if (!Participant.Participant->IsAssociationValid(Context, Endpoint, *Participant.Snapshot) ||
-				    bShuttingDown || World->bIsTearingDown ||
-				    !Nelaric::Control::MatchesAssociation(Context, Endpoint, World))
+				    !Participant.Participant->IsStateValid(Context, Endpoint, *Participant.Snapshot) || bShuttingDown ||
+				    World->bIsTearingDown || !Nelaric::Control::MatchesAssociation(Context, Endpoint, World))
 				{
 					return false;
 				}
@@ -448,6 +455,26 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 	if (!IsSettled() || bShuttingDown || World->bIsTearingDown || !RecoveryRequiredTransitions.Contains(TransitionId))
 	{
 		return false;
+	}
+	if (const auto* Batch = StateTransfers.Find(TransitionId))
+	{
+		const auto Exports = *Batch;
+		for (const auto& Transfer : Exports->Pawns)
+		{
+			if (!Transfer.Export->Context.Pawn.IsValid())
+			{
+				continue;
+			}
+			const auto& Context = Transfer.Export->Context;
+			const auto Endpoint =
+			    Nelaric::Control::MatchesAssociation(Context, Nelaric::Control::EAssociationEndpoint::Source, World)
+			        ? Nelaric::Control::EAssociationEndpoint::Source
+			        : Nelaric::Control::EAssociationEndpoint::Destination;
+			for (const auto& Participant : Transfer.Participants)
+			{
+				Participant.Participant->CommitState(Context, Endpoint, *Participant.Snapshot);
+			}
+		}
 	}
 	ReleaseTransition(TransitionId);
 	return true;
@@ -494,15 +521,43 @@ UControlSwitchSubsystem::ReserveParticipants(const TArray<TWeakObjectPtr<const A
 
 void UControlSwitchSubsystem::ReleaseTransition(const FGuid& TransitionId)
 {
+	TArray<TWeakObjectPtr<UPawnControlComponent>> ReadyPolicies;
 	for (auto It = ControlTransitions.CreateIterator(); It; ++It)
 	{
 		if (It.Value() == TransitionId)
 		{
+			if (const auto* Pawn = Cast<APawn>(It.Key().Get()))
+			{
+				if (auto* Policy = Nelaric::Control::FindPolicy(Pawn))
+				{
+					ReadyPolicies.Add(Policy);
+				}
+			}
 			It.RemoveCurrent();
 		}
 	}
 	RecoveryRequiredTransitions.Remove(TransitionId);
 	StateTransfers.Remove(TransitionId);
+	if (bShuttingDown || !GetWorld() || GetWorld()->bIsTearingDown)
+	{
+		return;
+	}
+	for (const auto& WeakPolicy : ReadyPolicies)
+	{
+		if (auto* Policy = WeakPolicy.Get())
+		{
+			const auto Generation = Policy->GetInitGeneration();
+			GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(
+			    Policy,
+			    [WeakPolicy, Generation]()
+			    {
+				    if (auto* Current = WeakPolicy.Get(); Current && Current->GetInitGeneration() == Generation)
+				    {
+					    Current->StartReadyBotLogic();
+				    }
+			    }));
+		}
+	}
 }
 
 void UControlSwitchSubsystem::PruneDestroyedParticipants()
@@ -701,6 +756,16 @@ EControlSwitchResult UControlSwitchSubsystem::BuildPlan(AController* Requester, 
 	Include(Plan.PreviousTargetState.Get());
 	Include(Plan.ReturnController.Get());
 	Include(Plan.ReturnState.Get());
+	for (const auto* Policy : {&Plan.OldPolicy, &Plan.TargetPolicy})
+	{
+		if (const auto* Component = Policy->Component.Get())
+		{
+			for (const auto& Registration : Component->GetStateTransferParticipants())
+			{
+				Registration.Participant->GetReservationActors(Component->GetPawn(), Plan.Participants);
+			}
+		}
+	}
 	return ValidatePlan(Plan, false);
 }
 
@@ -987,7 +1052,9 @@ bool UControlSwitchSubsystem::ValidateStateAssociations(const Nelaric::Control::
 		{
 			const bool bValid =
 			    Participant.Participant->IsAssociationValid(Transfer.Export->Context, Endpoint, *Participant.Snapshot);
-			if (!bValid || bShuttingDown || !MatchesAssociations(Batch, Endpoint, World))
+			if (!bValid ||
+			    !Participant.Participant->IsStateValid(Transfer.Export->Context, Endpoint, *Participant.Snapshot) ||
+			    bShuttingDown || !MatchesAssociations(Batch, Endpoint, World))
 			{
 				return false;
 			}
@@ -1016,6 +1083,20 @@ EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::
 		}
 		Nelaric::Control::FContextChange RecoveryContext(OldPawn, TargetPawn);
 		bool bBindingsRestored = true;
+		// Remove all destination state before any original ASC imports its pawn.
+		for (auto& Transfer : Batch->Pawns)
+		{
+			for (auto& Participant : Transfer.Participants)
+			{
+				if (Participant.bDestinationStateImportAttempted && !bShuttingDown)
+				{
+					const bool bReleased = Participant.Participant->ReleaseState(
+					    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Destination,
+					    *Participant.Snapshot);
+					bBindingsRestored = bReleased && bBindingsRestored;
+				}
+			}
+		}
 		// Undo every attempted destination attach, including a partial failure.
 		for (auto& Transfer : Batch->Pawns)
 		{
@@ -1084,6 +1165,21 @@ EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::
 				}
 			}
 		}
+		for (auto& Transfer : Batch->Pawns)
+		{
+			for (auto& Participant : Transfer.Participants)
+			{
+				if (Participant.bSourceStateReleaseAttempted && !bShuttingDown &&
+				    Nelaric::Control::MatchesAssociation(Transfer.Export->Context,
+				                                         Nelaric::Control::EAssociationEndpoint::Source, World))
+				{
+					const bool bImported = Participant.Participant->ImportState(
+					    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Source,
+					    *Participant.Snapshot);
+					bBindingsRestored = bImported && bBindingsRestored;
+				}
+			}
+		}
 		RecoveryContext.Finish();
 		ContextChange.Finish();
 		if (bShuttingDown || World->bIsTearingDown)
@@ -1105,8 +1201,31 @@ EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::
 			RecoveryRequiredTransitions.Add(TransitionId);
 			return EControlSwitchResult::RecoveryFailed;
 		}
+		for (auto& Transfer : Batch->Pawns)
+		{
+			for (auto& Participant : Transfer.Participants)
+			{
+				Participant.Participant->CommitState(
+				    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Source, *Participant.Snapshot);
+			}
+		}
 		return Failure;
 	};
+	// Snapshot the complete set first, then release the complete source set.
+	for (auto& Transfer : Batch->Pawns)
+	{
+		for (auto& Participant : Transfer.Participants)
+		{
+			Participant.bSourceStateReleaseAttempted = true;
+			const bool bReleased = Participant.Participant->ReleaseState(
+			    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Source, *Participant.Snapshot);
+			if (!bReleased || bShuttingDown ||
+			    !Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Source, World))
+			{
+				return Recover(EControlSwitchResult::StateImportFailed);
+			}
+		}
+	}
 	// Detach the complete source set before one ASC can acquire a new avatar.
 	for (auto& Transfer : Batch->Pawns)
 	{
@@ -1207,6 +1326,25 @@ EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::
 			}
 		}
 	}
+	for (auto& Transfer : Batch->Pawns)
+	{
+		for (auto& Participant : Transfer.Participants)
+		{
+			Participant.bDestinationStateImportAttempted = true;
+			const bool bImported = Participant.Participant->ImportState(
+			    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Destination, *Participant.Snapshot);
+			if (!bImported || bShuttingDown ||
+			    !Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Destination,
+			                                               World))
+			{
+				return Recover(EControlSwitchResult::StateImportFailed);
+			}
+		}
+	}
+	if (!ValidateStateAssociations(*Batch, Nelaric::Control::EAssociationEndpoint::Destination))
+	{
+		return Recover(EControlSwitchResult::StateImportFailed);
+	}
 	// Ready callbacks can destroy actors or attempt direct possession.
 	ContextChange.Finish();
 	if ((TargetPawn && !Nelaric::Control::Matches(Requester, TargetPawn, World)) ||
@@ -1231,6 +1369,14 @@ EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::
 	if (UPawnControlComponent* TargetPolicy = Plan.TargetPolicy.Component.Get())
 	{
 		TargetPolicy->RememberController(Cast<AAIController>(PreviousTargetController));
+	}
+	for (auto& Transfer : Batch->Pawns)
+	{
+		for (auto& Participant : Transfer.Participants)
+		{
+			Participant.Participant->CommitState(
+			    Transfer.Export->Context, Nelaric::Control::EAssociationEndpoint::Destination, *Participant.Snapshot);
+		}
 	}
 	Requester->ForceNetUpdate();
 	return EControlSwitchResult::Succeeded;

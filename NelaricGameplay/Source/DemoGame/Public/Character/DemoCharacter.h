@@ -6,11 +6,11 @@
 
 #pragma once
 
-#include "Pawn/NelaricCharacter.h"
+#include "NelaricGasCharacter.h"
 
 #include "DemoCharacter.generated.h"
 
-class UPawnControlComponent;
+class UGasStateProfile;
 
 /** @brief Base character for game-specific demo characters.
  * @details Derive demo character variants in C++ or
@@ -20,7 +20,7 @@ class UPawnControlComponent;
  * is inherited from ANelaricCharacter.
  */
 UCLASS(MinimalAPI, Blueprintable)
-class ADemoCharacter : public ANelaricCharacter
+class ADemoCharacter : public ANelaricGasCharacter
 {
 	GENERATED_BODY()
 
@@ -33,6 +33,6 @@ public:
 	DEMOGAME_API ADemoCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 private:
-	UPROPERTY(VisibleAnywhere, Category = "Nelaric|Control")
-	TObjectPtr<UPawnControlComponent> PawnControlComponent;
+	UPROPERTY(VisibleAnywhere, Category = "Nelaric|GAS")
+	TObjectPtr<UGasStateProfile> DefaultStateProfile;
 };

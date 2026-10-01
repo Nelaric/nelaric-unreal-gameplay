@@ -7,6 +7,7 @@
 #include "GameFramework/Controller.h"
 #include "InputActionValue.h"
 #include "NativeGameplayTags.h"
+#include "NelaricAbilitySystemComponent.h"
 
 namespace Nelaric::DemoInputTags
 {
@@ -98,7 +99,10 @@ void UDemoPlayerInputComponent::InputJumpStarted()
 {
 	if (ADemoPlayerCharacter* Character = GetPawn<ADemoPlayerCharacter>())
 	{
-		Character->Jump();
+		if (auto* ASC = Cast<UNelaricAbilitySystemComponent>(Character->GetAbilitySystemComponent()))
+		{
+			ASC->SubmitAction(FGameplayTag::RequestGameplayTag(TEXT("Action.Jump")), true);
+		}
 	}
 }
 
@@ -106,6 +110,9 @@ void UDemoPlayerInputComponent::InputJumpStopped()
 {
 	if (ADemoPlayerCharacter* Character = GetPawn<ADemoPlayerCharacter>())
 	{
-		Character->StopJumping();
+		if (auto* ASC = Cast<UNelaricAbilitySystemComponent>(Character->GetAbilitySystemComponent()))
+		{
+			ASC->SubmitAction(FGameplayTag::RequestGameplayTag(TEXT("Action.Jump")), false);
+		}
 	}
 }

@@ -58,9 +58,14 @@
 
 | 操作 | 契约 |
 | --- | --- |
+| `GetReservationActors` | 预留前只读发现额外状态持有者，例如托管 PlayerState。 |
 | `ExportState` | 只读导出原状态，返回非空不可变 `FStateSnapshot`；其 `SchemaId` 非空，`SchemaVersion` 为正数。 |
+| `ReleaseState` | 在原 ActorInfo 仍可用时移除选定端点的角色状态；支持部分清理后的补偿与重试。 |
 | `DetachAssociation` | 只解除选定端点拥有的绑定；允许原绑定已经不存在，不清除其他 Pawn 后来建立的绑定。 |
 | `AttachAssociation` | 原生 Possession 改变后、Ready 回调前建立选定绑定；Source 表示恢复，Destination 表示正向切换。 |
+| `ImportState` | 在 Ready 前把完整角色快照恢复到已绑定端点；Source 用于补偿，Destination 用于正向导入。 |
+| `IsStateValid` | 只读验证导入状态及领域适配器。 |
+| `CommitState` | 整批验证后发布已提交状态；通知不得失败或改变 Possession。 |
 | `IsAssociationValid` | 在绑定后、Ready 回调后及显式恢复解决期间只读检查关联。 |
 
 `FStateTransferContext` 记录共用转换 ID、Pawn 身份及原始、目标两个端点。端点以非拥有引用记录 Controller 和 PlayerState。显式空引用表示未控制端点；失效引用不能当成有意为空。无法支持拟议空端点的集成必须在导出时拒绝。集成可派生 `FStateSnapshot` 保存有类型的数据。UObject 引用应采用弱引用或明确的 GC 安全所有权；原生共享指针本身不会阻止 UObject 被垃圾回收。
@@ -69,13 +74,13 @@
 
 所有角色导出成功后，协调器才为各 Pawn 公布完整 `FControlStateExport`，其中包含两个关联端点、导出 World 时间及带注册 ID 的快照。关联回调和恢复失败期间可以通过 `GetExportedControlState(Pawn)` 读取。完整公布前及转换释放后返回空。调用者可以独立保留共享快照，但 Actor 引用仍为弱引用。没有状态集成的 Pawn 仍导出关联元数据，状态列表为空。
 
-关联切换先解除**全部**原集成绑定，再为完整角色集合切换原生 Possession，使用各新 Controller 自己已有的 PlayerState。全部目标关系确认一致后，才建立目标绑定并结束 Pawn 上下文变化。这样从角色 A 切到 B 时，解除 A 不会清除请求者刚建立的 B Avatar。每个回调后复核上下文；Ready 回调后的最终检查包含集成绑定、捕获的 PlayerState 身份及已空闲 Controller。
+切换先释放**全部**来源角色状态，再解除**全部**来源绑定，然后为完整角色集合切换原生 Possession，使用各新 Controller 自己已有的 PlayerState。全部目标绑定建立后，才导入全部目标状态。Ready 回调前后都验证状态及关联，最后整批提交。这样来源角色不会清除新 Avatar，也不会覆盖尚未导出的另一个角色状态。释放先于 ActorInfo 解绑，能力清理仍能访问原 Avatar。
 
-绑定回调返回失败时，即使它已部分改变绑定，也进入恢复：解除所有尝试过的目标绑定，恢复原生来源关系，再为所有尝试过来源解绑的参与者恢复来源绑定，最后执行恢复 Ready 回调。原先未控制的目标恢复其捕获的 PlayerState。`StateAssociationFailed` 表示集成绑定失败且恢复成功；原生 Possession 失败仍使用 `ExecutionFailed`。恢复失败返回 `RecoveryFailed`，保留完整快照、预留和修复所需的新替代 Bot。
+失败时补偿所有尝试过的目标导入和绑定，包括返回失败前已部分执行的回调；恢复原生来源关系、来源绑定，再为所有尝试过释放的来源重新导入快照。恢复整批验证后才提交。`StateImportFailed` 表示状态移除或导入失败但恢复成功；`StateAssociationFailed` 表示绑定失败且恢复成功；原生 Possession 失败使用 `ExecutionFailed`。`RecoveryFailed` 保留完整导出、预留和修复所需的新替代 Bot。
 
-玩法修复流程可以读取保留快照，修复集成绑定后再调用 `ResolveControlTransitionRecovery`。包含集成的导出要求仍存活 Pawn 落在捕获的某个端点，且全部集成都确认该绑定，才释放转换；没有集成的 Pawn 保持现有结构恢复规则。该方法只验证绑定，不建立绑定、不导入状态。World 退出会停止关联工作并清空保留导出；快照和预留不拥有 Actor 生命周期。
+玩法修复可以读取保留快照，修复原生关系及集成状态后调用 `ResolveControlTransitionRecovery`。存活的集成 Pawn 必须落在捕获的某个端点，并通过绑定和状态验证。解决器在释放预留前提交恢复状态，但不执行 Possession、不建立关联、不导入数据。World 退出会停止回调并清空保留快照；Actor 引用保持为弱引用。
 
-导出器定义哪些领域状态属于 Pawn 及其数据表示。关联方法负责上下文、订阅或可选 ASC 的 ActorInfo，不应导入属性、移除玩法效果或授予能力。状态导入和玩法提交是独立阶段。GAS 适配器可以在依赖 GameplayRuntime 与 GameplayAbilities 的模块中实现该原生契约；GameplayRuntime 本身不增加 GameplayAbilities 依赖。
+关联方法只更新上下文、订阅或 ASC ActorInfo；玩法状态变化放在释放与导入阶段。新增状态方法有默认实现，兼容只管理关联的已有集成。可选的 [GAS 集成](../GAS/ControlState.zh-CN.md) 完成属性、效果及能力授予迁移，GameplayRuntime 不增加 GameplayAbilities 依赖。
 
 ## 执行与恢复
 
@@ -85,7 +90,7 @@
 
 框架 Pawn 的初始化上下文变化在操作期间合并，旧本地绑定撤销，参与者基于最终 Controller 和 PlayerState 重新初始化。Ready 回调后再次验证最终控制关系；这些回调及恢复过程的回调期间，预留始终有效。游戏回调不应执行竞争性的直接 Possession；涉及已预留对象的嵌套请求返回 `ControlTransitionInProgress`，World 内无关对象的嵌套协调请求仍返回 `Busy`。
 
-执行检查 Controller、Pawn 的双向关系及 PlayerState 一致性。失败时尝试恢复原关系，但不会抢回已经由回调重新分配的无关 Pawn 或 Controller。`ExecutionFailed` 表示执行失败且恢复成功；`RecoveryFailed` 表示销毁或竞争回调阻止恢复。停止的导航不会自动恢复；配置的 Bot Brain 通过 Ready 控制上下文重新启动。
+执行检查 Controller、Pawn 的双向关系及 PlayerState 一致性。失败时尝试恢复原关系，但不会抢回已经由回调重新分配的无关 Pawn 或 Controller。`ExecutionFailed` 表示执行失败且恢复成功；`RecoveryFailed` 表示销毁或竞争回调阻止恢复。停止的导航不会自动恢复；配置的 Bot Brain 在 Ready 上下文完成提交且预留释放后重新启动。启动延迟到下一 Tick，并复核初始化代际，避免 AI 动作在状态事务中执行。
 
 执行成功、普通拒绝或恢复成功时，作用域结束会释放本次转换的预留与导出。`RecoveryFailed` 保留仍存活对象的预留，阻止后续普通请求。`IsControlTransitionRecoveryRequired(Actor)` 可区分待修复与正在执行。权威玩法修复控制关系或移除相关对象后，以任意仍存活的预留对象调用 `ResolveControlTransitionRecovery(Actor)`；协调器检查所有存活参与者、双向 Possession、有效 PlayerState 及已预留 Pawn 的就绪状态，通过后才释放整个失败转换。该方法不执行 Possession，也不能在正在执行的控制操作内调用。后续操作前清理已销毁参与者，World 退出时清空记录。预留使用弱引用，不延长 Actor 生命周期。
 
@@ -93,4 +98,4 @@
 
 普通拒绝不会断开请求者连接。状态阶段新增 `StateExportFailed` 与 `StateAssociationFailed`。除执行、恢复结果外，还包括 `Denied`、`TargetOccupied`、`NoCurrentPawn`、`PlayerStateUnavailable`、`StaleRequest`、`ReplacementUnavailable`、`ControlTransitionInProgress`、`Busy`、`InvalidRequest`、`InvalidTarget` 和 `WorldUnavailable`。
 
-本机制更新控制关系，使用新 Controller 自己已有的 PlayerState，不交换 PlayerState。GameplayRuntime 不依赖 GameplayAbilities，不复制 ASC 属性、效果、冷却或活动能力。状态参与者契约提供导出与关联切换入口；GAS 集成仍需提供领域导出器，并协调状态导入；Possession 本身不构成状态迁移。要求状态连续的项目应完成该集成后，再为 GAS 角色启用这些请求。
+本机制更新控制关系，使用新 Controller 自己已有的 PlayerState，不交换 PlayerState 身份。GameplayRuntime 协调领域状态，不认识 GAS 类型。GameplayAbilitiesIntegration 提供 ASC 存储、Pawn 托管、所有权配置、统一动作输入、状态迁移和自定义恢复契约。已初始化的 GAS Pawn 应通过协调器切换；直接原生 Possession 绕过整批事务后，玩法会保持阻止状态，直到原上下文被修复。

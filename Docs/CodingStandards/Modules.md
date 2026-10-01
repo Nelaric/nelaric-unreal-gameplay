@@ -17,11 +17,12 @@ Every module should state its responsibility and direct dependencies in its modu
 
 ## Plugin and module structure
 
-The framework uses one project-owned plugin, `NelaricGameplay`, under `NelaricGameplay/Plugins/NelaricGameplay/`. Its four modules correspond to the Runtime, Diagnostics, Benchmark, and Editor responsibilities. Add framework capabilities as modules in this plugin, with responsibilities and direct dependencies documented explicitly. Third-party plugins such as PuerTS remain separate and retain their own names and attribution.
+The framework uses one project-owned plugin, `NelaricGameplay`, under `NelaricGameplay/Plugins/NelaricGameplay/`. Its modules cover Runtime, optional GAS integration, Diagnostics, Benchmark and Editor responsibilities. Add framework capabilities as modules in this plugin, with responsibilities and direct dependencies documented explicitly. Third-party plugins such as PuerTS remain separate and retain their own names and attribution.
 
 | Responsibility | Module directory under the plugin's `Source/` | Module type |
 | --- | --- | --- |
 | Runtime | `GameplayRuntime/` | `Runtime` |
+| GAS integration | `GameplayAbilitiesIntegration/` | `Runtime` |
 | Diagnostics (performance analysis) | `Diagnostics/` | `Runtime` |
 | Benchmark | `Benchmark/` | `DeveloperTool` |
 | Editor | `Editor/` | `Editor` |
@@ -31,6 +32,8 @@ The framework uses one project-owned plugin, `NelaricGameplay`, under `NelaricGa
 `Diagnostics` registers `ng.Perf.HUD` on startup and unregisters it on shutdown. Its default value is `0` (hidden); a non-zero value shows an English Slate HUD with FPS, Frame, GT, RT, and GPU timings. The HUD covers game viewports and the active level editor viewport, remains enabled after PIE ends, and never consumes input. Measurements are engine-wide; GPU timings use the primary rendering GPU, its adapter name comes from the RHI, and unavailable values display `N/A`. `UFrameworkPerformanceSubsystem` provides an initial game-instance subsystem type with no performance operations; HUD ownership remains in the module so the editor overlay survives PIE teardown. Its public base type requires public `Core`, `CoreUObject`, and `Engine` dependencies in every target. Client builds additionally depend privately on `Slate`, `SlateCore`, `RenderCore`, and `RHI`; editor builds additionally depend privately on `LevelEditor` and `UnrealEd`. Server builds do not create a HUD. `Benchmark` still contains lifecycle scaffolding with a private `Core` dependency; benchmark execution is not implemented yet. `Editor` also hosts Pawn initialization consumer and network-event automation tests. It privately depends on `Core`, `CoreUObject`, `Engine`, `GameplayRuntime`, and `UnrealEd` to compile against runtime Public contracts and exercise real PIE lifecycle events; these dependencies do not flow back into GameplayRuntime. Editor authoring tools are not implemented yet. Add dependencies when an implementation needs another module; GameplayRuntime must remain independent of these optional tools. `DeveloperTool` modules are available only when the target builds developer tools; `Editor` modules are available only to editor targets.
 
 GameplayRuntime also owns the Game AI StateTree Schema, its executing component, native and Blueprint node extension points, and a world-owned AI context subsystem under its AI directories. The public StateTree contracts add public StateTreeModule, GameplayStateTreeModule, and AIModule dependencies. The plugin declares its GameplayStateTree plugin dependency, which enables StateTree transitively. Concrete behavior, perception, navigation policies, and game services remain with consumers. See the [API usage notes](../API/README.md#gameai-statetree).
+
+`GameplayAbilitiesIntegration` owns participant PlayerState ASCs, shared ability input, pawn state custody and control-state migration. Its public dependencies are Core, CoreUObject, Engine, GameplayRuntime, GameplayAbilities, GameplayTags and GameplayTasks; its private dependency is NetCore for effect replication. The plugin enables GameplayAbilities. The module stays optional for consumers, and GameplayRuntime never depends on it. Concrete AttributeSets and game abilities remain in the game. See [GAS state across control changes](../API/GAS/ControlState.md).
 
 ## Internal integration convention
 

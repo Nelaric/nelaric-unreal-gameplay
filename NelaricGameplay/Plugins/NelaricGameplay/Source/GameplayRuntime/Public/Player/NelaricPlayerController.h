@@ -80,6 +80,9 @@ enum class EControlSwitchResult : uint8
 
 	/// An integration binding failed and original associations were restored.
 	StateAssociationFailed,
+
+	/// State removal or import failed and original state was restored.
+	StateImportFailed,
 };
 
 /// Reports a player control decision on the owning client's game thread.

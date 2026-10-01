@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class DemoGame : ModuleRules
+public class GameplayAbilitiesIntegration : ModuleRules
 {
-	public DemoGame(ReadOnlyTargetRules Target)
+	public GameplayAbilitiesIntegration(ReadOnlyTargetRules Target)
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
@@ -15,12 +15,11 @@ public class DemoGame : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"GameplayRuntime",
-				"EnhancedInput",
-				"GameplayTags",
-				"GameplayAbilitiesIntegration",
 				"GameplayAbilities",
+				"GameplayTags",
+				"GameplayTasks",
 			}
 		);
-		PrivateDependencyModuleNames.Add("GameplayTasks");
+		PrivateDependencyModuleNames.Add("NetCore");
 	}
 }

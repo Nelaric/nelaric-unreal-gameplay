@@ -84,6 +84,15 @@ bool UPawnControlComponent::CanEntryDataAvailable()
 void UPawnControlComponent::OnInitReady()
 {
 	Super::OnInitReady();
+	StartReadyBotLogic();
+}
+
+void UPawnControlComponent::StartReadyBotLogic()
+{
+	if (IsControlTransitionInProgress() || GetInitState() != Nelaric::EInitState::Ready)
+	{
+		return;
+	}
 	APawn* Pawn = GetPawn();
 	AAIController* Controller = GetController<AAIController>();
 	if (!Pawn || !Pawn->HasAuthority() || !Controller || !bStartBotLogicOnReady)

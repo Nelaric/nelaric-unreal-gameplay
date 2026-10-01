@@ -39,6 +39,8 @@ struct FParticipantTransfer
 	TSharedPtr<IStateTransferParticipant> Participant;
 	TSharedPtr<const FStateSnapshot> Snapshot;
 	bool bSourceDetachAttempted = false;
+	bool bSourceStateReleaseAttempted = false;
+	bool bDestinationStateImportAttempted = false;
 	bool bDestinationAttachAttempted = false;
 };
 

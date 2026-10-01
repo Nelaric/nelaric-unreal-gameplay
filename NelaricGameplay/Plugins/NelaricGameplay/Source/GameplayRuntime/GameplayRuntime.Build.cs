@@ -9,7 +9,18 @@ public class GameplayRuntime : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(
-			new string[] { "Core", "CoreUObject", "Engine", "OnlineSubsystemUtils", "EnhancedInput", "GameplayTags" }
+			new string[]
+			{
+				"Core",
+				"CoreUObject",
+				"Engine",
+				"OnlineSubsystemUtils",
+				"EnhancedInput",
+				"GameplayTags",
+				"StateTreeModule",
+				"GameplayStateTreeModule",
+				"AIModule",
+			}
 		);
 	}
 }

@@ -8,6 +8,11 @@
 #include "Pawn/PawnInitializationComponent.h"
 #include "Pawn/InitStateParticipantInterface.h"
 
+bool UInitStateWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
+{
+	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
+}
+
 void UInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 {
 	if (bShuttingDown || !IsValid(Component) || StoppedComponents.Contains(Component) ||

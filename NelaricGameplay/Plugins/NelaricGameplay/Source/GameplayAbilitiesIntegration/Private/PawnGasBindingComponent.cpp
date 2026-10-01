@@ -446,19 +446,26 @@ bool UPawnGasBindingComponent::UnregisterTransferExtension(FName Id)
 
 bool UPawnGasBindingComponent::EnsureCustodian()
 {
+	UWorld* World = GetWorld();
+	APawn* Pawn = GetPawn();
+	if (!World || !World->IsGameWorld() || World->bIsTearingDown || !Pawn || !Pawn->HasAuthority() ||
+	    Pawn->IsActorBeingDestroyed())
+	{
+		return false;
+	}
 	if (IsValid(Custodian))
 	{
 		return true;
 	}
-	const auto* Mode = GetWorld()->GetAuthGameMode();
+	const auto* Mode = World->GetAuthGameMode();
 	UClass* Class =
 	    Mode && Mode->PlayerStateClass && Mode->PlayerStateClass->IsChildOf(ANelaricGasPlayerState::StaticClass())
 	        ? Mode->PlayerStateClass.Get()
 	        : ANelaricGasPlayerState::StaticClass();
 	FActorSpawnParameters Parameters;
-	Parameters.Owner = GetPawn();
+	Parameters.Owner = Pawn;
 	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Custodian = GetWorld()->SpawnActor<ANelaricGasPlayerState>(Class, Parameters);
+	Custodian = World->SpawnActor<ANelaricGasPlayerState>(Class, Parameters);
 	if (Custodian)
 	{
 		Custodian->SetIsABot(true);

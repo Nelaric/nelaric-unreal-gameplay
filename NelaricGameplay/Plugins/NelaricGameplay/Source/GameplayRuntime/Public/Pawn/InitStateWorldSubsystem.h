@@ -42,7 +42,7 @@ struct FInitParticipantConfiguration
 
 /** @brief Coordinates registered initialization participants in one world.
  *
- * @details Unreal owns the subsystem for the world lifetime. Components own
+ * @details Unreal owns the subsystem in Game and PIE worlds. Components own
  * all state; this service keeps only weak registrations. Call on the game
  * thread. A participant must register and unregister with its component.
  */
@@ -131,6 +131,7 @@ public:
 	GAMEPLAYRUNTIME_API bool IsParticipantReady(UActorComponent* Component) const;
 
 public:
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 	virtual void Deinitialize() override;
 
 private:

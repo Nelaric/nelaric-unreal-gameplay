@@ -18,6 +18,12 @@ bool ANelaricGameModeBase::CanAcceptTransition() const
 	return true;
 }
 
+bool ANelaricGameModeBase::CanChangePawnControl_Implementation(AController* Requester, EControlSwitchAction Action,
+                                                               APawn* TargetPawn) const
+{
+	return HasAuthority();
+}
+
 void ANelaricGameModeBase::StartPlay()
 {
 	Super::StartPlay();

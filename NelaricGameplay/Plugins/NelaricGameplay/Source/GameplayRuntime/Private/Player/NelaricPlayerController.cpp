@@ -4,6 +4,7 @@
 
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "Player/ControlSwitchSubsystem.h"
 #include "Templates/UnrealTemplate.h"
 
 int32 ANelaricPlayerController::RequestTakeControl(APawn* TargetPawn)
@@ -37,20 +38,23 @@ int32 ANelaricPlayerController::SendControlSwitchRequest(EControlSwitchAction Ac
 	}
 	const int32 RequestId = NextControlRequestId;
 	NextControlRequestId = RequestId == MAX_int32 ? 0 : RequestId + 1;
-	ServerRequestControlSwitch(RequestId, Action, TargetPawn);
+	ServerRequestControlSwitch(RequestId, Action, TargetPawn, GetPawn());
 	return RequestId;
 }
 
 void ANelaricPlayerController::ServerRequestControlSwitch_Implementation(int32 RequestId, EControlSwitchAction Action,
-                                                                         APawn* TargetPawn)
+                                                                         APawn* TargetPawn, APawn* ExpectedCurrentPawn)
 {
 	check(IsInGameThread());
-	const EControlSwitchResult Result = EvaluateControlSwitchRequest(RequestId, Action, TargetPawn);
+	const EControlSwitchResult Result =
+	    EvaluateControlSwitchRequest(RequestId, Action, TargetPawn, ExpectedCurrentPawn);
 	ClientReceiveControlSwitchDecision(RequestId, Action, TargetPawn, Result);
 }
 
-EControlSwitchResult
-ANelaricPlayerController::EvaluateControlSwitchRequest(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn)
+EControlSwitchResult ANelaricPlayerController::EvaluateControlSwitchRequest(int32 RequestId,
+                                                                            EControlSwitchAction Action,
+                                                                            APawn* TargetPawn,
+                                                                            APawn* ExpectedCurrentPawn)
 {
 	const UWorld* World = GetWorld();
 	if (!World || World->bIsTearingDown || IsActorBeingDestroyed())
@@ -60,6 +64,15 @@ ANelaricPlayerController::EvaluateControlSwitchRequest(int32 RequestId, EControl
 	if (!HasAuthority() || World->GetNetMode() == NM_Client || RequestId <= 0)
 	{
 		return EControlSwitchResult::InvalidRequest;
+	}
+	if (RequestId <= LastAuthorityControlRequestId)
+	{
+		return EControlSwitchResult::StaleRequest;
+	}
+	LastAuthorityControlRequestId = RequestId;
+	if (ExpectedCurrentPawn != GetPawn())
+	{
+		return EControlSwitchResult::StaleRequest;
 	}
 	if (Action == EControlSwitchAction::TakeControl)
 	{
@@ -85,7 +98,9 @@ ANelaricPlayerController::EvaluateControlSwitchRequest(int32 RequestId, EControl
 EControlSwitchResult ANelaricPlayerController::HandleControlSwitchRequest_Implementation(EControlSwitchAction Action,
                                                                                          APawn* TargetPawn)
 {
-	return EControlSwitchResult::NotHandled;
+	UWorld* World = GetWorld();
+	UControlSwitchSubsystem* Coordinator = World ? World->GetSubsystem<UControlSwitchSubsystem>() : nullptr;
+	return Coordinator ? Coordinator->ExecuteControlSwitch(this, Action, TargetPawn) : EControlSwitchResult::NotHandled;
 }
 
 void ANelaricPlayerController::ClientReceiveControlSwitchDecision_Implementation(int32 RequestId,

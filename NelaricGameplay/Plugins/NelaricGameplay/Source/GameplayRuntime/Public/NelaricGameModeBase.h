@@ -7,11 +7,13 @@
 #pragma once
 
 #include "GameFramework/GameModeBase.h"
+#include "Player/NelaricPlayerController.h"
 
 #include "NelaricGameModeBase.generated.h"
 
 class AOnlineBeaconHost;
 class ATransitionBeaconHost;
+class AController;
 
 /** @brief Base game mode for NelaricGameplay worlds.
  *
@@ -42,10 +44,27 @@ public:
 	 */
 	GAMEPLAYRUNTIME_API bool CanAcceptTransition() const;
 
-	/** @brief Starts the target approval beacon on an online server.
+	/** @brief Applies game-specific approval to a pawn control request.
 	 *
-	 * @details Unreal calls this on the authoritative game thread.
+	 * @details Called synchronously on the authority game thread after the
+	 * coordinator checks pawn eligibility and participant state. Override in
+	 * C++ or Blueprint for team, distance, life-state, or permission rules.
+	 * The default approves. This predicate must not change possession or
+	 * destroy participants. Structural checks run again after it returns.
+	 *
+	 * @param Requester Controller authenticated by the request transport.
+	 * @param Action Take or return control.
+	 * @param TargetPawn Selected pawn, or current pawn for a return request.
+	 * @return Whether gameplay rules approve this change.
 	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintAuthorityOnly, Category = "Nelaric|Control")
+	GAMEPLAYRUNTIME_API bool CanChangePawnControl(AController* Requester, EControlSwitchAction Action,
+	                                              APawn* TargetPawn) const;
+
+public:
+	GAMEPLAYRUNTIME_API virtual bool
+	CanChangePawnControl_Implementation(AController* Requester, EControlSwitchAction Action, APawn* TargetPawn) const;
+
 	GAMEPLAYRUNTIME_API virtual void StartPlay() override;
 
 private:

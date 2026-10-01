@@ -10,6 +10,8 @@
 
 #include "DemoCharacter.generated.h"
 
+class UPawnControlComponent;
+
 /** @brief Base character for game-specific demo characters.
  * @details Derive demo character variants in C++ or
  * Blueprint. The world
@@ -29,4 +31,8 @@ public:
 	 * @param ObjectInitializer Initializer for inherited default subobjects.
 	 */
 	DEMOGAME_API ADemoCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+private:
+	UPROPERTY(VisibleAnywhere, Category = "Nelaric|Control")
+	TObjectPtr<UPawnControlComponent> PawnControlComponent;
 };

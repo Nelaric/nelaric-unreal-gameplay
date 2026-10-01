@@ -12,6 +12,7 @@ Public APIs follow the [project coding standards](../CodingStandards/README.md),
 
 - [Network sessions and authority transitions](Core/NetWork/NetworkSessionTransitions.md)
 - [Native input](Input/NativeInput.md)
+- [Authority-validated pawn control](Player/ControlSwitching.md)
 
 ## GameAI StateTree
 

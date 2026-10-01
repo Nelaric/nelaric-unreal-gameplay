@@ -47,6 +47,30 @@ enum class EControlSwitchResult : uint8
 
 	/// This player already has a request executing in an authority callback.
 	Busy,
+
+	/// The authority's gameplay policy denied the request.
+	Denied,
+
+	/// Another player already controls the selected pawn.
+	TargetOccupied,
+
+	/// The player has no current pawn to return.
+	NoCurrentPawn,
+
+	/// A required controller has no usable player state.
+	PlayerStateUnavailable,
+
+	/// The request refers to a superseded pawn or request sequence.
+	StaleRequest,
+
+	/// A replacement bot could not be prepared before releasing control.
+	ReplacementUnavailable,
+
+	/// Possession failed; the coordinator attempted to restore prior control.
+	ExecutionFailed,
+
+	/// A callback prevented restoring the prior control relationships.
+	RecoveryFailed,
 };
 
 /// Reports a player control decision on the owning client's game thread.
@@ -86,7 +110,7 @@ public:
 	 *
 	 * @details Call on the owning local player's game thread. The authority
 	 * resolves the current pawn; the caller cannot nominate another player.
-	 * This only sends intent and does not assign an AI replacement.
+	 * The authority applies the pawn's configured return policy.
 	 * Requests cannot be cancelled through this transport API.
 	 *
 	 * @return Positive request ID, or zero if the request was not sent.
@@ -139,8 +163,9 @@ protected:
 	 *
 	 * @details Runs synchronously on the authority's game thread. Override
 	 * to apply gameplay approval and execute the control change. The player
-	 * making the request is this controller. The default returns NotHandled
-	 * and leaves control unchanged. Nested requests return Busy.
+	 * making the request is this controller. The default delegates validation
+	 * and execution to the world control coordinator and authority game mode.
+	 * Nested requests return Busy. Overrides must preserve authority checks.
 	 *
 	 * @param Action Whether to take selected control or return current control.
 	 * @param TargetPawn Valid target for TakeControl; null for ReturnControl.
@@ -148,14 +173,16 @@ protected:
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintAuthorityOnly, Category = "Nelaric|Control")
 	EControlSwitchResult HandleControlSwitchRequest(EControlSwitchAction Action, APawn* TargetPawn);
-	/// Implements the authority handler; defaults to NotHandled.
+	/// Delegates the authority request to the world's control coordinator.
 	GAMEPLAYRUNTIME_API virtual EControlSwitchResult
 	HandleControlSwitchRequest_Implementation(EControlSwitchAction Action, APawn* TargetPawn);
 
 private:
 	UFUNCTION(Server, Reliable)
-	void ServerRequestControlSwitch(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn);
-	void ServerRequestControlSwitch_Implementation(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn);
+	void ServerRequestControlSwitch(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn,
+	                                APawn* ExpectedCurrentPawn);
+	void ServerRequestControlSwitch_Implementation(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn,
+	                                               APawn* ExpectedCurrentPawn);
 
 	UFUNCTION(Client, Reliable)
 	void ClientReceiveControlSwitchDecision(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn,
@@ -172,7 +199,9 @@ private:
 	FDepartureDecision DepartureDecision;
 	FControlSwitchDecision ControlSwitchDecision;
 	int32 NextControlRequestId = 1;
+	int32 LastAuthorityControlRequestId = 0;
 	bool bHandlingControlRequest = false;
 	int32 SendControlSwitchRequest(EControlSwitchAction Action, APawn* TargetPawn);
-	EControlSwitchResult EvaluateControlSwitchRequest(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn);
+	EControlSwitchResult EvaluateControlSwitchRequest(int32 RequestId, EControlSwitchAction Action, APawn* TargetPawn,
+	                                                  APawn* ExpectedCurrentPawn);
 };

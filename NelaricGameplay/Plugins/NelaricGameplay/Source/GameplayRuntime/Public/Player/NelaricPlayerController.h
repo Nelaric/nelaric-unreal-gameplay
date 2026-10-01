@@ -57,10 +57,10 @@ enum class EControlSwitchResult : uint8
 	/// The player has no current pawn to return.
 	NoCurrentPawn,
 
-	/// A required controller has no usable player state.
+	/// A controller has no live player state owned by that controller.
 	PlayerStateUnavailable,
 
-	/// The request refers to a superseded pawn or request sequence.
+	/// A request sequence, captured identity, policy or context is superseded.
 	StaleRequest,
 
 	/// A replacement bot could not be prepared before releasing control.

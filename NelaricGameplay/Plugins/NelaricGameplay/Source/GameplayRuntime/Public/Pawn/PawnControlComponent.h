@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Containers/Array.h"
 #include "Pawn/PawnInitStateComponent.h"
 #include "Templates/SubclassOf.h"
 
@@ -60,7 +61,9 @@ public:
 public:
 	GAMEPLAYRUNTIME_API UPawnControlComponent(const FObjectInitializer& ObjectInitializer);
 	GAMEPLAYRUNTIME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	AAIController* PrepareReturnController();
+	AAIController* FindReturnController() const;
+	void TrackSpawnedController(AAIController* Controller);
+	void ForgetSpawnedController(AAIController* Controller);
 	void RememberController(AAIController* Controller);
 
 protected:
@@ -84,5 +87,5 @@ private:
 	TObjectPtr<AAIController> RememberedController;
 
 	UPROPERTY(Transient)
-	TObjectPtr<AAIController> SpawnedController;
+	TArray<TObjectPtr<AAIController>> SpawnedControllers;
 };

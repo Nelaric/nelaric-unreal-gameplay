@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Containers/Array.h"
 #include "Containers/Map.h"
 #include "Containers/Set.h"
 #include "Misc/Guid.h"
@@ -18,13 +19,20 @@
 class AActor;
 class AController;
 
+namespace Nelaric::Control
+{
+struct FSwitchPlan;
+}
+
 /** @brief Validates and executes pawn control changes on the authority.
  *
  * @details The world owns this subsystem. Structural checks and explicit
  * pawn eligibility precede the game mode's gameplay policy. Player-owned
  * pawns cannot be stolen. Operations are synchronous on the game thread;
  * nested changes are rejected across all participants in this world.
- * Pawns, controllers and player states are reserved before game callbacks.
+ * A validated plan snapshots identities, settings and context generations.
+ * Its actors are reserved together before gameplay policy callbacks.
+ * Replacement preparation never changes existing possession or bot caches.
  * Failed recovery keeps reservations until repaired control is verified.
  * Possession failure attempts recovery without stealing unrelated control.
  */
@@ -76,7 +84,11 @@ public:
 	 * requesting participant; never use a client-supplied requester identity.
 	 * TakeControl switches from the current pawn when necessary. ReturnControl
 	 * uses the current pawn. Pawn components configure bot handback. Failure
-	 * before execution keeps existing possession. Callbacks must not perform
+	 * before execution keeps existing possession. Reservations are atomic.
+	 * Policy or preparation callbacks that replace captured identities,
+	 * settings or init generations invalidate the plan. Unused bots created
+	 * by this operation are discarded; remembered bots are not destroyed.
+	 * Callbacks must not perform
 	 * competing direct possession changes during this operation.
 	 *
 	 * @param Requester Live controller and player state in this world.
@@ -93,10 +105,17 @@ public:
 
 private:
 	bool bExecutingControlSwitch = false;
+	bool bShuttingDown = false;
 	TMap<TWeakObjectPtr<const AActor>, FGuid> ControlTransitions;
 	TSet<FGuid> RecoveryRequiredTransitions;
 	bool HasConflictingTransition(const AActor* Actor, const FGuid& TransitionId) const;
-	bool ReserveController(AController* Controller, const FGuid& TransitionId);
+	EControlSwitchResult ReserveParticipants(const TArray<TWeakObjectPtr<const AActor>>& Participants,
+	                                         const FGuid& TransitionId);
+	EControlSwitchResult BuildPlan(AController* Requester, EControlSwitchAction Action, APawn* TargetPawn,
+	                               Nelaric::Control::FSwitchPlan& Plan) const;
+	EControlSwitchResult ValidatePlan(const Nelaric::Control::FSwitchPlan& Plan, bool bRequireReservation = true) const;
+	EControlSwitchResult PreparePlan(Nelaric::Control::FSwitchPlan& Plan);
+	void DiscardPreparedController(const Nelaric::Control::FSwitchPlan& Plan);
 	void ReleaseTransition(const FGuid& TransitionId);
 	void PruneDestroyedParticipants();
 	EControlSwitchResult ValidateRequest(AController* Requester, EControlSwitchAction Action, APawn* TargetPawn,

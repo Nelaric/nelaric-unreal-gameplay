@@ -64,47 +64,45 @@ void UPawnControlComponent::OnInitReady()
 	}
 }
 
-AAIController* UPawnControlComponent::PrepareReturnController()
+AAIController* UPawnControlComponent::FindReturnController() const
 {
-	APawn* Pawn = GetPawn();
-	UWorld* World = GetWorld();
+	const APawn* Pawn = GetPawn();
+	const UWorld* World = GetWorld();
 	if (!Pawn || !Pawn->HasAuthority() || !World || World->bIsTearingDown || !bReturnToBot)
 	{
 		return nullptr;
 	}
-	if (IsValid(RememberedController) && !RememberedController->IsActorBeingDestroyed() &&
-	    RememberedController->GetWorld() == World && !RememberedController->GetPawn() &&
-	    IsValid(RememberedController->PlayerState) && !RememberedController->PlayerState->IsActorBeingDestroyed())
+	auto IsAvailable = [World](const AAIController* Controller)
+	{
+		return IsValid(Controller) && !Controller->IsActorBeingDestroyed() && Controller->GetWorld() == World &&
+		       Controller->HasAuthority() && !Controller->GetPawn() && IsValid(Controller->PlayerState) &&
+		       !Controller->PlayerState->IsActorBeingDestroyed() && Controller->PlayerState->GetWorld() == World &&
+		       Controller->PlayerState->HasAuthority() && Controller->PlayerState->GetOwner() == Controller;
+	};
+	if (IsAvailable(RememberedController))
 	{
 		return RememberedController;
 	}
-	if (IsValid(SpawnedController) && !SpawnedController->GetPawn())
+	for (AAIController* Controller : SpawnedControllers)
 	{
-		SpawnedController->Destroy();
-	}
-	SpawnedController = nullptr;
-	if (!ReturnControllerClass || ReturnControllerClass->HasAnyClassFlags(CLASS_Abstract))
-	{
-		return nullptr;
-	}
-	FActorSpawnParameters Parameters;
-	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Parameters.OverrideLevel = Pawn->GetLevel();
-	Parameters.ObjectFlags |= RF_Transient;
-	AAIController* Controller = World->SpawnActor<AAIController>(ReturnControllerClass, Pawn->GetActorLocation(),
-	                                                             Pawn->GetActorRotation(), Parameters);
-	if (!IsValid(Controller) || Controller->IsActorBeingDestroyed() || Controller->GetPawn() ||
-	    !IsValid(Controller->PlayerState) || Controller->PlayerState->IsActorBeingDestroyed())
-	{
-		if (IsValid(Controller) && !Controller->GetPawn())
+		if (IsAvailable(Controller))
 		{
-			Controller->Destroy();
+			return Controller;
 		}
-		return nullptr;
 	}
-	SpawnedController = Controller;
-	RememberedController = Controller;
-	return Controller;
+	return nullptr;
+}
+
+void UPawnControlComponent::TrackSpawnedController(AAIController* Controller)
+{
+	SpawnedControllers.RemoveAll([](const AAIController* Existing)
+	                             { return !IsValid(Existing) || Existing->IsActorBeingDestroyed(); });
+	SpawnedControllers.AddUnique(Controller);
+}
+
+void UPawnControlComponent::ForgetSpawnedController(AAIController* Controller)
+{
+	SpawnedControllers.Remove(Controller);
 }
 
 void UPawnControlComponent::RememberController(AAIController* Controller)
@@ -114,11 +112,21 @@ void UPawnControlComponent::RememberController(AAIController* Controller)
 
 void UPawnControlComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (IsValid(SpawnedController) && !SpawnedController->GetPawn())
-	{
-		SpawnedController->Destroy();
-	}
+	// Destroy callbacks can reenter component teardown; detach ownership first.
+	const auto OwnedControllers = MoveTemp(SpawnedControllers);
 	RememberedController = nullptr;
-	SpawnedController = nullptr;
+	for (AAIController* Controller : OwnedControllers)
+	{
+		if (IsValid(Controller) && !Controller->IsActorBeingDestroyed() && !Controller->GetPawn())
+		{
+			const UWorld* World = GetWorld();
+			const UControlSwitchSubsystem* Coordinator =
+			    World ? World->GetSubsystem<UControlSwitchSubsystem>() : nullptr;
+			if (!Coordinator || !Coordinator->IsControlTransitionInProgress(Controller))
+			{
+				Controller->Destroy();
+			}
+		}
+	}
 	Super::EndPlay(EndPlayReason);
 }

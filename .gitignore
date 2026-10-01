@@ -27,6 +27,7 @@ obj/
 /NelaricGameplay/Typing/
 /NelaricGameplay/tsconfig.json
 /NelaricGameplay/Config/DefaultPuerts.ini
+/NelaricGameplay/ts_file_versions_info.json
 .gradle/
 
 # Local agent instructions, workspaces, and caches
@@ -81,3 +82,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# Local Unreal Engine user configuration
+/NelaricGameplay/Config/UserEngine.ini
+/NelaricGameplay/Config/DefaultEditorPerProjectUserSettings.ini

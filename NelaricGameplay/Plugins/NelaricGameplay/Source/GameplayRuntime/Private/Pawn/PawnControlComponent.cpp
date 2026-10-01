@@ -7,6 +7,15 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
+#include "Player/ControlSwitchSubsystem.h"
+
+bool UPawnControlComponent::IsControlTransitionInProgress() const
+{
+	check(IsInGameThread());
+	const UWorld* World = GetWorld();
+	const UControlSwitchSubsystem* Coordinator = World ? World->GetSubsystem<UControlSwitchSubsystem>() : nullptr;
+	return Coordinator && Coordinator->IsControlTransitionInProgress(GetPawn());
+}
 
 UPawnControlComponent::UPawnControlComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {

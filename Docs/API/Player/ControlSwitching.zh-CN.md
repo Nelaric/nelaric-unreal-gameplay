@@ -40,18 +40,24 @@
 
 请求者身份来自接收所属连接 RPC 的 Controller，不接受客户端指定请求者。Bot 和权威玩法代码可在游戏线程使用已知 Controller 调用 `UControlSwitchSubsystem::ExecuteControlSwitch`，经过同样的检查和玩法规则。不是 Nelaric GameMode 时返回 `NotHandled`。
 
+调用玩法策略或准备替代 Bot 之前，协调器以同一个转换 ID 预留当前 Pawn、目标 Pawn、相关 Controller 和 PlayerState。准备完成的替代 Controller 及其 PlayerState 在修改 Possession 前加入预留。其他请求涉及已预留的角色或参与者时返回 `ControlTransitionInProgress`，即使角色暂时没有 Controller 或已经重新进入 Ready，也不能重复转换。内部复核使用自己的转换 ID，不会拒绝自身预留；只有所属转换能够释放这些预留。
+
+权威端可通过 `UPawnControlComponent::IsControlTransitionInProgress()` 查询所属角色，或通过 `UControlSwitchSubsystem::IsControlTransitionInProgress(Actor)` 查询 Pawn、Controller、PlayerState。组件在客户端返回 false；这些查询不复制状态。初始化就绪、操控资格与控制转换占用是独立检查。
+
 ## 执行与恢复
 
 权威端先为当前 Pawn 准备替代控制器，再修改 Possession。接管时停止旧上下文移动及运行中的 Brain，解除当前 Pawn 与目标 Bot 的控制关系，将目标交给请求者，再将旧 Pawn 交给已准备的 Bot。释放时解除当前控制，并执行该 Pawn 的返回策略。请求者已经控制目标时直接成功，不重启角色。
 
 目标的原 Bot 被记住，供以后交还。如果它被销毁或已控制其他 Pawn，则创建替代 Bot。Controller 由 World 管理；组件结束生命周期时仅销毁自己创建且空闲的 Bot，不销毁其他 Controller 正在控制的 Pawn。
 
-框架 Pawn 的初始化上下文变化在操作期间合并，旧本地绑定撤销，参与者基于最终 Controller 和 PlayerState 重新初始化。Ready 回调后再次验证最终控制关系。游戏回调不应执行竞争性的直接 Possession；World 内任意参与者的嵌套协调请求返回 `Busy`。
+框架 Pawn 的初始化上下文变化在操作期间合并，旧本地绑定撤销，参与者基于最终 Controller 和 PlayerState 重新初始化。Ready 回调后再次验证最终控制关系；这些回调及恢复过程的回调期间，预留始终有效。游戏回调不应执行竞争性的直接 Possession；涉及已预留对象的嵌套请求返回 `ControlTransitionInProgress`，World 内无关对象的嵌套协调请求仍返回 `Busy`。
 
 执行检查 Controller、Pawn 的双向关系及 PlayerState 一致性。失败时尝试恢复原关系，但不会抢回已经由回调重新分配的无关 Pawn 或 Controller。`ExecutionFailed` 表示执行失败且恢复成功；`RecoveryFailed` 表示销毁或竞争回调阻止恢复。停止的导航不会自动恢复；配置的 Bot Brain 通过 Ready 控制上下文重新启动。
 
+执行成功、普通拒绝或恢复成功时，作用域结束会释放本次转换的预留。`RecoveryFailed` 保留仍存活对象的预留，阻止后续普通请求。`IsControlTransitionRecoveryRequired(Actor)` 可区分待修复与正在执行。权威玩法修复控制关系或移除相关对象后，以任意仍存活的预留对象调用 `ResolveControlTransitionRecovery(Actor)`；协调器检查所有存活参与者、双向 Possession、有效 PlayerState 及已预留 Pawn 的就绪状态，通过后才释放整个失败转换。该方法不执行 Possession，也不能在正在执行的控制操作内调用。后续操作前清理已销毁参与者，World 退出时清空记录。预留使用弱引用，不延长 Actor 生命周期。
+
 ## 结果与范围
 
-普通拒绝不会断开请求者连接。除执行、恢复结果外，还包括 `Denied`、`TargetOccupied`、`NoCurrentPawn`、`PlayerStateUnavailable`、`StaleRequest`、`ReplacementUnavailable`、`Busy`、`InvalidRequest`、`InvalidTarget` 和 `WorldUnavailable`。
+普通拒绝不会断开请求者连接。除执行、恢复结果外，还包括 `Denied`、`TargetOccupied`、`NoCurrentPawn`、`PlayerStateUnavailable`、`StaleRequest`、`ReplacementUnavailable`、`ControlTransitionInProgress`、`Busy`、`InvalidRequest`、`InvalidTarget` 和 `WorldUnavailable`。
 
 本机制更新控制关系，使用新 Controller 自己已有的 PlayerState，不交换 PlayerState。GameplayRuntime 不依赖 GameplayAbilities，不复制 ASC 属性、效果、冷却或活动能力。GAS 集成需要协调状态交接；Possession 本身不构成状态迁移。要求状态连续的项目应完成该集成后，再为 GAS 角色启用这些请求。

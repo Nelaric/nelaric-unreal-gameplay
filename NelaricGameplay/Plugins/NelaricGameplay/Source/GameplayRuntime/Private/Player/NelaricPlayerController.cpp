@@ -4,6 +4,7 @@
 
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
 #include "Player/ControlSwitchSubsystem.h"
 #include "Templates/UnrealTemplate.h"
 
@@ -85,6 +86,14 @@ EControlSwitchResult ANelaricPlayerController::EvaluateControlSwitchRequest(int3
 	else if (Action != EControlSwitchAction::ReturnControl || TargetPawn != nullptr)
 	{
 		return EControlSwitchResult::InvalidRequest;
+	}
+	const UControlSwitchSubsystem* Coordinator = World->GetSubsystem<UControlSwitchSubsystem>();
+	if (Coordinator &&
+	    (Coordinator->IsControlTransitionInProgress(this) || Coordinator->IsControlTransitionInProgress(PlayerState) ||
+	     Coordinator->IsControlTransitionInProgress(GetPawn()) ||
+	     Coordinator->IsControlTransitionInProgress(TargetPawn)))
+	{
+		return EControlSwitchResult::ControlTransitionInProgress;
 	}
 	if (bHandlingControlRequest)
 	{

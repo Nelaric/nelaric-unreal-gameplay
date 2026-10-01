@@ -27,6 +27,16 @@ class UPawnControlComponent : public UPawnInitStateComponent
 	GENERATED_BODY()
 
 public:
+	/** @brief Checks whether this pawn is reserved for a control transition.
+	 *
+	 * @details Call on the game thread. Reads the authority coordinator.
+	 * Includes failed recovery reservations. Returns false on clients.
+	 *
+	 * @return True while this pawn participates in a reserved transition.
+	 */
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category = "Nelaric|Control")
+	GAMEPLAYRUNTIME_API bool IsControlTransitionInProgress() const;
+
 	/// Whether authority requests may take control of this pawn.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nelaric|Control")
 	bool bAllowPlayerControl = true;

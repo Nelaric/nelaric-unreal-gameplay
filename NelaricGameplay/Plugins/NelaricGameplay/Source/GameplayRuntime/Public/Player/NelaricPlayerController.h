@@ -45,7 +45,7 @@ enum class EControlSwitchResult : uint8
 	/// The authority's world is unavailable or is being torn down.
 	WorldUnavailable,
 
-	/// This player already has a request executing in an authority callback.
+	/// A nested world operation or an unready control context is busy.
 	Busy,
 
 	/// The authority's gameplay policy denied the request.
@@ -71,6 +71,9 @@ enum class EControlSwitchResult : uint8
 
 	/// A callback prevented restoring the prior control relationships.
 	RecoveryFailed,
+
+	/// A related pawn or participant is reserved by a control transition.
+	ControlTransitionInProgress,
 };
 
 /// Reports a player control decision on the owning client's game thread.
@@ -165,7 +168,9 @@ protected:
 	 * to apply gameplay approval and execute the control change. The player
 	 * making the request is this controller. The default delegates validation
 	 * and execution to the world control coordinator and authority game mode.
-	 * Nested requests return Busy. Overrides must preserve authority checks.
+	 * Reserved participants return ControlTransitionInProgress. Other nested
+	 * requests return Busy. Overrides must
+	 * preserve authority checks.
 	 *
 	 * @param Action Whether to take selected control or return current control.
 	 * @param TargetPawn Valid target for TakeControl; null for ReturnControl.

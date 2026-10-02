@@ -86,3 +86,8 @@ Desktop.ini
 # Local Unreal Engine user configuration
 /NelaricGameplay/Config/UserEngine.ini
 /NelaricGameplay/Config/DefaultEditorPerProjectUserSettings.ini
+
+# Third-party assets: track only directory placeholders
+/NelaricGameplay/Content/ThirdParty/**
+!/NelaricGameplay/Content/ThirdParty/**/
+!/NelaricGameplay/Content/ThirdParty/**/.gitkeep

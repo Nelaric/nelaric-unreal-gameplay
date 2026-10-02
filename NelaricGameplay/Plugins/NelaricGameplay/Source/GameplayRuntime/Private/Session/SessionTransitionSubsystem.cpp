@@ -9,6 +9,8 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricSession, Log, All);
+
 namespace
 {
 constexpr double TransitionTimeoutSeconds = 30.0;
@@ -67,6 +69,8 @@ USessionTransitionSubsystem::RequestTransition(ENetMode TargetMode, const Nelari
 {
 	if (Active)
 	{
+		UE_LOG(LogNelaricSession, Error, TEXT("Transition request rejected: another request is active (request=%llu)."),
+		       Active->Handle.Id);
 		return {};
 	}
 
@@ -74,6 +78,12 @@ USessionTransitionSubsystem::RequestTransition(ENetMode TargetMode, const Nelari
 	if (!World || World->GetNetMode() != NM_Client || TargetMode != NM_Client || !Destination.GameEndpoint.IsValid() ||
 	    !Destination.BeaconEndpoint.IsValid() || !StartSourceApproval.IsBound() || !StartTargetApproval.IsBound())
 	{
+		UE_LOG(LogNelaricSession, Error,
+		       TEXT("Transition request rejected: world=%s sourceMode=%d targetMode=%d gameEndpointValid=%d "
+		            "beaconEndpointValid=%d sourceTransportBound=%d targetTransportBound=%d."),
+		       *GetNameSafe(World), World ? static_cast<int32>(World->GetNetMode()) : -1,
+		       static_cast<int32>(TargetMode), Destination.GameEndpoint.IsValid(), Destination.BeaconEndpoint.IsValid(),
+		       StartSourceApproval.IsBound(), StartTargetApproval.IsBound());
 		return {};
 	}
 
@@ -81,6 +91,7 @@ USessionTransitionSubsystem::RequestTransition(ENetMode TargetMode, const Nelari
 	const FURL BeaconURL = MakeEndpointURL(Destination.BeaconEndpoint);
 	if (!GameURL.Valid || GameURL.Host.IsEmpty() || !BeaconURL.Valid || BeaconURL.Host.IsEmpty())
 	{
+		UE_LOG(LogNelaricSession, Error, TEXT("Transition request rejected: malformed game or beacon URL."));
 		return {};
 	}
 
@@ -215,6 +226,10 @@ bool USessionTransitionSubsystem::Tick(float DeltaTime)
 
 void USessionTransitionSubsystem::Fail(Nelaric::ETransitionError Error)
 {
+	UE_LOG(LogNelaricSession, Error,
+	       TEXT("Transition failed: request=%llu error=%d sourceApproved=%d targetApproved=%d travelStarted=%d."),
+	       Active->Handle.Id, static_cast<int32>(Error), Active->bSourceApproved, Active->bTargetApproved,
+	       Active->bTravelStarted);
 	const Nelaric::FTransitionHandle Handle = Active->Handle;
 	const Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
 	Active.Reset();
@@ -233,6 +248,9 @@ void USessionTransitionSubsystem::FinishSucceeded(ENetMode Mode)
 
 void USessionTransitionSubsystem::FinishTimedOut()
 {
+	UE_LOG(LogNelaricSession, Error,
+	       TEXT("Transition timed out: request=%llu sourceApproved=%d targetApproved=%d travelStarted=%d."),
+	       Active->Handle.Id, Active->bSourceApproved, Active->bTargetApproved, Active->bTravelStarted);
 	const Nelaric::FTransitionHandle Handle = Active->Handle;
 	const Nelaric::FTransitionCallbacks Callbacks = Active->Callbacks;
 	Active.Reset();

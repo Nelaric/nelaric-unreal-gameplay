@@ -150,10 +150,12 @@ protected:
 		{
 			return Component->BindNativeAction(InputConfig, InputTag, TriggerEvent, Object, Func, BindHandles);
 		}
+		ReportMissingInputComponent(InputTag);
 		return false;
 	}
 
 private:
+	GAMEPLAYRUNTIME_API void ReportMissingInputComponent(const FGameplayTag& InputTag) const;
 	void ReleaseLocalInput();
 	TWeakObjectPtr<UNelaricInputComponent> BoundInputComponent;
 	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> BoundSubsystem;

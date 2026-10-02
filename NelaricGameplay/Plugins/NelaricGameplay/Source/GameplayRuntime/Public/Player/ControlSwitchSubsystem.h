@@ -1,0 +1,147 @@
+﻿// Copyright (c) 2026 Nelaric Contributors
+
+/** @file ControlSwitchSubsystem.h
+ * Declares the authority world's control-request coordinator.
+ */
+
+#pragma once
+
+#include "Containers/Array.h"
+#include "Containers/Map.h"
+#include "Containers/Set.h"
+#include "Misc/Guid.h"
+#include "Player/ControlStateTransfer.h"
+#include "Player/NelaricPlayerController.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "UObject/WeakObjectPtrTemplates.h"
+
+#include "ControlSwitchSubsystem.generated.h"
+
+class AActor;
+class AController;
+
+namespace Nelaric::Control
+{
+struct FSwitchPlan;
+struct FStateTransferBatch;
+struct FContextChange;
+} // namespace Nelaric::Control
+
+/** @brief Validates and executes pawn control changes on the authority.
+ *
+ * @details The world owns this subsystem. Structural checks and explicit
+ * pawn eligibility precede the game mode's gameplay policy. Player-owned
+ * pawns cannot be stolen. Operations are synchronous on the game thread;
+ * nested changes are rejected across all participants in this world.
+ * A validated plan snapshots identities, settings and context generations.
+ * Its actors are reserved together before gameplay policy callbacks.
+ * Replacement preparation never changes existing possession or bot caches.
+ * Failed recovery keeps reservations until repaired control is verified.
+ * Possession failure attempts recovery without stealing unrelated control.
+ */
+UCLASS(MinimalAPI)
+class UControlSwitchSubsystem : public UWorldSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	/** @brief Reads a complete export for a reserved pawn.
+	 *
+	 * @details Call on the authority game thread from association callbacks
+	 * or during failed recovery. Returns null before export completes and
+	 * after the transition is released. Retaining the immutable value keeps
+	 * snapshots alive but does not retain actors. This data is not
+	 * replicated.
+	 *
+	 * @param Pawn Exported pawn in this world.
+	 *
+	 * @return Complete export, or null when unavailable.
+	 */
+	GAMEPLAYRUNTIME_API TSharedPtr<const Nelaric::Control::FControlStateExport>
+	GetExportedControlState(const APawn* Pawn) const;
+
+	/** @brief Checks whether an actor is reserved by a control transition.
+	 *
+	 * @details Call on the authority game thread. Includes preparation,
+	 * possession, Ready callbacks and recovery. Failed recovery remains
+	 * reserved. The query reads coordinator state and does not replicate it.
+	 *
+	 * @param Actor Pawn, controller or player state in this world.
+	 * @return True while reserved; false for invalid or foreign actors.
+	 */
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category = "Nelaric|Control")
+	GAMEPLAYRUNTIME_API bool IsControlTransitionInProgress(const AActor* Actor) const;
+
+	/** @brief Checks whether an actor's control transition needs repair.
+	 *
+	 * @details Call on the authority game thread. A failed restoration keeps
+	 * surviving participants reserved until explicit recovery resolution.
+	 *
+	 * @param Actor Pawn, controller or player state in this world.
+	 * @return True if its reserved transition failed to restore control.
+	 */
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category = "Nelaric|Control")
+	GAMEPLAYRUNTIME_API bool IsControlTransitionRecoveryRequired(const AActor* Actor) const;
+
+	/** @brief Releases a failed transition after gameplay repairs control.
+	 *
+	 * @details Call on the authority game thread after repairing or removing
+	 * affected actors. Checks surviving reserved actors, possession and
+	 * pawn readiness before releasing the entire transition. Performs no
+	 * possession. Active callbacks cannot resolve their transition.
+	 *
+	 * @param Actor Surviving actor reserved by the failed transition.
+	 * @return True if control is settled and reservations are released.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Nelaric|Control")
+	GAMEPLAYRUNTIME_API bool ResolveControlTransitionRecovery(const AActor* Actor);
+
+	/** @brief Validates policy and changes a controller's pawn on authority.
+	 *
+	 * @details Call on the authority game thread. The controller is the
+	 * requesting participant; never use a client-supplied requester identity.
+	 * TakeControl switches from the current pawn when necessary. ReturnControl
+	 * uses the current pawn. Pawn components configure bot handback. Failure
+	 * before execution keeps existing possession. Reservations are atomic.
+	 * Policy or preparation callbacks that replace captured identities,
+	 * settings or init generations invalidate the plan. Unused bots created
+	 * by this operation are discarded; remembered bots are not destroyed.
+	 * Callbacks must not perform
+	 * competing direct possession changes during this operation.
+	 *
+	 * @param Requester Live controller and player state in this world.
+	 * @param Action Requested control operation.
+	 * @param TargetPawn Selected pawn for TakeControl; null for ReturnControl.
+	 * @return Structural, policy, execution, or recovery result.
+	 */
+	GAMEPLAYRUNTIME_API EControlSwitchResult ExecuteControlSwitch(AController* Requester, EControlSwitchAction Action,
+	                                                              APawn* TargetPawn);
+
+public:
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+	virtual void Deinitialize() override;
+
+private:
+	bool bExecutingControlSwitch = false;
+	bool bShuttingDown = false;
+	TMap<TWeakObjectPtr<const AActor>, FGuid> ControlTransitions;
+	TSet<FGuid> RecoveryRequiredTransitions;
+	TMap<FGuid, TSharedPtr<Nelaric::Control::FStateTransferBatch>> StateTransfers;
+	bool HasConflictingTransition(const AActor* Actor, const FGuid& TransitionId) const;
+	EControlSwitchResult ReserveParticipants(const TArray<TWeakObjectPtr<const AActor>>& Participants,
+	                                         const FGuid& TransitionId);
+	EControlSwitchResult BuildPlan(AController* Requester, EControlSwitchAction Action, APawn* TargetPawn,
+	                               Nelaric::Control::FSwitchPlan& Plan) const;
+	EControlSwitchResult ValidatePlan(const Nelaric::Control::FSwitchPlan& Plan, bool bRequireReservation = true) const;
+	EControlSwitchResult PreparePlan(Nelaric::Control::FSwitchPlan& Plan);
+	EControlSwitchResult ExportPlan(Nelaric::Control::FSwitchPlan& Plan);
+	EControlSwitchResult SwitchAssociations(const Nelaric::Control::FSwitchPlan& Plan,
+	                                        Nelaric::Control::FContextChange& ContextChange);
+	bool ValidateStateAssociations(const Nelaric::Control::FStateTransferBatch& Batch,
+	                               Nelaric::Control::EAssociationEndpoint Endpoint) const;
+	void DiscardPreparedController(const Nelaric::Control::FSwitchPlan& Plan);
+	void ReleaseTransition(const FGuid& TransitionId);
+	void PruneDestroyedParticipants();
+	EControlSwitchResult ValidateRequest(AController* Requester, EControlSwitchAction Action, APawn* TargetPawn,
+	                                     const FGuid& TransitionId) const;
+};

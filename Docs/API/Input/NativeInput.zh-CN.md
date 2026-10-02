@@ -21,20 +21,22 @@ GameplayRuntime 提供原生输入配置、Tag 绑定、映射管理和设置驱
 ## 配置与绑定
 
 1. 在游戏中创建 Input Action 和 Input Mapping Context 资产，根据游戏行为选择值类型和触发器。
-2. 在游戏中定义动作 Tag，创建 `UNelaricInputConfig` 数据资产并配置 `NativeInputActions` 与 `MappingContexts`。重复动作 Tag 使用首个非空动作，空项跳过；框架不预定义具体动作 Tag。
+2. 在游戏中定义动作 Tag 与 `InputMapping.*` 下的映射 Tag，创建 `UNelaricInputConfig` 数据资产并配置 `NativeInputActions` 与 `MappingContexts`。重复动作 Tag 使用首个非空动作；按 Tag 查找映射时使用首个匹配的非空上下文。空项跳过；框架不预定义具体 Tag。
 3. 在游戏的输入初始化代码中获取 Pawn 的 `UNelaricInputComponent` 和所属本地玩家的 `UEnhancedInputLocalPlayerSubsystem`。不要通过全局玩家索引查找。
 4. 调用 `AddInputMappings` 添加映射，再对游戏提供的各个回调和触发事件调用 `BindNativeAction`；由游戏侧保存绑定句柄。
 5. 不使用 `UPlayerInputComponent` 时，输入替换或结束时在创建绑定的组件上解除绑定，并调用 `RemoveInputMappings`；使用生命周期组件时，由其初始化代际失效自动清理，并在后续重试初始化。
 
-所有接口与回调在游戏线程运行，配置生命周期和回调行为由游戏管理。配置、动作或回调对象缺失时，`BindNativeAction` 返回 false，不添加句柄；UObject 回调目标采用弱绑定。框架仅绑定游戏显式指定的动作，不调用移动、视角、蹲伏或跳跃接口。
+所有接口与回调在游戏线程运行，游戏负责制作配置与实现回调；输入组件持有已安装的配置，直到映射移除或配置替换。配置、动作或回调对象缺失时，`BindNativeAction` 返回 false，不添加句柄；UObject 回调目标采用弱绑定。框架仅绑定游戏显式指定的动作，不调用移动、视角、蹲伏或跳跃接口。
 
 `DefaultInput.ini` 使用 `UEnhancedPlayerInput` 和 `UNelaricInputComponent`，启用 Enhanced Input 用户设置并选择 `UNelaricInputUserSettings`。其他项目使用插件时也需应用这些配置并启用 `NelaricGameplay`，无需专用 LocalPlayer 子类。动作、映射和配置资产由游戏制作。
 
 ## 映射生命周期
 
-`AddInputMappings` 替换当前输入组件的映射配置。传入空配置或空子系统时释放旧映射并返回 false。用户设置注册为可选项，与映射激活独立；已注册的重映射条目随本地玩家保留，跨 Pawn 切换继续可用。
+每个映射条目都有可选的 `MappingTag` 和 `bActivateOnStart`，后者默认为 true，以保持现有资产的行为。需要运行时控制的条目应填写有效映射 Tag。`AddInputMappings` 替换当前输入组件的映射配置，并激活标记为开始时启用的条目。传入空配置或空子系统时释放旧映射并返回 false。用户设置注册为可选项，与激活独立；开始时不激活的映射也可注册。已注册的重映射条目随本地玩家保留，跨 Pawn 切换继续可用。
 
-已有映射仅借用并保留原优先级；组件只记录自己新激活的上下文，在 `RemoveInputMappings` 或 `OnUnregister` 时释放。重复上下文项使用首次激活的优先级。不调用全局 `ClearAllMappings` 或 `ClearActionBindings`。
+配置安装后，可调用 `AddInputMappingByTag` 按配置优先级启用 IMC，调用 `RemoveInputMappingByTag` 移除本组件启用的 IMC。两者按完整 Tag 匹配；Tag 无效或不存在时返回 false。重复启用已激活的 IMC 不改变其优先级；借用的 IMC 无法由本组件移除。组件持有当前配置，直到调用 `RemoveInputMappings` 或替换配置。需要独立切换的 Tag 应使用不同的 IMC。
+
+已有映射仅借用并保留原优先级；组件只记录自己新激活的上下文，在 `RemoveInputMappings` 或 `OnUnregister` 时释放。重复上下文项使用首次激活的优先级；重复映射 Tag 在按 Tag 操作时选择首个非空上下文，开始时激活仍逐项处理。没有 Tag 的条目仍可在开始时激活，但不能按 Tag 切换。不调用全局 `ClearAllMappings` 或 `ClearActionBindings`。
 
 独立管理的系统应使用不同映射上下文。其他系统不能同时接管本组件拥有的上下文，因为 Enhanced Input 不提供引用计数式激活所有权。移除映射不会解除游戏回调绑定，解绑由 `RemoveBinds` 单独完成。
 

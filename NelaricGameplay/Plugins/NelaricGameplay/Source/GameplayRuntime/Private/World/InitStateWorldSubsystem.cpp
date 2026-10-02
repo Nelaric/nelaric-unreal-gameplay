@@ -8,6 +8,13 @@
 #include "Pawn/PawnInitializationComponent.h"
 #include "Pawn/InitStateParticipantInterface.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricInitGraph, Log, All);
+
+bool UInitStateWorldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
+{
+	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
+}
+
 void UInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 {
 	if (bShuttingDown || !IsValid(Component) || StoppedComponents.Contains(Component) ||
@@ -76,6 +83,8 @@ bool UInitStateWorldSubsystem::ConfigureParticipants(
 {
 	if (bShuttingDown)
 	{
+		UE_LOG(LogNelaricInitGraph, Error,
+		       TEXT("Cannot configure initialization participants: subsystem is shutting down."));
 		return false;
 	}
 	for (int32 Index = 0; Index < Configurations.Num(); ++Index)
@@ -86,6 +95,10 @@ bool UInitStateWorldSubsystem::ConfigureParticipants(
 		if (!Owner || Component->GetWorld() != GetWorld() || Entry.ComponentId.IsNone() ||
 		    StoppedComponents.Contains(Component) || ConfiguredComponents.Contains(Component))
 		{
+			UE_LOG(LogNelaricInitGraph, Error,
+			       TEXT("Cannot configure initialization participant: component=%s id=%s owner=%s; invalid world, ID "
+			            "or registration."),
+			       *GetNameSafe(Component), *Entry.ComponentId.ToString(), *GetNameSafe(Owner));
 			return false;
 		}
 		for (int32 PreviousIndex = 0; PreviousIndex < Index; ++PreviousIndex)
@@ -94,6 +107,9 @@ bool UInitStateWorldSubsystem::ConfigureParticipants(
 			if (Previous.Component == Component || (Previous.Component && Previous.Component->GetOwner() == Owner &&
 			                                        Previous.ComponentId == Entry.ComponentId))
 			{
+				UE_LOG(LogNelaricInitGraph, Error,
+				       TEXT("Cannot configure initialization participants: duplicate component or ID within the "
+				            "configuration batch."));
 				return false;
 			}
 		}
@@ -102,6 +118,9 @@ bool UInitStateWorldSubsystem::ConfigureParticipants(
 			if (Pair.Value.Owner.Get() == Owner && Pair.Value.ComponentId == Entry.ComponentId &&
 			    Pair.Key.Get() != Component)
 			{
+				UE_LOG(LogNelaricInitGraph, Error,
+				       TEXT("Cannot configure initialization participants: component ID is already configured for this "
+				            "owner."));
 				return false;
 			}
 		}
@@ -112,6 +131,9 @@ bool UInitStateWorldSubsystem::ConfigureParticipants(
 			if (IsValid(Manager) && Manager->HasConfiguredId(Entry.ComponentId) &&
 			    !Manager->IsConfiguredInstance(Entry.ComponentId, Component))
 			{
+				UE_LOG(LogNelaricInitGraph, Error,
+				       TEXT("Cannot configure initialization participants: component conflicts with a managed "
+				            "initialization instance."));
 				return false;
 			}
 		}

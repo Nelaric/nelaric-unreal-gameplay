@@ -8,6 +8,8 @@
 #include "GameFramework/Pawn.h"
 #include "Input/NelaricInputConfig.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricPlayerInput, Log, All);
+
 UPlayerInputComponent::UPlayerInputComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 }
@@ -65,10 +67,19 @@ void UPlayerInputComponent::OnInitReady()
 	    LocalPlayer ? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
 	if (!Component || !Subsystem)
 	{
+		// Remote participants reach Ready without local input work.
+		if (Controller && Controller->IsLocalController())
+		{
+			UE_LOG(LogNelaricPlayerInput, Error,
+			       TEXT("Local input Ready failed on %s: inputComponent=%s subsystem=%s."), *GetNameSafe(GetPawn()),
+			       *GetNameSafe(Component), *GetNameSafe(Subsystem));
+		}
 		return;
 	}
 	if (!Component->AddInputMappings(InputConfig, Subsystem))
 	{
+		UE_LOG(LogNelaricPlayerInput, Error, TEXT("Local input mapping setup failed on %s (config=%s)."),
+		       *GetNameSafe(GetPawn()), *GetNameSafe(InputConfig));
 		return;
 	}
 	BoundInputComponent = Component;
@@ -104,4 +115,10 @@ void UPlayerInputComponent::ReleaseLocalInput()
 	BindHandles.Reset();
 	BoundInputComponent.Reset();
 	BoundSubsystem.Reset();
+}
+
+void UPlayerInputComponent::ReportMissingInputComponent(const FGameplayTag& InputTag) const
+{
+	UE_LOG(LogNelaricPlayerInput, Error, TEXT("Cannot bind action on %s (tag=%s): no bound input component."),
+	       *GetNameSafe(GetPawn()), *InputTag.ToString());
 }

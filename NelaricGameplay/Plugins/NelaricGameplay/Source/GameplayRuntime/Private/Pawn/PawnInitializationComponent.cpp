@@ -9,6 +9,8 @@
 #include "Pawn/InitStateParticipantInterface.h"
 #include "Pawn/InitStateWorldSubsystem.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricPawnInitialization, Log, All);
+
 namespace Nelaric::Pawn
 {
 static bool ShouldCreateComponent(const APawn* Owner, const FPawnInitializationEntry& Entry)
@@ -318,8 +320,8 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 		}
 		if (Reason)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Invalid pawn initialization entry [%d] '%s' on %s: %s."), Index,
-			       *Entry.ComponentId.ToString(), *GetNameSafe(Owner), Reason);
+			UE_LOG(LogNelaricPawnInitialization, Error, TEXT("Invalid pawn initialization entry [%d] '%s' on %s: %s."),
+			       Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), Reason);
 			return false;
 		}
 		EntriesById.Add(Entry.ComponentId, &Entry);
@@ -354,8 +356,9 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 			}
 			if (Reason)
 			{
-				UE_LOG(LogTemp, Error, TEXT("Invalid pawn initialization entry [%d] '%s' on %s: dependency '%s' %s."),
-				       Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *DependencyId.ToString(), Reason);
+				UE_LOG(LogNelaricPawnInitialization, Error,
+				       TEXT("Invalid pawn initialization entry [%d] '%s' on %s: dependency '%s' %s."), Index,
+				       *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *DependencyId.ToString(), Reason);
 				return false;
 			}
 			DeclaredDependencies.Add(DependencyId);
@@ -374,12 +377,12 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 			if (!Existing->IsA(Entry.ComponentClass))
 			{
 				UE_LOG(
-				    LogTemp, Error,
+				    LogNelaricPawnInitialization, Error,
 				    TEXT("Invalid pawn initialization entry [%d] '%s' on %s: instance '%s' has a conflicting class."),
 				    Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *InstanceName.ToString());
 				return false;
 			}
-			UE_LOG(LogTemp, Error,
+			UE_LOG(LogNelaricPawnInitialization, Error,
 			       TEXT("Invalid pawn initialization entry [%d] '%s' on %s: instance '%s' already exists outside the "
 			            "initialization component."),
 			       Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner), *InstanceName.ToString());
@@ -392,7 +395,7 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 				if (Subsystem->HasConfiguredId(Owner, Entry.ComponentId))
 				{
 					UE_LOG(
-					    LogTemp, Error,
+					    LogNelaricPawnInitialization, Error,
 					    TEXT("Invalid pawn initialization entry [%d] '%s' on %s: component ID is already configured."),
 					    Index, *Entry.ComponentId.ToString(), *GetNameSafe(Owner));
 					return false;
@@ -424,8 +427,8 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 	UInitStateWorldSubsystem* Subsystem = World ? World->GetSubsystem<UInitStateWorldSubsystem>() : nullptr;
 	if (!Subsystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Pawn initialization on %s has no init-state world subsystem."),
-		       *GetNameSafe(Owner));
+		UE_LOG(LogNelaricPawnInitialization, Error,
+		       TEXT("Pawn initialization on %s has no init-state world subsystem."), *GetNameSafe(Owner));
 		bConfigValid = false;
 		return;
 	}
@@ -476,6 +479,8 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 	}
 	if (!Subsystem->ConfigureParticipants(LocalGraph))
 	{
+		UE_LOG(LogNelaricPawnInitialization, Error, TEXT("Pawn initialization graph setup failed on %s (config=%s)."),
+		       *GetNameSafe(Owner), *GetNameSafe(ActiveConfig));
 		bConfigValid = false;
 		DestroyConfiguredComponents();
 		return;

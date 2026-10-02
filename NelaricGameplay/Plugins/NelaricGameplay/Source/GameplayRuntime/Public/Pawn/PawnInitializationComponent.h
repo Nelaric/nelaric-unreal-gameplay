@@ -16,6 +16,11 @@ class UPawnInitializationComponent;
 class UPawnInitializationConfig;
 class UActorComponent;
 
+namespace Nelaric::Control
+{
+struct FContextChange;
+}
+
 /// Game-thread callback observing local pawn readiness.
 DECLARE_DYNAMIC_DELEGATE_OneParam(FPawnInitializationCallback, UPawnInitializationComponent*, Component);
 
@@ -151,6 +156,7 @@ private:
 	friend class UInitStateWorldSubsystem;
 	friend class ANelaricPawn;
 	friend class ANelaricCharacter;
+	friend struct Nelaric::Control::FContextChange;
 	void BeginPawnContextChange();
 	void EndPawnContextChange();
 	int32 ContextChangeDepth = 0;

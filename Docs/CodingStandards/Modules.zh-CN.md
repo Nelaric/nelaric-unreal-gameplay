@@ -17,11 +17,12 @@
 
 ## 插件与模块结构
 
-框架使用一个项目自有插件 `NelaricGameplay`，位于 `NelaricGameplay/Plugins/NelaricGameplay/`。插件中的四个模块分别对应 Runtime、Diagnostics、Benchmark 和 Editor 职责。新增框架能力以该插件内的模块组织，并明确记录职责和直接依赖。PuerTS 等第三方插件单独保留，沿用其自身名称和版权归属。
+框架使用一个项目自有插件 `NelaricGameplay`，位于 `NelaricGameplay/Plugins/NelaricGameplay/`。插件模块承载 Runtime、可选 GAS 集成、Diagnostics、Benchmark 和 Editor 职责。新增框架能力以该插件内的模块组织，并明确记录职责和直接依赖。PuerTS 等第三方插件单独保留，沿用其自身名称和版权归属。
 
 | 职责 | 插件 `Source/` 下的模块目录 | 模块类型 |
 | --- | --- | --- |
 | Runtime | `GameplayRuntime/` | `Runtime` |
+| GAS 集成 | `GameplayAbilitiesIntegration/` | `Runtime` |
 | Diagnostics（性能分析） | `Diagnostics/` | `Runtime` |
 | Benchmark | `Benchmark/` | `DeveloperTool` |
 | Editor | `Editor/` | `Editor` |
@@ -31,6 +32,8 @@
 `Diagnostics` 在启动时注册 `ng.Perf.HUD`，关闭时注销。默认值为 `0`（隐藏），非零值显示全英文 Slate HUD，包含 FPS、Frame、GT、RT 和 GPU 耗时。HUD 覆盖游戏视口与当前活动的关卡编辑器视口，退出 PIE 后保持开启，且不拦截输入。指标为引擎进程级数据；GPU 耗时使用主渲染 GPU，其显卡名称从 RHI 读取，不可用的指标显示 `N/A`。`UFrameworkPerformanceSubsystem` 提供初始的 Game Instance 子系统类型，暂未定义性能操作；HUD 仍由模块持有，以便编辑器覆盖层在 PIE 结束后继续显示。其公开基类要求所有目标公开依赖 `Core`、`CoreUObject` 和 `Engine`。客户端构建额外私有依赖 `Slate`、`SlateCore`、`RenderCore` 和 `RHI`；编辑器构建额外私有依赖 `LevelEditor` 和 `UnrealEd`。服务器构建不创建 HUD。`Benchmark` 仍仅包含生命周期骨架并私有依赖 `Core`，尚未实现基准执行。`Editor` 还承载 Pawn 初始化的外部消费者和网络事件自动化测试，私有依赖 `Core`、`CoreUObject`、`Engine`、`GameplayRuntime` 和 `UnrealEd`，用于通过运行时 Public 契约进行跨模块编译和真实 PIE 生命周期验证；这些依赖不会反向引入 GameplayRuntime。编辑器制作工具尚未实现。实现需要跨模块调用时再声明相应依赖；GameplayRuntime 必须保持独立，不依赖这些可选工具。`DeveloperTool` 模块仅在目标构建开发工具时可用；`Editor` 模块仅在编辑器目标中可用。
 
 GameplayRuntime 的 AI 目录还提供 Game AI StateTree Schema、执行组件、C++ 与 Blueprint 节点扩展基类和 World 管理的 AI 上下文 Subsystem。公开 StateTree 契约增加 StateTreeModule、GameplayStateTreeModule 与 AIModule 公开依赖。插件声明 GameplayStateTree 依赖，由它传递启用 StateTree。具体行为、感知、导航策略和游戏服务由接入方实现。参见 [API 使用说明](../API/README.zh-CN.md#gameai-statetree)。
+
+`GameplayAbilitiesIntegration` 提供参与者 PlayerState ASC、统一能力输入、角色状态托管和控制状态迁移。公开依赖为 Core、CoreUObject、Engine、GameplayRuntime、GameplayAbilities、GameplayTags 和 GameplayTasks，效果复制私有依赖 NetCore。插件启用 GameplayAbilities。使用方按需选择该模块，GameplayRuntime 不反向依赖；具体 AttributeSet 和游戏能力仍留在游戏模块。参见[控制切换中的 GAS 状态](../API/GAS/ControlState.zh-CN.md)。
 
 ## 内部集成约定
 

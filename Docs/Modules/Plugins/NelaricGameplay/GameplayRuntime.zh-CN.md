@@ -4,6 +4,21 @@
 
 # GameplayRuntime
 
+## Pawn 初始化组件复制
+
+`UPawnInitializationConfig` 中的每个 `FPawnInitializationEntry` 新增
+`bReplicateComponent`，默认关闭。关闭时沿用各端本地创建规则，单机和
+监听服务器取权威端与客户端创建标记的并集。开启时要求两个创建标记都为
+true，组件仅由权威端创建；联网还要求 Pawn 本身启用复制。Pawn 初始化
+协调器复制当前配置和 ID 到组件的引用映射，客户端接纳收到的动态组件，
+不再重复创建。两端的 UObject 名称无需一致。
+
+本地依赖图会等待所有参与的复制组件引用解析完成，参与者在依赖图安装前
+不会进入 Ready。初始化状态与 Generation 仍然保持本地。权威端更换配置时
+通知远端销毁旧的复制组件，客户端解除旧图，由 Actor Channel 销毁对应实例。
+该开关启用 UE 的组件复制，不会自动复制任意成员；组件实现仍需声明玩法
+属性及其复制规则。本地输入和动画表现组件通常保持关闭。
+
 `GameplayRuntime` 是 `NelaricGameplay/Plugins/NelaricGameplay` 插件中的运行时模块，承载玩法契约、可复用项目侧 Actor 和会话传输。`NelaricGameplay/NelaricGameplay.uproject` 项目启用该插件，其 `Source/` 目录包含 `DemoGame` Runtime 模块。
 
 该模块承载规则判定、玩法状态、玩家生命周期和活动组合的通用契约。对局流程、目标和计分由可选模块提供；持续世界无需全局对局或结算也可运行。模块基于 Unreal Engine 的玩法与网络系统，不依赖特定玩法类型、后端、技能系统或内容分发 Provider。可选模块可以依赖 GameplayRuntime；GameplayRuntime 不依赖这些模块。

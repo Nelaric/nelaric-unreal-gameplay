@@ -12,7 +12,7 @@ Use `ANelaricGameModeBase` and its player controller, or derived classes. Add on
 
 The component must be registered and Ready on authority before a request can use the pawn. When a controller exists locally, its live PlayerState must match the pawn's PlayerState. Unpossessed pawns and remote AI replicas do not require a local controller. For non-framework pawns, integrate controller and PlayerState changes with the existing initialization coordinator so a replacement context invalidates and retries participants.
 
-`ADemoCharacter` creates a native control component and chooses `ANelaricBotController` as its AI controller class. Existing Blueprint subclasses inherit the component; no binary assets are changed. The framework's generic pawn and character bases remain independent of control policy.
+`ADemoCharacter` chooses `ANelaricBotController` as its AI controller class. Configure its control component explicitly through pawn initialization or Blueprint; the native character constructor does not create one. The overview camera pawn also requires an explicit policy and disables bot handback. The framework's generic pawn and character bases remain independent of control policy.
 
 | Setting | Meaning |
 | --- | --- |

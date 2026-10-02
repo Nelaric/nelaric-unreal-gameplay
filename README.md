@@ -20,6 +20,18 @@ The framework has four modules in the `NelaricGameplay` plugin: Runtime (`Gamepl
 
 Linux CI builds this project for Game, Editor, and Server, including enabled plugins whose module types are supported by each target, as well as PuerTS.
 
+## Third-party assets
+
+Place third-party Unreal assets under `NelaricGameplay/Content/ThirdParty/<AssetName>/`, using the asset name listed below as the directory name. Keep each asset pack's internal directory structure when importing its resources. The corresponding Unreal content path is `/Game/ThirdParty/<AssetName>/`.
+
+Only `.gitkeep` files are tracked anywhere under `Content/ThirdParty`; all other files are ignored. After cloning, download the assets separately and import the required resources into their named directories.
+
+The project currently uses the following third-party assets:
+
+| Asset name | Required directory | Download |
+| --- | --- | --- |
+| `LyraStarterGame` | `NelaricGameplay/Content/ThirdParty/LyraStarterGame/` | [Lyra Starter Game — Epic Games on Fab](https://www.fab.com/listings/93faede1-4434-47c0-85f1-bf27c0820ad0) |
+
 ## PuerTS setup
 
 The repository includes the PuerTS Unreal plugin source from [Tencent/puerts](https://github.com/Tencent/puerts), tag [Unreal_v1.0.9](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9). The following backends are included for Windows x64, Linux x86_64, and macOS x64/arm64. A build links one backend at a time.

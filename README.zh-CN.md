@@ -20,6 +20,18 @@
 
 Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模块类型编译适用的已启用插件，同时编译 PuerTS。
 
+## 第三方资产
+
+第三方 Unreal 资产统一放在 `NelaricGameplay/Content/ThirdParty/<资产名称>/` 下，目录名称必须与下表中的资产名称一致。导入资源时保留各资源包内部的目录结构。对应的 Unreal 内容路径为 `/Game/ThirdParty/<资产名称>/`。
+
+`Content/ThirdParty` 及其所有子目录仅跟踪 `.gitkeep`，其他文件全部忽略。克隆仓库后，需自行下载资产，并将需要的资源导入对应的同名目录。
+
+项目目前使用以下第三方资产：
+
+| 资产名称 | 放置目录 | 下载链接 |
+| --- | --- | --- |
+| `LyraStarterGame` | `NelaricGameplay/Content/ThirdParty/LyraStarterGame/` | [Lyra Starter Game — Epic Games 官方 Fab 页面](https://www.fab.com/listings/93faede1-4434-47c0-85f1-bf27c0820ad0) |
+
 ## PuerTS 配置
 
 仓库已包含来自 [Tencent/puerts](https://github.com/Tencent/puerts) 的 PuerTS Unreal 插件源码，版本为 [Unreal_v1.0.9](https://github.com/Tencent/puerts/releases/tag/Unreal_v1.0.9)。以下后端均已纳入仓库，适用于 Windows x64、Linux x86_64 和 macOS x64/arm64。每次构建只链接一种后端。

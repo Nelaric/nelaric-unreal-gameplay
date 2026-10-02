@@ -127,6 +127,14 @@ bool FPawnReadyDependencyRecheckTest::RunTest(const FString& Parameters)
 			}
 		};
 		A->bAllowReady = true;
+		if (Mutation == 2)
+		{
+			AddExpectedErrorPlain(
+			    FString::Printf(TEXT("Terminal initialization failure: component=%s generation=%llu state=%d."),
+			                    *B->GetName(), static_cast<unsigned long long>(B->GetInitGeneration().Value),
+			                    static_cast<int32>(B->GetInitState())),
+			    EAutomationExpectedErrorFlags::Exact, 1);
+		}
 		A->RequestInitRefresh();
 		TestEqual(TEXT("Invalidated dependency prevents Ready callback"), A->ReadyCalls, 0);
 		TestFalse(TEXT("Pawn never becomes Ready against an invalid dependency"), Fixture.Manager->IsPawnInitialized());

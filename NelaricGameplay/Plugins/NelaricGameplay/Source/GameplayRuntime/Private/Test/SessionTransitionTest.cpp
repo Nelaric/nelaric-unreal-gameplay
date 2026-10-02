@@ -73,8 +73,18 @@ bool FSessionTransitionTest::RunTest(const FString& Parameters)
 	         Coordinator->GetNetMode().IsSet() && Coordinator->GetNetMode().GetValue() == NM_Client);
 	Nelaric::FTransitionDestination InvalidDestination = Destination;
 	InvalidDestination.BeaconEndpoint.Port = 0;
+	AddExpectedErrorPlain(
+	    FString::Printf(TEXT("Transition request rejected: world=%s sourceMode=%d targetMode=%d gameEndpointValid=1 "
+	                         "beaconEndpointValid=0 sourceTransportBound=1 targetTransportBound=1."),
+	                    *ClientWorld->GetName(), static_cast<int32>(NM_Client), static_cast<int32>(NM_Client)),
+	    EAutomationExpectedErrorFlags::Exact, 1);
 	TestEqual(TEXT("Missing beacon endpoint is rejected"),
 	          Coordinator->RequestTransition(NM_Client, InvalidDestination, Callbacks).Id, uint64(0));
+	AddExpectedErrorPlain(
+	    FString::Printf(TEXT("Transition request rejected: world=%s sourceMode=%d targetMode=%d gameEndpointValid=1 "
+	                         "beaconEndpointValid=1 sourceTransportBound=1 targetTransportBound=1."),
+	                    *ClientWorld->GetName(), static_cast<int32>(NM_Client), static_cast<int32>(NM_ListenServer)),
+	    EAutomationExpectedErrorFlags::Exact, 1);
 	TestEqual(TEXT("Unsupported destination mode is rejected"),
 	          Coordinator->RequestTransition(NM_ListenServer, Destination, Callbacks).Id, uint64(0));
 	TestEqual(TEXT("Rejected requests do not start approval"), SourceStarts + TargetStarts, 0);
@@ -83,10 +93,20 @@ bool FSessionTransitionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Valid request is accepted"), First.Id != 0);
 	TestEqual(TEXT("Source approval starts once"), SourceStarts, 1);
 	TestEqual(TEXT("Target approval starts once"), TargetStarts, 1);
+	AddExpectedErrorPlain(
+	    FString::Printf(TEXT("Transition request rejected: another request is active (request=%llu)."),
+	                    static_cast<unsigned long long>(First.Id)),
+	    EAutomationExpectedErrorFlags::Exact, 1);
 	TestEqual(TEXT("Concurrent request is rejected"),
 	          Coordinator->RequestTransition(NM_Client, Destination, Callbacks).Id, uint64(0));
 	Coordinator->InternalReportSourceApproval(Key, First.Id + 1, false);
 	TestEqual(TEXT("Unrelated decision does not finish request"), Failures, 0);
+	AddExpectedErrorPlain(
+	    FString::Printf(TEXT("Transition failed: request=%llu error=%d sourceApproved=0 targetApproved=0 "
+	                         "travelStarted=0."),
+	                    static_cast<unsigned long long>(First.Id),
+	                    static_cast<int32>(Nelaric::ETransitionError::AuthorityRejected)),
+	    EAutomationExpectedErrorFlags::Exact, 1);
 	Coordinator->InternalReportSourceApproval(Key, First.Id, false);
 	TestEqual(TEXT("Source denial fails exactly once"), Failures, 1);
 	TestEqual(TEXT("Source denial error"), LastError, Nelaric::ETransitionError::AuthorityRejected);
@@ -106,6 +126,12 @@ bool FSessionTransitionTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Finished request cannot be cancelled again"), Coordinator->CancelTransition(Second));
 
 	const Nelaric::FTransitionHandle Third = Coordinator->RequestTransition(NM_Client, Destination, Callbacks);
+	AddExpectedErrorPlain(
+	    FString::Printf(TEXT("Transition failed: request=%llu error=%d sourceApproved=0 targetApproved=0 "
+	                         "travelStarted=0."),
+	                    static_cast<unsigned long long>(Third.Id),
+	                    static_cast<int32>(Nelaric::ETransitionError::AuthorityUnavailable)),
+	    EAutomationExpectedErrorFlags::Exact, 1);
 	Coordinator->InternalReportTargetUnavailable(Key, Third.Id);
 	TestEqual(TEXT("Unavailable target fails"), Failures, 2);
 	TestEqual(TEXT("Unavailable target error"), LastError, Nelaric::ETransitionError::AuthorityUnavailable);

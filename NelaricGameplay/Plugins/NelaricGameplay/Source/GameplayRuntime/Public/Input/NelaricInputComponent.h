@@ -85,6 +85,7 @@ public:
 				return true;
 			}
 		}
+		ReportNativeBindingFailure(InputConfig, InputTag, TriggerEvent);
 		return false;
 	}
 	/** @brief Removes tracked bindings and empties their handles.
@@ -98,6 +99,8 @@ public:
 	virtual void OnUnregister() override;
 
 private:
+	GAMEPLAYRUNTIME_API void ReportNativeBindingFailure(const UNelaricInputConfig* InputConfig,
+	                                                    const FGameplayTag& InputTag, ETriggerEvent TriggerEvent) const;
 	bool ActivateMapping(const FNelaricInputMapping& Mapping, UEnhancedInputLocalPlayerSubsystem* InputSubsystem);
 	UPROPERTY(Transient)
 	TObjectPtr<const UNelaricInputConfig> ActiveInputConfig;

@@ -12,7 +12,6 @@
 
 class UCameraComponent;
 class UPawnControlComponent;
-class UFloatingPawnMovement;
 
 /** @brief Holds a persistent overview camera for one player.
  * @details The authority spawns this pawn for its
@@ -23,6 +22,7 @@ class UFloatingPawnMovement;
  * It uses the controlling player's PlayerState.
  * Access components on the
  * game thread.
+ * Configure one control policy through pawn initialization or Blueprint.
  */
 UCLASS(MinimalAPI, Blueprintable)
 class ADemoOverviewPawn : public ANelaricPawn
@@ -34,25 +34,28 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Demo|Camera")
 	DEMOGAME_API UCameraComponent* GetCameraComponent() const;
 
-	/// Returns the owned policy allowing release without bot handback.
+	/** @brief Finds this pawn's explicitly configured control policy.
+	 * @details Borrowed on the game thread during
+	 * the component lifetime.
+	 * @return The only policy, or null if missing or ambiguous.
+	 */
 	UFUNCTION(BlueprintPure, Category = "Demo|Control")
 	DEMOGAME_API UPawnControlComponent* GetControlPolicy() const;
 
+	/** @brief Moves the local camera without changing its height or rotation.
+	 * @details Game-thread only. Invalid offsets are ignored.
+	 * @param LocalOffset Centimeters right (X) and forward (Y) by camera yaw.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Demo|Camera")
+	DEMOGAME_API void PanOverview(const FVector2D& LocalOffset);
+
 public:
 	DEMOGAME_API ADemoOverviewPawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	DEMOGAME_API virtual void BeginPlay() override;
 	DEMOGAME_API virtual void UnPossessed() override;
-	DEMOGAME_API virtual UPawnMovementComponent* GetMovementComponent() const override;
 
 protected:
 	/// Camera owned by this pawn; Blueprint subclasses configure its lens.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Demo|Camera")
 	TObjectPtr<UCameraComponent> CameraComponent;
-
-	/// Control policy owned by this pawn; release never requires a bot.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Demo|Control")
-	TObjectPtr<UPawnControlComponent> ControlPolicy;
-
-	/// Local flying movement owned by this pawn; Blueprint configures speed.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Demo|Camera")
-	TObjectPtr<UFloatingPawnMovement> MovementComponent;
 };

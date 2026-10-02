@@ -10,7 +10,7 @@ English | [简体中文](ControlState.zh-CN.md)
 
 Use `ANelaricGasGameMode`, `ANelaricGasPlayerState` and `ANelaricGasPlayerController`, or derive game classes from them. Humans and `ANelaricBotController` receive the same game-mode PlayerState class. Configure `AttributeSetClasses` for every attribute used by pawn profiles. Participant defaults initialize once through `ParticipantProfile`. Avatar changes keep the PlayerState and its ASC object identity.
 
-`ANelaricGasCharacter` provides PawnControlComponent, PawnGasBindingComponent and IAbilitySystemInterface. Other pawn classes can add those components and forward their ability-system interface to the binding. Set `StateProfile` before initialization. It is immutable during the pawn lifetime; conflicting participant/pawn ownership for the same attribute is rejected.
+`ANelaricGasCharacter` provides PawnGasBindingComponent and IAbilitySystemInterface. Add exactly one PawnControlComponent through a pawn initialization configuration or Blueprint to enable control switching. Other pawn classes can add those components and forward their ability-system interface to the binding. Set `StateProfile` before initialization. It is immutable during the pawn lifetime; conflicting participant/pawn ownership for the same attribute is rejected.
 
 An unpossessed pawn retains its state in an authority-created custody PlayerState ASC. This actor is owned by the pawn, participates in reservations, and is destroyed with the pawn. `IsStateCustodian()` distinguishes it from a gameplay participant for roster logic. Native Pawn.PlayerState can be null while the binding refers to custody; this is intentional. Custody receives no control bonuses and cannot submit input without a controller.
 

@@ -72,6 +72,7 @@ public:
 
 public:
 	GAMEPLAYABILITIESINTEGRATION_API UPawnGasBindingComponent(const FObjectInitializer& ObjectInitializer);
+	GAMEPLAYABILITIESINTEGRATION_API virtual void BeginPlay() override;
 	GAMEPLAYABILITIESINTEGRATION_API virtual void EndPlay(EEndPlayReason::Type Reason) override;
 	GAMEPLAYABILITIESINTEGRATION_API virtual void
 	GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -87,6 +88,8 @@ protected:
 	GAMEPLAYABILITIESINTEGRATION_API virtual bool CanEntryDataInitialized() override;
 
 private:
+	void ReportInitErrorOnce(FName ErrorId, const TCHAR* Reason) const;
+	mutable TSet<FName> ReportedInitErrors;
 	friend class Nelaric::GAS::FTransferParticipant;
 	UPROPERTY(ReplicatedUsing = OnRep_StateOwner)
 	TObjectPtr<ANelaricGasPlayerState> StateOwner;

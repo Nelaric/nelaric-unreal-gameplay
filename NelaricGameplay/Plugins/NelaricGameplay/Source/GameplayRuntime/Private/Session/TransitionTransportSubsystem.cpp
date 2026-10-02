@@ -9,6 +9,8 @@
 #include "Session/SessionTransitionSubsystem.h"
 #include "Session/TransitionBeaconClient.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricTransport, Log, All);
+
 void UTransitionTransportSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Collection.InitializeDependency<USessionTransitionSubsystem>();
@@ -42,6 +44,9 @@ bool UTransitionTransportSubsystem::BeginSourceApproval(uint64 RequestId,
 	    Cast<ANelaricPlayerController>(GetGameInstance()->GetFirstLocalPlayerController());
 	if (!Controller)
 	{
+		UE_LOG(LogNelaricTransport, Error,
+		       TEXT("Source approval failed (request=%llu): local controller does not support departure approval."),
+		       RequestId);
 		return false;
 	}
 	SourceController = Controller;
@@ -61,6 +66,8 @@ bool UTransitionTransportSubsystem::BeginTargetApproval(uint64 RequestId,
 	ATransitionBeaconClient* Beacon = World ? World->SpawnActor<ATransitionBeaconClient>() : nullptr;
 	if (!Beacon)
 	{
+		UE_LOG(LogNelaricTransport, Error,
+		       TEXT("Target approval failed (request=%llu): could not spawn the target beacon client."), RequestId);
 		return false;
 	}
 	TargetBeacon = Beacon;

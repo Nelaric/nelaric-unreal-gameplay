@@ -5,6 +5,8 @@
 #include "Engine/World.h"
 #include "Pawn/InitStateWorldSubsystem.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricInitState, Log, All);
+
 UPawnInitStateComponent::UPawnInitStateComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 }
@@ -177,6 +179,7 @@ UPawnInitStateComponent::ResolveInitResult(const TWeakObjectPtr<UPawnInitStateCo
 {
 	if (!IsInGameThread())
 	{
+		UE_LOG(LogNelaricInitState, Error, TEXT("Cannot resolve an initialization result outside the game thread."));
 		return nullptr;
 	}
 	UPawnInitStateComponent* Component = WeakComponent.Get();
@@ -233,6 +236,8 @@ void UPawnInitStateComponent::MarkTerminalInitFailure()
 	}
 
 	const Nelaric::FInitStateSnapshot Previous{InitGeneration, InitState, bTerminalInitFailure};
+	UE_LOG(LogNelaricInitState, Error, TEXT("Terminal initialization failure: component=%s generation=%llu state=%d."),
+	       *GetName(), InitGeneration.Value, static_cast<int32>(InitState));
 	bTerminalInitFailure = true;
 	NotifyInitChanged(Previous);
 }

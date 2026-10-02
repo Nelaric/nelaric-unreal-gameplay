@@ -10,6 +10,8 @@
 #include "Player/ControlSwitchSubsystem.h"
 #include "Templates/UnrealTemplate.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricPawnControl, Log, All);
+
 bool UPawnControlComponent::RegisterStateTransferParticipant(
     FName Id, TSharedRef<Nelaric::Control::IStateTransferParticipant> Participant)
 {
@@ -18,6 +20,10 @@ bool UPawnControlComponent::RegisterStateTransferParticipant(
 	    IsControlTransitionInProgress() ||
 	    StateTransferParticipants.ContainsByPredicate([Id](const auto& Entry) { return Entry.Id == Id; }))
 	{
+		UE_LOG(LogNelaricPawnControl, Error,
+		       TEXT("Cannot register state participant on %s (id=%s): empty or duplicate ID, registration ended or a "
+		            "transition is active."),
+		       *GetName(), *Id.ToString());
 		return false;
 	}
 	TGuardValue<bool> RegistrationGuard(bChangingStateTransferParticipants, true);

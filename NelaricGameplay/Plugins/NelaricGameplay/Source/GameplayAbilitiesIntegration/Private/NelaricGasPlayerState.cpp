@@ -5,6 +5,8 @@
 #include "Abilities/GameplayAbility.h"
 #include "GameFramework/Pawn.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricGasPlayerState, Log, All);
+
 ANelaricGasPlayerState::ANelaricGasPlayerState(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 	AbilitySystem = CreateDefaultSubobject<UNelaricAbilitySystemComponent>(TEXT("AbilitySystem"));
@@ -37,6 +39,12 @@ void ANelaricGasPlayerState::PostInitializeComponents()
 			Seen.Add(Class.Get());
 			AbilitySystem->AddAttributeSetSubobject(NewObject<UAttributeSet>(this, Class));
 		}
+		else
+		{
+			UE_LOG(LogNelaricGasPlayerState, Error,
+			       TEXT("Invalid attribute set configuration on %s: class=%s is null, abstract or duplicated."),
+			       *GetName(), *GetNameSafe(Class.Get()));
+		}
 	}
 	if (ParticipantProfile && ParticipantProfile->IsValidProfile())
 	{
@@ -47,6 +55,13 @@ void ANelaricGasPlayerState::PostInitializeComponents()
 			{
 				AbilitySystem->SetNumericAttributeBase(Rule.Attribute, Rule.InitialBase);
 			}
+			else if (Rule.Ownership == EGasStateOwnership::Participant)
+			{
+				UE_LOG(LogNelaricGasPlayerState, Error,
+				       TEXT("Cannot initialize participant attribute on %s: attribute=%s profile=%s; attribute set is "
+				            "missing."),
+				       *GetName(), *Rule.Attribute.GetName(), *GetNameSafe(ParticipantProfile));
+			}
 		}
 		for (const auto& Grant : ParticipantProfile->Abilities)
 		{
@@ -55,7 +70,12 @@ void ANelaricGasPlayerState::PostInitializeComponents()
 			{
 				Spec.GetDynamicSpecSourceTags().AddTag(Grant.ActionTag);
 			}
-			AbilitySystem->GiveAbility(Spec);
+			if (!AbilitySystem->GiveAbility(Spec).IsValid())
+			{
+				UE_LOG(LogNelaricGasPlayerState, Error,
+				       TEXT("Cannot grant participant ability on %s: ability=%s level=%d profile=%s."), *GetName(),
+				       *GetNameSafe(Grant.Ability.Get()), Grant.Level, *GetNameSafe(ParticipantProfile));
+			}
 		}
 	}
 }

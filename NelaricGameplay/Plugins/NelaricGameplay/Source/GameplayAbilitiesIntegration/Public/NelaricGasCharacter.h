@@ -5,10 +5,9 @@
 #include "Pawn/NelaricCharacter.h"
 #include "AbilitySystemInterface.h"
 #include "NelaricGasCharacter.generated.h"
-class UPawnControlComponent;
 class UPawnGasBindingComponent;
 
-/// Character composing framework control and PlayerState ASC binding.
+/// Character binding PlayerState GAS; control policy is configured separately.
 UCLASS(MinimalAPI, Blueprintable)
 class ANelaricGasCharacter : public ANelaricCharacter, public IAbilitySystemInterface
 {
@@ -31,8 +30,6 @@ public:
 	ANelaricGasCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 private:
-	UPROPERTY(VisibleAnywhere, Category = "Nelaric|Control")
-	TObjectPtr<UPawnControlComponent> ControlPolicy;
 	UPROPERTY(VisibleAnywhere, Category = "Nelaric|GAS")
 	TObjectPtr<UPawnGasBindingComponent> GasBinding;
 };

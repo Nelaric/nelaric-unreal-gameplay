@@ -165,10 +165,11 @@ void ADemoPlayerController::RestoreAuthorityOverview()
 	if (!EnsureAuthorityOverviewPawn())
 	{
 		bRestoreOverviewRequested = false;
-		UE_LOG(LogDemoControl, Warning, TEXT("Could not restore the overview pawn for %s."), *GetName());
+		UE_LOG(LogDemoControl, Error, TEXT("Could not restore the overview pawn for %s."), *GetName());
 		return;
 	}
-	if (OverviewPawn->GetControlPolicy()->GetInitState() != Nelaric::EInitState::Ready)
+	const UPawnControlComponent* Policy = OverviewPawn->GetControlPolicy();
+	if (!IsValid(Policy) || Policy->GetInitState() != Nelaric::EInitState::Ready)
 	{
 		return;
 	}
@@ -179,7 +180,7 @@ void ADemoPlayerController::RestoreAuthorityOverview()
 		bRestoreOverviewRequested = false;
 		if (Result != EControlSwitchResult::Succeeded)
 		{
-			UE_LOG(LogDemoControl, Warning, TEXT("Overview restoration failed for %s: %s."), *GetName(),
+			UE_LOG(LogDemoControl, Error, TEXT("Overview restoration failed for %s: %s."), *GetName(),
 			       *UEnum::GetValueAsString(Result));
 		}
 	}
@@ -243,7 +244,7 @@ void ADemoPlayerController::SetMode(EDemoControlMode NewMode)
 		if (!bHasCamera && !bCameraUnavailableReported)
 		{
 			bCameraUnavailableReported = true;
-			UE_LOG(LogDemoControl, Warning, TEXT("No overview camera is available for %s."), *GetName());
+			UE_LOG(LogDemoControl, Error, TEXT("No overview camera is available for %s."), *GetName());
 			OnOverviewCameraUnavailable();
 		}
 	}
@@ -283,10 +284,17 @@ bool ADemoPlayerController::TakeControlOfBot(APawn* TargetPawn)
 	if (!bLocalInitialized || bEndingPlay || !IsLocalPlayerController() || bSendingRequest || bPendingRequest ||
 	    ControlMode != EDemoControlMode::Overview || !IsOverviewReady(GetPawn()))
 	{
+		UE_LOG(LogDemoControl, Error,
+		       TEXT("Cannot take bot control on %s: localInitialized=%d pending=%d mode=%s; controller or overview "
+		            "input is not ready."),
+		       *GetName(), bLocalInitialized, bPendingRequest, *UEnum::GetValueAsString(ControlMode));
 		return false;
 	}
 	if (!IsSelectableBot(TargetPawn))
 	{
+		UE_LOG(LogDemoControl, Error,
+		       TEXT("Cannot take bot control: controller=%s target=%s; target is not selectable."), *GetName(),
+		       *GetNameSafe(TargetPawn));
 		OnControlRequestFailed(EControlSwitchAction::TakeControl, EControlSwitchResult::InvalidTarget);
 		return false;
 	}
@@ -298,6 +306,10 @@ bool ADemoPlayerController::ReturnToOverview()
 	if (!bLocalInitialized || bEndingPlay || !IsLocalPlayerController() || bSendingRequest || !IsValid(GetPawn()) ||
 	    !GetPawn()->IsA<ADemoCharacter>())
 	{
+		UE_LOG(LogDemoControl, Error,
+		       TEXT("Cannot return to overview on %s: localInitialized=%d pending=%d mode=%s; controller or character "
+		            "is not ready."),
+		       *GetName(), bLocalInitialized, bPendingRequest, *UEnum::GetValueAsString(ControlMode));
 		return false;
 	}
 	if (bPendingRequest)
@@ -344,6 +356,8 @@ bool ADemoPlayerController::BeginControlRequest(EControlSwitchAction Action, APa
 	    Action == EControlSwitchAction::TakeControl ? RequestTakeControl(Target) : RequestReturnControl();
 	if (RequestId == 0)
 	{
+		UE_LOG(LogDemoControl, Error, TEXT("Could not send control request: controller=%s action=%s target=%s."),
+		       *GetName(), *UEnum::GetValueAsString(Action), *GetNameSafe(Target));
 		ClearPendingRequest();
 		ReconcilePossession();
 		OnControlRequestFailed(Action, EControlSwitchResult::InvalidRequest);
@@ -366,7 +380,16 @@ void ADemoPlayerController::HandleControlDecision(int32 RequestId, EControlSwitc
 	PendingRequestId = RequestId;
 	PendingDecision = Result;
 	bHasDecision = true;
-	UE_LOG(LogDemoControl, Verbose, TEXT("Control request %d: %s"), RequestId, *UEnum::GetValueAsString(Result));
+	if (Result != EControlSwitchResult::Succeeded)
+	{
+		UE_LOG(LogDemoControl, Error,
+		       TEXT("Control request failed: controller=%s request=%d action=%s target=%s result=%s."), *GetName(),
+		       RequestId, *UEnum::GetValueAsString(Action), *GetNameSafe(Target), *UEnum::GetValueAsString(Result));
+	}
+	else
+	{
+		UE_LOG(LogDemoControl, Verbose, TEXT("Control request %d: %s"), RequestId, *UEnum::GetValueAsString(Result));
+	}
 	WaitStartedAt = GetWorld()->GetRealTimeSeconds();
 	bWaitTimeoutReported = false;
 }
@@ -383,11 +406,12 @@ void ADemoPlayerController::ClearPendingRequest()
 bool ADemoPlayerController::IsOverviewReady(APawn* ControlledPawn) const
 {
 	const ADemoOverviewPawn* Overview = Cast<ADemoOverviewPawn>(ControlledPawn);
+	const UPawnControlComponent* Policy = IsValid(Overview) ? Overview->GetControlPolicy() : nullptr;
 	return IsValid(Overview) && !Overview->IsActorBeingDestroyed() && Overview == GetOverviewPawn() &&
 	       Overview->GetController() == this && IsValid(PlayerState) && Overview->GetPlayerState() == PlayerState &&
-	       IsPawnInputReady(ControlledPawn) &&
-	       Overview->GetControlPolicy()->GetInitState() == Nelaric::EInitState::Ready &&
-	       IsValid(Overview->GetCameraComponent()) && Overview->GetCameraComponent()->IsActive();
+	       IsPawnInputReady(ControlledPawn) && IsValid(Policy) &&
+	       Policy->GetInitState() == Nelaric::EInitState::Ready && IsValid(Overview->GetCameraComponent()) &&
+	       Overview->GetCameraComponent()->IsActive();
 }
 
 bool ADemoPlayerController::IsCharacterReady(APawn* ControlledPawn) const
@@ -433,7 +457,7 @@ void ADemoPlayerController::ReportWaitTimeout()
 	    GetWorld()->GetRealTimeSeconds() - WaitStartedAt >= FMath::Max(0.1f, ControlWaitTimeout))
 	{
 		bWaitTimeoutReported = true;
-		UE_LOG(LogDemoControl, Warning, TEXT("Control wait timed out for %s; reconciling without resending."),
+		UE_LOG(LogDemoControl, Error, TEXT("Control wait timed out for %s; reconciling without resending."),
 		       *GetName());
 		OnControlWaitTimedOut(PendingAction, bPendingRequest && !bHasDecision);
 	}
@@ -477,6 +501,8 @@ void ADemoPlayerController::UpdateLocalControl()
 		APawn* Target = PendingTarget.Get();
 		if (!IsValid(Target) || Target->IsActorBeingDestroyed())
 		{
+			UE_LOG(LogDemoControl, Error, TEXT("Control target disappeared while waiting: controller=%s request=%d."),
+			       *GetName(), PendingRequestId);
 			ClearPendingRequest();
 			ReconcilePossession();
 			OnControlRequestFailed(EControlSwitchAction::TakeControl, EControlSwitchResult::InvalidTarget);

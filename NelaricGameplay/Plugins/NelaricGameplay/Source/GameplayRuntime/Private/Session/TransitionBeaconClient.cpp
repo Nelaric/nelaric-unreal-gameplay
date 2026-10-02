@@ -5,10 +5,16 @@
 #include "Engine/EngineBaseTypes.h"
 #include "NelaricGameModeBase.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricBeacon, Log, All);
+
 bool ATransitionBeaconClient::BeginTargetApproval(const Nelaric::FNetworkEndpoint& Endpoint, uint64 RequestId)
 {
 	if (RequestId == 0 || !Endpoint.IsValid() || PendingRequestId != 0)
 	{
+		UE_LOG(
+		    LogNelaricBeacon, Error,
+		    TEXT("Target approval failed (request=%llu pending=%llu): invalid request, endpoint or pending request."),
+		    RequestId, PendingRequestId);
 		return false;
 	}
 
@@ -16,6 +22,9 @@ bool ATransitionBeaconClient::BeginTargetApproval(const Nelaric::FNetworkEndpoin
 	FURL BeaconURL(nullptr, *AddressWithPort, TRAVEL_Absolute);
 	if (!BeaconURL.Valid || BeaconURL.Host.IsEmpty())
 	{
+		UE_LOG(LogNelaricBeacon, Error,
+		       TEXT("Target approval failed (request=%llu pending=%llu): malformed beacon URL."), RequestId,
+		       PendingRequestId);
 		return false;
 	}
 
@@ -23,6 +32,9 @@ bool ATransitionBeaconClient::BeginTargetApproval(const Nelaric::FNetworkEndpoin
 	if (!InitClient(BeaconURL))
 	{
 		PendingRequestId = 0;
+		UE_LOG(LogNelaricBeacon, Error,
+		       TEXT("Target approval failed (request=%llu pending=%llu): beacon client initialization failed."),
+		       RequestId, PendingRequestId);
 		return false;
 	}
 	return true;
@@ -45,6 +57,7 @@ void ATransitionBeaconClient::OnFailure()
 {
 	if (!bDecisionDelivered && PendingRequestId != 0)
 	{
+		UE_LOG(LogNelaricBeacon, Error, TEXT("Target approval connection failed (request=%llu)."), PendingRequestId);
 		bDecisionDelivered = true;
 		TargetDecision.Broadcast(PendingRequestId, false, false);
 	}

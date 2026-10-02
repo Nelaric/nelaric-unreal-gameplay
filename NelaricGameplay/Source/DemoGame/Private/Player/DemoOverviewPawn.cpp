@@ -4,8 +4,9 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/SceneComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Controller.h"
-#include "GameFramework/FloatingPawnMovement.h"
+#include "GameFramework/PlayerController.h"
 #include "Pawn/PawnControlComponent.h"
 
 ADemoOverviewPawn::ADemoOverviewPawn(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -23,15 +24,6 @@ ADemoOverviewPawn::ADemoOverviewPawn(const FObjectInitializer& ObjectInitializer
 	CameraComponent->SetupAttachment(GetRootComponent());
 	CameraComponent->SetRelativeRotation(FRotator(-60.0, 0.0, 0.0));
 	CameraComponent->bUsePawnControlRotation = false;
-	MovementComponent = CreateDefaultSubobject<UFloatingPawnMovement>(TEXT("OverviewMovement"));
-	MovementComponent->SetUpdatedComponent(GetRootComponent());
-
-	ControlPolicy = CreateDefaultSubobject<UPawnControlComponent>(TEXT("ControlPolicy"));
-	ControlPolicy->bAllowPlayerControl = true;
-	ControlPolicy->bAllowReturnControl = true;
-	ControlPolicy->bReturnToBot = false;
-	ControlPolicy->bStartBotLogicOnReady = false;
-	ControlPolicy->ReturnControllerClass = nullptr;
 }
 
 UCameraComponent* ADemoOverviewPawn::GetCameraComponent() const
@@ -41,19 +33,44 @@ UCameraComponent* ADemoOverviewPawn::GetCameraComponent() const
 
 UPawnControlComponent* ADemoOverviewPawn::GetControlPolicy() const
 {
-	return ControlPolicy;
+	TInlineComponentArray<UPawnControlComponent*> Policies(this);
+	return Policies.Num() == 1 ? Policies[0] : nullptr;
 }
 
-UPawnMovementComponent* ADemoOverviewPawn::GetMovementComponent() const
+void ADemoOverviewPawn::PanOverview(const FVector2D& LocalOffset)
 {
-	return MovementComponent;
+	const APlayerController* LocalController = Cast<APlayerController>(GetController());
+	if (!LocalController || !LocalController->IsLocalPlayerController() || LocalController->GetPawn() != this ||
+	    IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown || !FMath::IsFinite(LocalOffset.X) ||
+	    !FMath::IsFinite(LocalOffset.Y))
+	{
+		return;
+	}
+	const FRotator YawRotation(0.0, CameraComponent->GetComponentRotation().Yaw, 0.0);
+	const FVector Offset = YawRotation.RotateVector(FVector(LocalOffset.Y, LocalOffset.X, 0.0));
+	const FVector CurrentLocation = GetActorLocation();
+	FVector NewLocation = CurrentLocation + Offset;
+	NewLocation.Z = CurrentLocation.Z;
+	SetActorLocation(NewLocation);
+}
+
+void ADemoOverviewPawn::BeginPlay()
+{
+	Super::BeginPlay();
+	// The initialization config creates the policy during BeginPlay. This
+	// camera stays with its player while a character is controlled; handing
+	// it to a bot would replace its owner and prevent returning to it.
+	if (UPawnControlComponent* Policy = GetControlPolicy())
+	{
+		Policy->bReturnToBot = false;
+		Policy->bStartBotLogicOnReady = false;
+	}
 }
 
 void ADemoOverviewPawn::UnPossessed()
 {
 	const TWeakObjectPtr<AController> ReleasingController = GetController();
 	Super::UnPossessed();
-	MovementComponent->StopMovementImmediately();
 	// APawn clears Owner on release. Preserve owner relevancy and permission
 	// to return to this camera while the player operates another character.
 	if (HasAuthority() && !IsActorBeingDestroyed() && !GetController() && ReleasingController.IsValid() &&

@@ -8,11 +8,16 @@
 #include "Player/ControlSwitchSubsystem.h"
 #include "Templates/UnrealTemplate.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricPlayerControl, Log, All);
+
 int32 ANelaricPlayerController::RequestTakeControl(APawn* TargetPawn)
 {
 	check(IsInGameThread());
 	if (!IsValid(TargetPawn) || TargetPawn->IsActorBeingDestroyed() || TargetPawn->GetWorld() != GetWorld())
 	{
+		UE_LOG(LogNelaricPlayerControl, Error,
+		       TEXT("Cannot request pawn control on %s: invalid target %s or target belongs to another world."),
+		       *GetName(), *GetNameSafe(TargetPawn));
 		return 0;
 	}
 	return SendControlSwitchRequest(EControlSwitchAction::TakeControl, TargetPawn);
@@ -35,6 +40,10 @@ int32 ANelaricPlayerController::SendControlSwitchRequest(EControlSwitchAction Ac
 	if (!IsLocalPlayerController() || IsActorBeingDestroyed() || !World || World->bIsTearingDown ||
 	    NextControlRequestId == 0)
 	{
+		UE_LOG(LogNelaricPlayerControl, Error,
+		       TEXT("Cannot send control request on %s: localPlayer=%d destroying=%d world=%s nextRequest=%d."),
+		       *GetName(), IsLocalPlayerController(), IsActorBeingDestroyed(), *GetNameSafe(World),
+		       NextControlRequestId);
 		return 0;
 	}
 	const int32 RequestId = NextControlRequestId;
@@ -49,6 +58,14 @@ void ANelaricPlayerController::ServerRequestControlSwitch_Implementation(int32 R
 	check(IsInGameThread());
 	const EControlSwitchResult Result =
 	    EvaluateControlSwitchRequest(RequestId, Action, TargetPawn, ExpectedCurrentPawn);
+	if (Result != EControlSwitchResult::Succeeded && Result != EControlSwitchResult::Busy &&
+	    Result != EControlSwitchResult::ControlTransitionInProgress)
+	{
+		UE_LOG(LogNelaricPlayerControl, Error,
+		       TEXT("Authority control request failed: controller=%s request=%d action=%s target=%s result=%s."),
+		       *GetName(), RequestId, *UEnum::GetValueAsString(Action), *GetNameSafe(TargetPawn),
+		       *UEnum::GetValueAsString(Result));
+	}
 	ClientReceiveControlSwitchDecision(RequestId, Action, TargetPawn, Result);
 }
 
@@ -124,6 +141,10 @@ bool ANelaricPlayerController::RequestDepartureApproval(uint64 RequestId, const 
 {
 	if (RequestId == 0 || TargetAddress.IsEmpty() || !IsLocalController())
 	{
+		UE_LOG(LogNelaricPlayerControl, Error,
+		       TEXT("Cannot request departure approval on %s (request=%llu): invalid request, empty target address or "
+		            "non-local controller."),
+		       *GetName(), RequestId);
 		return false;
 	}
 

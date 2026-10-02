@@ -15,6 +15,8 @@
 #include "Templates/UnrealTemplate.h"
 #include "TimerManager.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricControlSwitch, Log, All);
+
 namespace Nelaric::Control
 {
 static bool IsLive(const AActor* Actor, const UWorld* World)
@@ -331,6 +333,10 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 	UWorld* World = GetWorld();
 	if (bExecutingControlSwitch || !World || World->bIsTearingDown || !Nelaric::Control::IsLive(Actor, World))
 	{
+		UE_LOG(
+		    LogNelaricControlSwitch, Error,
+		    TEXT("Cannot resolve control recovery for %s: invalid actor, world or an operation is already executing."),
+		    *GetNameSafe(Actor));
 		return false;
 	}
 	PruneDestroyedParticipants();
@@ -412,10 +418,15 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 	};
 	if (!IsSettled())
 	{
+		UE_LOG(LogNelaricControlSwitch, Error,
+		       TEXT("Cannot resolve control recovery for %s: participants have not settled."), *GetNameSafe(Actor));
 		return false;
 	}
 	if (World->bIsTearingDown || !RecoveryRequiredTransitions.Contains(TransitionId))
 	{
+		UE_LOG(LogNelaricControlSwitch, Error,
+		       TEXT("Cannot resolve control recovery for %s: world or recovery reservation changed."),
+		       *GetNameSafe(Actor));
 		return false;
 	}
 	if (const auto* Batch = StateTransfers.Find(TransitionId))
@@ -439,6 +450,9 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 			        : Nelaric::Control::EAssociationEndpoint::Destination;
 			if (!Nelaric::Control::MatchesAssociation(Context, Endpoint, World))
 			{
+				UE_LOG(LogNelaricControlSwitch, Error,
+				       TEXT("Cannot resolve control recovery for %s: pawn association matches neither endpoint."),
+				       *GetNameSafe(Actor));
 				return false;
 			}
 			for (const auto& Participant : Transfer.Participants)
@@ -447,6 +461,9 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 				    !Participant.Participant->IsStateValid(Context, Endpoint, *Participant.Snapshot) || bShuttingDown ||
 				    World->bIsTearingDown || !Nelaric::Control::MatchesAssociation(Context, Endpoint, World))
 				{
+					UE_LOG(LogNelaricControlSwitch, Error,
+					       TEXT("Cannot resolve control recovery for %s: state participant validation failed."),
+					       *GetNameSafe(Actor));
 					return false;
 				}
 			}
@@ -454,6 +471,10 @@ bool UControlSwitchSubsystem::ResolveControlTransitionRecovery(const AActor* Act
 	}
 	if (!IsSettled() || bShuttingDown || World->bIsTearingDown || !RecoveryRequiredTransitions.Contains(TransitionId))
 	{
+		UE_LOG(
+		    LogNelaricControlSwitch, Error,
+		    TEXT("Cannot resolve control recovery for %s: participants or recovery reservation changed before commit."),
+		    *GetNameSafe(Actor));
 		return false;
 	}
 	if (const auto* Batch = StateTransfers.Find(TransitionId))
@@ -1026,6 +1047,10 @@ EControlSwitchResult UControlSwitchSubsystem::ExportPlan(Nelaric::Control::FSwit
 			}
 			if (!bExported || !Snapshot || Snapshot->SchemaId.IsNone() || Snapshot->SchemaVersion == 0)
 			{
+				UE_LOG(LogNelaricControlSwitch, Error,
+				       TEXT("State export failed: transition=%s pawn=%s participant=%s exported=%d snapshotValid=%d."),
+				       *Plan.TransitionId.ToString(), *GetNameSafe(Transfer.Export->Context.Pawn.Get()),
+				       *Registration.Id.ToString(), bExported, Snapshot.IsValid());
 				return EControlSwitchResult::StateExportFailed;
 			}
 			Transfer.Export->States.Add({Registration.Id, Snapshot});
@@ -1044,6 +1069,9 @@ bool UControlSwitchSubsystem::ValidateStateAssociations(const Nelaric::Control::
 	const UWorld* World = GetWorld();
 	if (bShuttingDown || !MatchesAssociations(Batch, Endpoint, World))
 	{
+		UE_LOG(LogNelaricControlSwitch, Error,
+		       TEXT("Control state validation failed (endpoint=%d): world unavailable or native associations differ."),
+		       static_cast<int32>(Endpoint));
 		return false;
 	}
 	for (const auto& Transfer : Batch.Pawns)
@@ -1056,6 +1084,10 @@ bool UControlSwitchSubsystem::ValidateStateAssociations(const Nelaric::Control::
 			    !Participant.Participant->IsStateValid(Transfer.Export->Context, Endpoint, *Participant.Snapshot) ||
 			    bShuttingDown || !MatchesAssociations(Batch, Endpoint, World))
 			{
+				UE_LOG(LogNelaricControlSwitch, Error,
+				       TEXT("Control state validation failed (endpoint=%d): state participant association or restored "
+				            "state is invalid."),
+				       static_cast<int32>(Endpoint));
 				return false;
 			}
 		}
@@ -1076,6 +1108,10 @@ EControlSwitchResult UControlSwitchSubsystem::SwitchAssociations(const Nelaric::
 	const auto Batch = Plan.StateTransfers;
 	auto Recover = [&](EControlSwitchResult Failure = EControlSwitchResult::ExecutionFailed)
 	{
+		UE_LOG(LogNelaricControlSwitch, Error,
+		       TEXT("Control switch requires rollback: transition=%s requester=%s oldPawn=%s target=%s cause=%s."),
+		       *TransitionId.ToString(), *GetNameSafe(Requester), *GetNameSafe(OldPawn), *GetNameSafe(TargetPawn),
+		       *UEnum::GetValueAsString(Failure));
 		if (bShuttingDown || World->bIsTearingDown)
 		{
 			ContextChange.Finish();
@@ -1386,6 +1422,22 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
                                                                    APawn* TargetPawn)
 {
 	check(IsInGameThread());
+	const FString RequesterName = GetNameSafe(Requester);
+	const FString TargetName = GetNameSafe(TargetPawn);
+	FGuid LoggedTransitionId;
+	const TCHAR* Stage = TEXT("request validation");
+	auto Finish = [&](EControlSwitchResult Outcome)
+	{
+		if (Outcome != EControlSwitchResult::Succeeded && Outcome != EControlSwitchResult::Busy &&
+		    Outcome != EControlSwitchResult::ControlTransitionInProgress)
+		{
+			UE_LOG(LogNelaricControlSwitch, Error,
+			       TEXT("Control switch failed: transition=%s stage=%s requester=%s target=%s action=%s result=%s."),
+			       *LoggedTransitionId.ToString(), Stage, *RequesterName, *TargetName, *UEnum::GetValueAsString(Action),
+			       *UEnum::GetValueAsString(Outcome));
+		}
+		return Outcome;
+	};
 	if (bExecutingControlSwitch)
 	{
 		if (IsControlTransitionInProgress(Requester) || IsControlTransitionInProgress(TargetPawn) ||
@@ -1393,9 +1445,9 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 		                            IsControlTransitionInProgress(Requester->GetPawn()))) ||
 		    (IsValid(TargetPawn) && IsControlTransitionInProgress(TargetPawn->GetController())))
 		{
-			return EControlSwitchResult::ControlTransitionInProgress;
+			return Finish(EControlSwitchResult::ControlTransitionInProgress);
 		}
-		return EControlSwitchResult::Busy;
+		return Finish(EControlSwitchResult::Busy);
 	}
 	TGuardValue<bool> OperationGuard(bExecutingControlSwitch, true);
 	PruneDestroyedParticipants();
@@ -1403,9 +1455,10 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 	EControlSwitchResult Result = BuildPlan(Requester, Action, TargetPawn, Plan);
 	if (Result != EControlSwitchResult::Succeeded)
 	{
-		return Result;
+		return Finish(Result);
 	}
 	const FGuid TransitionId = Plan.TransitionId;
+	LoggedTransitionId = TransitionId;
 	ON_SCOPE_EXIT
 	{
 		if (!RecoveryRequiredTransitions.Contains(TransitionId))
@@ -1414,25 +1467,28 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 			ReleaseTransition(TransitionId);
 		}
 	};
+	Stage = TEXT("reservation");
 	Result = ReserveParticipants(Plan.Participants, TransitionId);
 	if (Result != EControlSwitchResult::Succeeded)
 	{
-		return Result;
+		return Finish(Result);
 	}
+	Stage = TEXT("preparation");
 	Result = PreparePlan(Plan);
 	if (Result != EControlSwitchResult::Succeeded)
 	{
-		return Result;
+		return Finish(Result);
 	}
+	Stage = TEXT("plan validation");
 	Result = ValidatePlan(Plan);
 	if (Result != EControlSwitchResult::Succeeded)
 	{
-		return Result;
+		return Finish(Result);
 	}
 	APawn* OldPawn = Plan.OldPawn.Get();
 	if (OldPawn == TargetPawn)
 	{
-		return EControlSwitchResult::Succeeded;
+		return Finish(EControlSwitchResult::Succeeded);
 	}
 	Nelaric::Control::FContextChange ContextChange(OldPawn, TargetPawn);
 	Nelaric::Control::StopContext(Requester, OldPawn);
@@ -1440,22 +1496,24 @@ EControlSwitchResult UControlSwitchSubsystem::ExecuteControlSwitch(AController* 
 	{
 		Nelaric::Control::StopContext(Plan.PreviousTargetController.Get(), TargetPawn);
 	}
+	Stage = TEXT("state export");
 	Result = ExportPlan(Plan);
 	if (Result != EControlSwitchResult::Succeeded)
 	{
 		ContextChange.Finish();
 		if (bShuttingDown || !GetWorld() || GetWorld()->bIsTearingDown)
 		{
-			return EControlSwitchResult::WorldUnavailable;
+			return Finish(EControlSwitchResult::WorldUnavailable);
 		}
 		if (!Nelaric::Control::MatchesPlanAssociations(Plan, Nelaric::Control::EAssociationEndpoint::Source,
 		                                               GetWorld()))
 		{
 			// Export is read-only; retain reservations if a callback violated it.
 			RecoveryRequiredTransitions.Add(TransitionId);
-			return EControlSwitchResult::RecoveryFailed;
+			return Finish(EControlSwitchResult::RecoveryFailed);
 		}
-		return Result;
+		return Finish(Result);
 	}
-	return SwitchAssociations(Plan, ContextChange);
+	Stage = TEXT("association switch and recovery");
+	return Finish(SwitchAssociations(Plan, ContextChange));
 }

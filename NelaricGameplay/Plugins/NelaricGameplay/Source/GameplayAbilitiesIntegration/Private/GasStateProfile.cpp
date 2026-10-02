@@ -4,15 +4,28 @@
 #include "Abilities/GameplayAbility.h"
 #include "GameplayEffect.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricGasProfile, Log, All);
+
 bool UGasStateProfile::IsValidProfile() const
 {
+	auto Invalid = [this](const TCHAR* Reason, const FString& Entry)
+	{
+		if (!bInvalidProfileReported)
+		{
+			bInvalidProfileReported = true;
+			UE_LOG(LogNelaricGasProfile, Error, TEXT("Invalid GAS profile %s: %s (entry=%s)."), *GetName(), Reason,
+			       *Entry);
+		}
+		return false;
+	};
 	TSet<FGameplayAttribute> Seen;
 	for (const auto& Rule : Attributes)
 	{
 		if (!Rule.Attribute.IsValid() || Seen.Contains(Rule.Attribute) || !FMath::IsFinite(Rule.InitialBase) ||
 		    Rule.Ownership == EGasStateOwnership::Control)
 		{
-			return false;
+			return Invalid(TEXT("attribute is invalid, duplicated, non-finite or control-owned"),
+			               Rule.Attribute.GetName());
 		}
 		Seen.Add(Rule.Attribute);
 	}
@@ -22,7 +35,8 @@ bool UGasStateProfile::IsValidProfile() const
 		    Grant.Ability->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists) ||
 		    Grant.Level < 1)
 		{
-			return false;
+			return Invalid(TEXT("ability class is missing, non-concrete or its level is below one"),
+			               GetNameSafe(Grant.Ability.Get()));
 		}
 	}
 	TArray<TSubclassOf<UGameplayEffect>> Effects = ControlEffects;
@@ -34,8 +48,10 @@ bool UGasStateProfile::IsValidProfile() const
 		    Effect->GetDefaultObject<UGameplayEffect>()->DurationPolicy == EGameplayEffectDurationType::Instant ||
 		    Effect->GetDefaultObject<UGameplayEffect>()->StackingType != EGameplayEffectStackingType::None)
 		{
-			return false;
+			return Invalid(TEXT("control effect is missing, non-concrete, instant or stacked"),
+			               GetNameSafe(Effect.Get()));
 		}
 	}
+	bInvalidProfileReported = false;
 	return true;
 }

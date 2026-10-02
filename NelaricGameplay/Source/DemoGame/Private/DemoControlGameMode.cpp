@@ -5,6 +5,8 @@
 #include "Player/DemoPlayerController.h"
 #include "Player/DemoOverviewPawn.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogDemoControlGameMode, Log, All);
+
 ADemoControlGameMode::ADemoControlGameMode()
 {
 	PlayerControllerClass = ADemoPlayerController::StaticClass();
@@ -19,6 +21,9 @@ APawn* ADemoControlGameMode::SpawnDefaultPawnAtTransform_Implementation(AControl
 	UClass* OverviewClass = GetDefaultPawnClassForController(NewPlayer);
 	if (!OverviewClass || !OverviewClass->IsChildOf(ADemoOverviewPawn::StaticClass()))
 	{
+		UE_LOG(LogDemoControlGameMode, Error,
+		       TEXT("Cannot spawn overview pawn: controller=%s class=%s; expected a DemoOverviewPawn class."),
+		       *GetNameSafe(NewPlayer), *GetNameSafe(OverviewClass));
 		return nullptr;
 	}
 	FTransform OverviewTransform = SpawnTransform;
@@ -27,6 +32,11 @@ APawn* ADemoControlGameMode::SpawnDefaultPawnAtTransform_Implementation(AControl
 	if (IsValid(SpawnedPawn))
 	{
 		SpawnedPawn->SetOwner(NewPlayer);
+	}
+	else
+	{
+		UE_LOG(LogDemoControlGameMode, Error, TEXT("Overview pawn spawn failed: controller=%s class=%s."),
+		       *GetNameSafe(NewPlayer), *GetNameSafe(OverviewClass));
 	}
 	return SpawnedPawn;
 }

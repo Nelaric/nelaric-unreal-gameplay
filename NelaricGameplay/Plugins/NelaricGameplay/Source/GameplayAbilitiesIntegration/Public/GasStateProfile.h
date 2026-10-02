@@ -86,4 +86,6 @@ public:
 	TArray<TSubclassOf<UGameplayEffect>> BotControlEffects;
 
 public:
+private:
+	mutable bool bInvalidProfileReported = false;
 };

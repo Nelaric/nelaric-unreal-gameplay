@@ -10,7 +10,7 @@
 
 使用或派生 `ANelaricGasGameMode`、`ANelaricGasPlayerState` 和 `ANelaricGasPlayerController`。人类与 `ANelaricBotController` 都获取 GameMode 配置的同一种 PlayerState。通过 `AttributeSetClasses` 配置角色所有属性集合；`ParticipantProfile` 只初始化一次参与者默认属性与授予。Avatar 变化不改变 PlayerState 或 ASC 对象身份。
 
-`ANelaricGasCharacter` 提供 PawnControlComponent、PawnGasBindingComponent 和 IAbilitySystemInterface。其他 Pawn 可以加入这些组件，把能力系统接口转发到绑定组件。在初始化前设置 `StateProfile`；角色生命周期内配置保持不变。同一属性同时被参与者配置与角色配置声明为不同所有权时，拒绝绑定。
+`ANelaricGasCharacter` 提供 PawnGasBindingComponent 和 IAbilitySystemInterface。通过 Pawn 初始化配置或蓝图显式添加一个 PawnControlComponent，启用控制切换；同一个 Pawn 只能有一个控制策略组件。其他 Pawn 可以加入这些组件，把能力系统接口转发到绑定组件。在初始化前设置 `StateProfile`；角色生命周期内配置保持不变。同一属性同时被参与者配置与角色配置声明为不同所有权时，拒绝绑定。
 
 无人控制的 Pawn 把状态保留在权威创建的托管 PlayerState ASC 内。该 Actor 由 Pawn 拥有，加入切换预留，随 Pawn 销毁。名单逻辑用 `IsStateCustodian()` 区分托管对象和真实参与者。此时原生 Pawn.PlayerState 可以为空，GAS 绑定仍指向托管 ASC。托管不获取控制加成，没有 Controller 时不能提交输入。
 

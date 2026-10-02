@@ -6,6 +6,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricGasPlayerControl, Log, All);
+
 void ANelaricGasPlayerController::PawnLeavingGame()
 {
 	APawn* Previous = GetPawn();
@@ -17,6 +19,13 @@ void ANelaricGasPlayerController::PawnLeavingGame()
 		                       EControlSwitchResult::Succeeded)
 		{
 			return;
+		}
+		if (!Coordinator)
+		{
+			UE_LOG(LogNelaricGasPlayerControl, Error,
+			       TEXT("Cannot return GAS pawn control on departure: controller=%s pawn=%s; control coordinator is "
+			            "unavailable."),
+			       *GetName(), *GetNameSafe(Previous));
 		}
 	}
 	Super::PawnLeavingGame();

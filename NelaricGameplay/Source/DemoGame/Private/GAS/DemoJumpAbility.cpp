@@ -4,6 +4,8 @@
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "GameFramework/Character.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogDemoJumpAbility, Log, All);
+
 UDemoJumpAbility::UDemoJumpAbility()
 {
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
@@ -15,6 +17,11 @@ void UDemoJumpAbility::ActivateAbility(FGameplayAbilitySpecHandle Handle, const 
 	ACharacter* Character = Cast<ACharacter>(ActorInfo->AvatarActor.Get());
 	if (!Character || !CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
+		if (!Character)
+		{
+			UE_LOG(LogDemoJumpAbility, Error, TEXT("Cannot activate jump ability %s: avatar is not a character."),
+			       *GetName());
+		}
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}

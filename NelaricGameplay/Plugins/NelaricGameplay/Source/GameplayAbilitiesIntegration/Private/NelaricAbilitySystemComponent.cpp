@@ -12,6 +12,8 @@
 #include "NelaricGasPlayerState.h"
 #include "NativeGameplayTags.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricAbilitySystem, Log, All);
+
 namespace Nelaric::GAS
 {
 UE_DEFINE_GAMEPLAY_TAG_STATIC(PlayerInput, "Input.Source.Player");
@@ -95,6 +97,11 @@ bool UNelaricAbilitySystemComponent::SubmitAction(FGameplayTag ActionTag, bool b
 {
 	check(IsInGameThread());
 	const APawn* Pawn = Cast<APawn>(GetAvatarActor());
+	if (!ActionTag.IsValid())
+	{
+		UE_LOG(LogNelaricAbilitySystem, Error, TEXT("Cannot submit an action on %s: action tag is invalid."),
+		       *GetName());
+	}
 	if (!ActionTag.IsValid() || !IsValid(Pawn) || Pawn->IsActorBeingDestroyed() || !Pawn->GetController() ||
 	    (!Pawn->HasAuthority() && !Pawn->IsLocallyControlled()) || IsTransferringState())
 	{
@@ -139,6 +146,11 @@ bool UNelaricAbilitySystemComponent::SubmitAction(FGameplayTag ActionTag, bool b
 	{
 		TryActivateAbility(Handle);
 	}
+	if (!bMatched && bPressed)
+	{
+		UE_LOG(LogNelaricAbilitySystem, Error, TEXT("Action has no granted ability on %s: pawn=%s tag=%s."), *GetName(),
+		       *GetNameSafe(Pawn), *ActionTag.ToString());
+	}
 	return bMatched;
 }
 
@@ -149,11 +161,18 @@ bool UNelaricAbilitySystemComponent::TrackEffect(FActiveGameplayEffectHandle Han
 	if (!IsOwnerActorAuthoritative() || !IsValid(Pawn) || Pawn->GetWorld() != GetWorld() ||
 	    !GetActiveGameplayEffect(Handle) || Ownership == EGasStateOwnership::Participant)
 	{
+		UE_LOG(LogNelaricAbilitySystem, Error,
+		       TEXT("Cannot track effect on %s (pawn=%s ownership=%d): invalid authority, pawn, effect or ownership."),
+		       *GetName(), *GetNameSafe(Pawn), static_cast<int32>(Ownership));
 		return false;
 	}
 	if (const auto* Existing = OwnedEffects.Find(Handle);
 	    Existing && (Existing->Pawn.Get() != Pawn || Existing->Ownership != Ownership))
 	{
+		UE_LOG(LogNelaricAbilitySystem, Error,
+		       TEXT("Cannot track effect on %s (pawn=%s ownership=%d): effect is already tracked for another pawn or "
+		            "ownership."),
+		       *GetName(), *GetNameSafe(Pawn), static_cast<int32>(Ownership));
 		return false;
 	}
 	OwnedEffects.Add(Handle, {Pawn, Ownership});
@@ -179,6 +198,9 @@ bool UNelaricAbilitySystemComponent::ExportPawnEffects(APawn* Pawn, TArray<Nelar
 		    Active->Spec.Def->PeriodicInhibitionPolicy != EGameplayEffectPeriodInhibitionRemovedPolicy::NeverReset)
 		{
 			// Reset-on-uninhibit semantics require a domain restoration adapter.
+			UE_LOG(LogNelaricAbilitySystem, Error,
+			       TEXT("Cannot export pawn effects on %s (pawn=%s): periodic effect requires a restoration adapter."),
+			       *GetName(), *GetNameSafe(Pawn));
 			return false;
 		}
 		auto& State = OutEffects.AddDefaulted_GetRef();
@@ -200,6 +222,8 @@ bool UNelaricAbilitySystemComponent::CanReceiveEffects(const TArray<Nelaric::GAS
 	{
 		if (!Saved.Spec.Def)
 		{
+			UE_LOG(LogNelaricAbilitySystem, Error, TEXT("Cannot receive effects on %s: effect definition is missing."),
+			       *GetName());
 			return false;
 		}
 		if (Saved.Spec.Def->StackingType == EGameplayEffectStackingType::None)
@@ -222,6 +246,8 @@ bool UNelaricAbilitySystemComponent::CanReceiveEffects(const TArray<Nelaric::GAS
 			    Existing.Spec.GetContext().GetInstigatorAbilitySystemComponent() ==
 			        Saved.Spec.GetContext().GetInstigatorAbilitySystemComponent())
 			{
+				UE_LOG(LogNelaricAbilitySystem, Error,
+				       TEXT("Cannot receive effects on %s: effect would merge with an existing stack."), *GetName());
 				return false;
 			}
 		}
@@ -243,6 +269,9 @@ bool UNelaricAbilitySystemComponent::RemovePawnEffects(APawn* Pawn)
 	{
 		if (GetActiveGameplayEffect(Handle) && !RemoveActiveGameplayEffect(Handle))
 		{
+			UE_LOG(LogNelaricAbilitySystem, Error,
+			       TEXT("Cannot remove pawn effects on %s (pawn=%s): active effect removal failed."), *GetName(),
+			       *GetNameSafe(Pawn));
 			return false;
 		}
 		OwnedEffects.Remove(Handle);
@@ -274,6 +303,10 @@ bool UNelaricAbilitySystemComponent::RestorePawnEffects(APawn* Pawn, const TArra
 		FActiveGameplayEffect* Active = ActiveGameplayEffects.ApplyGameplayEffectSpec(Spec, Key, bMerged);
 		if (!Active || bMerged)
 		{
+			UE_LOG(LogNelaricAbilitySystem, Error,
+			       TEXT("Cannot restore pawn effects on %s (pawn=%s): effect insertion failed or merged with an "
+			            "existing stack."),
+			       *GetName(), *GetNameSafe(Pawn));
 			return false;
 		}
 		const auto Handle = Active->Handle;
@@ -283,6 +316,9 @@ bool UNelaricAbilitySystemComponent::RestorePawnEffects(APawn* Pawn, const TArra
 		Active = ActiveGameplayEffects.GetActiveGameplayEffect(Handle);
 		if (!Active)
 		{
+			UE_LOG(LogNelaricAbilitySystem, Error,
+			       TEXT("Cannot restore pawn effects on %s (pawn=%s): effect disappeared during inhibition."),
+			       *GetName(), *GetNameSafe(Pawn));
 			return false;
 		}
 		Active->Spec.Period = Period;

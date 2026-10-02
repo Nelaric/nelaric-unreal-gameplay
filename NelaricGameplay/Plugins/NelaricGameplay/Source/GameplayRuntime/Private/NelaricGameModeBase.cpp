@@ -6,6 +6,8 @@
 #include "Player/NelaricPlayerController.h"
 #include "Session/TransitionBeaconHost.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricGameMode, Log, All);
+
 ANelaricGameModeBase::ANelaricGameModeBase()
 {
 	PlayerControllerClass = ANelaricPlayerController::StaticClass();
@@ -28,21 +30,32 @@ void ANelaricGameModeBase::StartPlay()
 {
 	Super::StartPlay();
 
-	if ((GetNetMode() != NM_DedicatedServer && GetNetMode() != NM_ListenServer) || TransitionBeaconListenPort < 1 ||
-	    TransitionBeaconListenPort > 65535)
+	if (GetNetMode() != NM_DedicatedServer && GetNetMode() != NM_ListenServer)
 	{
+		return;
+	}
+	if (TransitionBeaconListenPort < 1 || TransitionBeaconListenPort > 65535)
+	{
+		UE_LOG(LogNelaricGameMode, Error, TEXT("Transition beacon startup failed on %s: invalid listen port %d."),
+		       *GetName(), TransitionBeaconListenPort);
 		return;
 	}
 
 	BeaconHost = GetWorld()->SpawnActor<AOnlineBeaconHost>();
 	if (!BeaconHost)
 	{
+		UE_LOG(LogNelaricGameMode, Error,
+		       TEXT("Transition beacon startup failed on %s (port=%d): could not spawn the beacon listener."),
+		       *GetName(), TransitionBeaconListenPort);
 		return;
 	}
 
 	BeaconHost->ListenPort = TransitionBeaconListenPort;
 	if (!BeaconHost->InitHost())
 	{
+		UE_LOG(LogNelaricGameMode, Error,
+		       TEXT("Transition beacon startup failed on %s (port=%d): could not initialize the beacon listener."),
+		       *GetName(), TransitionBeaconListenPort);
 		BeaconHost->Destroy();
 		BeaconHost = nullptr;
 		return;
@@ -51,6 +64,9 @@ void ANelaricGameModeBase::StartPlay()
 	TransitionBeaconHost = GetWorld()->SpawnActor<ATransitionBeaconHost>();
 	if (!TransitionBeaconHost)
 	{
+		UE_LOG(LogNelaricGameMode, Error,
+		       TEXT("Transition beacon startup failed on %s (port=%d): could not spawn the transition beacon host."),
+		       *GetName(), TransitionBeaconListenPort);
 		BeaconHost->Destroy();
 		BeaconHost = nullptr;
 		return;

@@ -69,6 +69,11 @@ bool UGameAIStateTreeSchema::SetContextRequirements(UStateTreeComponent& Compone
 {
 	if (!Context.IsValid())
 	{
+		if (bLogErrors)
+		{
+			UE_LOG(LogStateTree, Error, TEXT("Cannot set GameAI context for %s: execution context is invalid."),
+			       *Component.GetName());
+		}
 		return false;
 	}
 	AActor* OwnerActor = Component.GetOwner();
@@ -93,8 +98,10 @@ bool UGameAIStateTreeSchema::SetContextRequirements(UStateTreeComponent& Compone
 	if (!bContextValid && bLogErrors)
 	{
 		UE_LOG(LogStateTree, Error,
-		       TEXT("GameAI context requires a valid owner, possessed pawn, controller, game subsystem and StateTree "
-		            "component."));
+		       TEXT("GameAI context failed for %s: owner=%s ownerValid=%d pawn=%s pawnValid=%d controller=%s "
+		            "controllerValid=%d gameContext=%s."),
+		       *Component.GetName(), *GetNameSafe(OwnerActor), bOwnerValid, *GetNameSafe(Pawn), bPawnValid,
+		       *GetNameSafe(Controller), bControllerValid, *GetNameSafe(GameContext));
 	}
 
 	Context.SetContextDataByName(TEXT("OwnerActor"), FStateTreeDataView(bOwnerValid ? OwnerActor : nullptr));
@@ -103,5 +110,10 @@ bool UGameAIStateTreeSchema::SetContextRequirements(UStateTreeComponent& Compone
 	Context.SetContextDataByName(TEXT("GameContext"), FStateTreeDataView(IsValid(GameContext) ? GameContext : nullptr));
 	Context.SetContextDataByName(TEXT("StateTreeComponent"),
 	                             FStateTreeDataView(IsValid(&Component) ? &Component : nullptr));
-	return bContextValid && Context.AreContextDataViewsValid();
+	const bool bViewsValid = bContextValid && Context.AreContextDataViewsValid();
+	if (bContextValid && !bViewsValid && bLogErrors)
+	{
+		UE_LOG(LogStateTree, Error, TEXT("GameAI context data views are invalid for %s."), *Component.GetName());
+	}
+	return bViewsValid;
 }

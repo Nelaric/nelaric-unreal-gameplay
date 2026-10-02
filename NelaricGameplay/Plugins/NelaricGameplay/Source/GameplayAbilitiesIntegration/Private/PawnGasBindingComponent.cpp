@@ -14,6 +14,8 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogNelaricGasBinding, Log, All);
+
 namespace Nelaric::GAS
 {
 class FTransferParticipant : public Control::IStateTransferParticipant
@@ -55,6 +57,9 @@ public:
 		if (!Component || !IsValid(Component->Custodian) ||
 		    (Component->StateProfile && !Component->StateProfile->IsValidProfile()))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ExportState failed (pawn=%s): binding, custodian or profile is invalid."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		auto State = MakeShared<FSnapshot>();
@@ -63,6 +68,9 @@ public:
 		const auto* Destination = Cast<ANelaricGasPlayerState>(Context.Destination.PlayerState.Get());
 		if (!Destination && !Context.Destination.PlayerState.IsExplicitlyNull())
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ExportState failed (pawn=%s): destination PlayerState does not support GAS."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		State->Destination =
@@ -72,6 +80,9 @@ public:
 		auto* DestinationASC = State->Destination.Get();
 		if (!Component->HasLayout(SourceASC) || !Component->HasLayout(DestinationASC))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ExportState failed (pawn=%s): source or destination attribute layout is incompatible."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		if (State->Profile)
@@ -84,6 +95,9 @@ public:
 					const float DestinationBase = DestinationASC->GetNumericAttributeBase(Rule.Attribute);
 					if (!FMath::IsFinite(SourceBase) || !FMath::IsFinite(DestinationBase))
 					{
+						UE_LOG(LogNelaricGasBinding, Error,
+						       TEXT("ExportState failed (pawn=%s): attribute base value is not finite."),
+						       *GetNameSafe(Context.Pawn.Get()));
 						return false;
 					}
 					State->Attributes.Add({Rule.Attribute, SourceBase});
@@ -110,6 +124,10 @@ public:
 			    { return Instance && Instance->IsActive() && !Instance->CanBeCanceled(); });
 			if (Coverage > 1 || ((bNeedsAdapter || bNonCancelable) && Coverage != 1))
 			{
+				UE_LOG(
+				    LogNelaricGasBinding, Error,
+				    TEXT("ExportState failed (pawn=%s): active ability has missing or overlapping transfer adapters."),
+				    *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 		}
@@ -118,6 +136,9 @@ public:
 			const auto* Spec = SourceASC->FindAbilitySpecFromHandle(Handle);
 			if (!Spec || !Spec->Ability)
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ExportState failed (pawn=%s): granted ability specification is missing."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 			State->Abilities.Add({Spec->Ability->GetClass(), Spec->GetDynamicSpecSourceTags(),
@@ -133,6 +154,9 @@ public:
 			}
 			if (Coverage > 1)
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ExportState failed (pawn=%s): active effect has overlapping transfer adapters."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 			if (Coverage == 1)
@@ -143,6 +167,9 @@ public:
 		if (!SourceASC->ExportPawnEffects(Context.Pawn.Get(), State->Effects, CustomEffects) ||
 		    !DestinationASC->CanReceiveEffects(State->Effects))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ExportState failed (pawn=%s): pawn effects could not be exported or received."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		// Domain adapters validate and capture active ability/task state before
@@ -153,6 +180,9 @@ public:
 			if (!Entry.Value->Export(Context, SourceASC, DestinationASC, Export) || !Export ||
 			    Export->SchemaId.IsNone() || Export->SchemaVersion == 0)
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ExportState failed (pawn=%s): transfer extension failed or returned an invalid snapshot."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 			State->Extensions.Add({Entry.Value, Export});
@@ -168,11 +198,17 @@ public:
 		const auto* State = Payload(Snapshot);
 		if (!Component || !State)
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("DetachAssociation failed (pawn=%s): binding or snapshot schema is invalid."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		auto* ASC = Select(*State, Endpoint);
 		if (!ASC)
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("DetachAssociation failed (pawn=%s): selected ability system is unavailable."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		ASC->SetStateTransferBlocked(true);
@@ -191,15 +227,28 @@ public:
 		const auto* State = Payload(Snapshot);
 		if (!Component || !State)
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("AttachAssociation failed (pawn=%s): binding or snapshot schema is invalid."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		auto* ASC = Select(*State, Endpoint);
 		if (!ASC || (ASC->GetAvatarActor() && ASC->GetAvatarActor() != Context.Pawn.Get()))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("AttachAssociation failed (pawn=%s): selected ability system is unavailable or has another "
+			            "avatar."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		Component->StateOwner = Cast<ANelaricGasPlayerState>(ASC->GetOwnerActor());
 		ASC->InitAbilityActorInfo(ASC->GetOwnerActor(), Context.Pawn.Get());
+		if (!Component->StateOwner)
+		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("Cannot attach GAS association for %s: ASC owner is not a GAS PlayerState."),
+			       *GetNameSafe(Context.Pawn.Get()));
+		}
 		return Component->StateOwner != nullptr;
 	}
 	virtual bool IsAssociationValid(const Control::FStateTransferContext& Context,
@@ -220,6 +269,9 @@ public:
 		auto* ASC = State ? Select(*State, Endpoint) : nullptr;
 		if (!Component || !ASC)
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ReleaseState failed (pawn=%s): binding or selected ability system is unavailable."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		ASC->SetStateTransferBlocked(true);
@@ -227,6 +279,9 @@ public:
 		{
 			if (!Extension.Extension->Release(ASC, Context.Pawn.Get(), *Extension.State))
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ReleaseState failed (pawn=%s): transfer extension failed to release state."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 		}
@@ -244,11 +299,17 @@ public:
 			const auto* Spec = ASC->FindAbilitySpecFromHandle(Handle);
 			if (Spec && Spec->IsActive())
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ReleaseState failed (pawn=%s): ability remained active after cancellation."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 		}
 		if (!Component->RemoveGrants(ASC) || !ASC->RemovePawnEffects(Context.Pawn.Get()))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ReleaseState failed (pawn=%s): grants or pawn effects could not be removed."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		const auto& Defaults =
@@ -270,12 +331,18 @@ public:
 		auto* ASC = State ? Select(*State, Endpoint) : nullptr;
 		if (!Component || !ASC || !Component->HasLayout(ASC))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ImportState failed (pawn=%s): binding or selected ability system layout is invalid."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		ASC->SetStateTransferBlocked(true);
 		// Idempotent recovery removes any partial role import first.
 		if (!Component->RemoveGrants(ASC) || !ASC->RemovePawnEffects(Context.Pawn.Get()))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ImportState failed (pawn=%s): partial imported grants or effects could not be removed."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		for (const auto& Attribute : State->Attributes)
@@ -284,6 +351,9 @@ public:
 		}
 		if (!ASC->RestorePawnEffects(Context.Pawn.Get(), State->Effects) || !Component->InstallGrants(ASC, false))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("ImportState failed (pawn=%s): effects or control grants could not be restored."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		Component->GrantsOwner = ASC;
@@ -295,6 +365,9 @@ public:
 			const auto Handle = ASC->GiveAbility(Spec);
 			if (!Handle.IsValid())
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ImportState failed (pawn=%s): saved ability grant could not be restored."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 			Component->GrantedAbilities.Add(Handle);
@@ -304,6 +377,9 @@ public:
 			if (!Extension.Extension->Restore(ASC, Context.Pawn.Get(), *Extension.State,
 			                                  Endpoint == Control::EAssociationEndpoint::Source))
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("ImportState failed (pawn=%s): transfer extension failed to restore state."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 		}
@@ -319,12 +395,18 @@ public:
 		if (!Component || !State || !ASC || !Component->bPawnStateInstalled ||
 		    !IsAssociationValid(Context, Endpoint, Snapshot))
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("IsStateValid failed (pawn=%s): binding, snapshot, installed state or association is invalid."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return false;
 		}
 		for (const auto& Extension : State->Extensions)
 		{
 			if (!Extension.Extension->IsRestored(ASC, Context.Pawn.Get(), *Extension.State))
 			{
+				UE_LOG(LogNelaricGasBinding, Error,
+				       TEXT("IsStateValid failed (pawn=%s): transfer extension state was not restored."),
+				       *GetNameSafe(Context.Pawn.Get()));
 				return false;
 			}
 		}
@@ -337,6 +419,9 @@ public:
 		const auto* State = Payload(Snapshot);
 		if (!Component || !State)
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("Cannot commit GAS state for %s: binding or snapshot schema is invalid."),
+			       *GetNameSafe(Context.Pawn.Get()));
 			return;
 		}
 		for (const auto& Extension : State->Extensions)
@@ -371,6 +456,23 @@ UPawnGasBindingComponent::UPawnGasBindingComponent(const FObjectInitializer& Obj
 	SetIsReplicatedByDefault(true);
 }
 
+void UPawnGasBindingComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	// Registration can run before actor roles and the authority game mode
+	// are initialized, especially in PIE. Dynamic control components may
+	// also be created during BeginPlay. Retry after that entire phase ends.
+	GetWorld()->GetTimerManager().SetTimerForNextTick(
+	    FTimerDelegate::CreateWeakLambda(this,
+	                                     [this]()
+	                                     {
+		                                     if (IsRegistered() && GetWorld() && !GetWorld()->bIsTearingDown)
+		                                     {
+			                                     RequestInitRefresh();
+		                                     }
+	                                     }));
+}
+
 UNelaricAbilitySystemComponent* UPawnGasBindingComponent::GetAbilitySystem() const
 {
 	return IsValid(StateOwner) && !StateOwner->IsActorBeingDestroyed() ? StateOwner->GetNelaricAbilitySystem()
@@ -388,17 +490,25 @@ bool UPawnGasBindingComponent::RestoreReservedState()
 {
 	if (!GetPawn() || !GetPawn()->HasAuthority())
 	{
+		UE_LOG(LogNelaricGasBinding, Error,
+		       TEXT("Cannot restore reserved GAS state on %s: pawn is unavailable or has no authority."), *GetName());
 		return false;
 	}
 	auto* Coordinator = GetWorld()->GetSubsystem<UControlSwitchSubsystem>();
 	const auto Export = Coordinator->GetExportedControlState(GetPawn());
 	if (!Export || !Coordinator->IsControlTransitionRecoveryRequired(GetPawn()) || !Participant)
 	{
+		UE_LOG(LogNelaricGasBinding, Error,
+		       TEXT("Cannot restore reserved GAS state on %s: retained export, recovery reservation or transfer "
+		            "participant is unavailable."),
+		       *GetName());
 		return false;
 	}
 	const auto* State = Export->States.FindByPredicate([](const auto& Entry) { return Entry.Id == TEXT("GAS"); });
 	if (!State)
 	{
+		UE_LOG(LogNelaricGasBinding, Error,
+		       TEXT("Cannot restore reserved GAS state on %s: retained GAS snapshot is missing."), *GetName());
 		return false;
 	}
 	const auto& Context = Export->Context;
@@ -410,6 +520,9 @@ bool UPawnGasBindingComponent::RestoreReservedState()
 	else if (GetController() != Context.Destination.Controller.Get() ||
 	         GetPlayerState() != Context.Destination.PlayerState.Get())
 	{
+		UE_LOG(LogNelaricGasBinding, Error,
+		       TEXT("Cannot restore reserved GAS state on %s: native association matches neither endpoint."),
+		       *GetName());
 		return false;
 	}
 	return Participant->AttachAssociation(Context, Endpoint, *State->Snapshot) &&
@@ -431,6 +544,10 @@ bool UPawnGasBindingComponent::RegisterTransferExtension(FName Id,
 	const auto* Policy = GetPawn() ? GetPawn()->FindComponentByClass<UPawnControlComponent>() : nullptr;
 	if (Id.IsNone() || Extensions.Contains(Id) || (Policy && Policy->IsControlTransitionInProgress()))
 	{
+		UE_LOG(LogNelaricGasBinding, Error,
+		       TEXT("Cannot register GAS transfer extension on %s (id=%s): ID is empty, duplicated or a control "
+		            "transition is active."),
+		       *GetName(), *Id.ToString());
 		return false;
 	}
 	Extensions.Add(Id, Extension);
@@ -458,10 +575,17 @@ bool UPawnGasBindingComponent::EnsureCustodian()
 		return true;
 	}
 	const auto* Mode = World->GetAuthGameMode();
-	UClass* Class =
-	    Mode && Mode->PlayerStateClass && Mode->PlayerStateClass->IsChildOf(ANelaricGasPlayerState::StaticClass())
-	        ? Mode->PlayerStateClass.Get()
-	        : ANelaricGasPlayerState::StaticClass();
+	if (!Mode)
+	{
+		return false;
+	}
+	UClass* Class = Mode->PlayerStateClass.Get();
+	if (!Class || !Class->IsChildOf(ANelaricGasPlayerState::StaticClass()) || Class->HasAnyClassFlags(CLASS_Abstract))
+	{
+		ReportInitErrorOnce(TEXT("CustodianClass"),
+		                    TEXT("GameMode must configure a concrete GAS PlayerState class for state custody."));
+		return false;
+	}
 	FActorSpawnParameters Parameters;
 	Parameters.Owner = Pawn;
 	Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -469,6 +593,10 @@ bool UPawnGasBindingComponent::EnsureCustodian()
 	if (Custodian)
 	{
 		Custodian->SetIsABot(true);
+	}
+	if (!Custodian)
+	{
+		ReportInitErrorOnce(TEXT("CustodianSpawn"), TEXT("Could not spawn the state custodian."));
 	}
 	return Custodian != nullptr;
 }
@@ -492,12 +620,17 @@ bool UPawnGasBindingComponent::HasLayout(UNelaricAbilitySystemComponent* ASC) co
 				{
 					if (ParticipantRule.Attribute == Rule.Attribute && ParticipantRule.Ownership != Rule.Ownership)
 					{
+						ReportInitErrorOnce(
+						    TEXT("AttributeOwnership"),
+						    TEXT("Pawn and participant profiles assign conflicting attribute ownership."));
 						return false;
 					}
 				}
 			}
 			if (!ASC->HasAttributeSetForAttribute(Rule.Attribute))
 			{
+				ReportInitErrorOnce(TEXT("AttributeLayout"),
+				                    TEXT("The ability system is missing a configured attribute set."));
 				return false;
 			}
 		}
@@ -508,7 +641,7 @@ bool UPawnGasBindingComponent::HasLayout(UNelaricAbilitySystemComponent* ASC) co
 bool UPawnGasBindingComponent::CanEntryDataAvailable()
 {
 	APawn* Pawn = GetPawn();
-	if (!Pawn || (StateProfile && !StateProfile->IsValidProfile()))
+	if (!Pawn || !Pawn->HasActorBegunPlay() || (StateProfile && !StateProfile->IsValidProfile()))
 	{
 		return false;
 	}
@@ -519,6 +652,10 @@ bool UPawnGasBindingComponent::CanEntryDataAvailable()
 	auto* Policy = Pawn->FindComponentByClass<UPawnControlComponent>();
 	if (!Policy || !EnsureCustodian())
 	{
+		if (!Policy)
+		{
+			ReportInitErrorOnce(TEXT("ControlPolicy"), TEXT("The pawn has no control policy component."));
+		}
 		return false;
 	}
 	if (!bParticipantRegistered)
@@ -582,6 +719,8 @@ bool UPawnGasBindingComponent::CanEntryDataInitialized()
 		{
 			// Only the world coordinator may migrate an initialized avatar.
 			// Preserve its old ASC state rather than performing a partial swap.
+			ReportInitErrorOnce(TEXT("UncoordinatedControl"),
+			                    TEXT("Initialized GAS state changed owner outside the control coordinator."));
 			return false;
 		}
 		StateOwner = Pawn->GetController() ? Cast<ANelaricGasPlayerState>(Pawn->GetPlayerState()) : Custodian.Get();
@@ -597,6 +736,7 @@ bool UPawnGasBindingComponent::CanEntryDataInitialized()
 	}
 	if (ASC->GetAvatarActor() && ASC->GetAvatarActor() != Pawn)
 	{
+		ReportInitErrorOnce(TEXT("AvatarConflict"), TEXT("The ability system is already bound to another pawn."));
 		return false;
 	}
 	ASC->InitAbilityActorInfo(StateOwner, Pawn);
@@ -606,6 +746,10 @@ bool UPawnGasBindingComponent::CanEntryDataInitialized()
 		if (bStateCommitted)
 		{
 			GetWorld()->GetTimerManager().ClearTimer(ReplicationRetry);
+		}
+		if (bStateCommitted)
+		{
+			ReportedInitErrors.Reset();
 		}
 		return bStateCommitted;
 	}
@@ -628,6 +772,7 @@ bool UPawnGasBindingComponent::CanEntryDataInitialized()
 		bPawnStateInstalled = true;
 	}
 	bStateCommitted = true;
+	ReportedInitErrors.Reset();
 	return true;
 }
 
@@ -652,6 +797,7 @@ bool UPawnGasBindingComponent::InstallGrants(UNelaricAbilitySystemComponent* ASC
 		const auto Handle = ASC->GiveAbility(Spec);
 		if (!Handle.IsValid())
 		{
+			ReportInitErrorOnce(TEXT("AbilityGrant"), TEXT("Could not grant a configured pawn ability."));
 			return false;
 		}
 		GrantedAbilities.Add(Handle);
@@ -669,6 +815,7 @@ bool UPawnGasBindingComponent::InstallGrants(UNelaricAbilitySystemComponent* ASC
 		const auto Handle = ASC->ApplyGameplayEffectToSelf(Effect->GetDefaultObject<UGameplayEffect>(), 1.0f, Context);
 		if (!Handle.IsValid())
 		{
+			ReportInitErrorOnce(TEXT("ControlEffect"), TEXT("Could not apply a configured control effect."));
 			return false;
 		}
 		ControlEffects.Add(Handle);
@@ -689,6 +836,9 @@ bool UPawnGasBindingComponent::RemoveGrants(UNelaricAbilitySystemComponent* ASC)
 		const auto* Spec = ASC->FindAbilitySpecFromHandle(Handle);
 		if (Spec && Spec->IsActive())
 		{
+			UE_LOG(LogNelaricGasBinding, Error,
+			       TEXT("Cannot remove GAS grants on %s: granted ability remained active after cancellation."),
+			       *GetName());
 			return false;
 		}
 		ASC->ClearAbility(Handle);
@@ -698,6 +848,8 @@ bool UPawnGasBindingComponent::RemoveGrants(UNelaricAbilitySystemComponent* ASC)
 	{
 		if (ASC->GetActiveGameplayEffect(Handle) && !ASC->RemoveActiveGameplayEffect(Handle))
 		{
+			UE_LOG(LogNelaricGasBinding, Error, TEXT("Cannot remove GAS grants on %s: control effect removal failed."),
+			       *GetName());
 			return false;
 		}
 	}
@@ -771,4 +923,14 @@ void UPawnGasBindingComponent::EndPlay(EEndPlayReason::Type Reason)
 		Custodian->Destroy();
 	}
 	Super::EndPlay(Reason);
+}
+
+void UPawnGasBindingComponent::ReportInitErrorOnce(FName ErrorId, const TCHAR* Reason) const
+{
+	if (!ReportedInitErrors.Contains(ErrorId))
+	{
+		ReportedInitErrors.Add(ErrorId);
+		UE_LOG(LogNelaricGasBinding, Error, TEXT("GAS initialization failed on %s: %s (profile=%s stateOwner=%s)."),
+		       *GetNameSafe(GetPawn()), Reason, *GetNameSafe(StateProfile), *GetNameSafe(StateOwner));
+	}
 }

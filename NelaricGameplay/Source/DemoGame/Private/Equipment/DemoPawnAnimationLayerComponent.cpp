@@ -5,6 +5,7 @@
 #include "Animation/AnimBlueprintGeneratedClass.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimLayerInterface.h"
+#include "Animation/DemoAnimationDataInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Equipment/DemoEquipmentInstance.h"
@@ -144,6 +145,13 @@ void UDemoPawnAnimationLayerComponent::RefreshLayer()
 		{
 			Mesh->LinkAnimClassLayers(DesiredClass);
 			bAppliedLinkWasPresent = Mesh->GetLinkedAnimLayerInstanceByClass(DesiredClass) != nullptr;
+			if (bAppliedLinkWasPresent)
+			{
+				if (UDemoAnimationDataInstance* Data = Cast<UDemoAnimationDataInstance>(AnimInstance))
+				{
+					Data->NotifyAnimationLayerChanged();
+				}
+			}
 			if (!bAppliedLinkWasPresent)
 			{
 				UE_LOG(LogDemoEquipmentAnimation, Warning,
@@ -163,6 +171,13 @@ void UDemoPawnAnimationLayerComponent::ClearAppliedLayer()
 	if (Mesh && AppliedClass && Mesh->GetAnimInstance() == AppliedAnimInstance.Get())
 	{
 		Mesh->UnlinkAnimClassLayers(AppliedClass);
+		if (bAppliedLinkWasPresent)
+		{
+			if (UDemoAnimationDataInstance* Data = Cast<UDemoAnimationDataInstance>(Mesh->GetAnimInstance()))
+			{
+				Data->NotifyAnimationLayerChanged();
+			}
+		}
 	}
 	AppliedMesh.Reset();
 	AppliedAnimInstance.Reset();

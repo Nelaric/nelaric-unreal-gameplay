@@ -9,6 +9,9 @@ Saved/
 # Local Unreal development project
 /Development/
 
+# Downloaded third-party source projects used for local asset migration
+/ThirdParty/
+
 # Generated API documentation and local tooling outputs
 /.tools/
 /.csharpier/
@@ -23,7 +26,6 @@ __pycache__/
 venv/
 node_modules/
 obj/
-/NelaricGameplay/Content/JavaScript/
 /NelaricGameplay/Typing/
 /NelaricGameplay/tsconfig.json
 /NelaricGameplay/Config/DefaultPuerts.ini
@@ -87,7 +89,5 @@ Desktop.ini
 /NelaricGameplay/Config/UserEngine.ini
 /NelaricGameplay/Config/DefaultEditorPerProjectUserSettings.ini
 
-# Third-party assets: track only directory placeholders
-/NelaricGameplay/Content/ThirdParty/**
-!/NelaricGameplay/Content/ThirdParty/**/
-!/NelaricGameplay/Content/ThirdParty/**/.gitkeep
+# Unreal project content is managed outside this source repository
+/NelaricGameplay/Content/

@@ -3,6 +3,7 @@
 #include "Animation/DemoUnitAnimationSubsystem.h"
 
 #include "Animation/AnimationDataUpdater.h"
+#include "Animation/DemoAnimationDataInstance.h"
 #include "Animation/AnimInstance.h"
 #include "Async/Async.h"
 #include "Async/ParallelFor.h"
@@ -236,6 +237,13 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 	if (Jobs.IsEmpty())
 	{
 		return;
+	}
+
+	// All mesh callbacks have completed. Capture values before any worker runs.
+	for (const FAnimationUpdateJob& Job : Jobs)
+	{
+		const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(Job.UnitIndex));
+		static_cast<UDemoAnimationDataInstance*>(Job.Instance.Get())->PrepareAnimationData(*Character);
 	}
 
 	// The future wait does not pump game-thread work. Actor ticks resume only

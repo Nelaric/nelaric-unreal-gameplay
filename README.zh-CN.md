@@ -24,13 +24,15 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模
 
 第三方 Unreal 资产统一放在 `NelaricGameplay/Content/ThirdParty/<资产名称>/` 下，目录名称必须与下表中的资产名称一致。导入资源时保留各资源包内部的目录结构。对应的 Unreal 内容路径为 `/Game/ThirdParty/<资产名称>/`。
 
-`Content/ThirdParty` 及其所有子目录仅跟踪 `.gitkeep`，其他文件全部忽略。克隆仓库后，需自行下载资产，并将需要的资源导入对应的同名目录。
+整个 `NelaricGameplay/Content/` 目录均不纳入版本控制，包括 `.gitkeep` 文件。克隆仓库后，需单独获取项目内容，并将第三方资产导入对应的同名目录。
 
 项目目前使用以下第三方资产：
 
 | 资产名称 | 放置目录 | 下载链接 |
 | --- | --- | --- |
 | `LyraStarterGame` | `NelaricGameplay/Content/ThirdParty/LyraStarterGame/` | [Lyra Starter Game — Epic Games 官方 Fab 页面](https://www.fab.com/listings/93faede1-4434-47c0-85f1-bf27c0820ad0) |
+
+将 Lyra 美术资产提取到 `/Game/ThirdParty/LyraStarterGame/LyraStarterGame` 的步骤见 [Lyra 美术资产迁移说明](Docs/LyraArtMigration.zh-CN.md)。
 
 ## PuerTS 配置
 

@@ -21,6 +21,6 @@ public class DemoGame : ModuleRules
 				"GameplayAbilities",
 			}
 		);
-		PrivateDependencyModuleNames.Add("GameplayTasks");
+		PrivateDependencyModuleNames.AddRange(new string[] { "AIModule", "GameplayTasks" });
 	}
 }

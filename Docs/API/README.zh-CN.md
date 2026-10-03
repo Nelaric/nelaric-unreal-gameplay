@@ -14,6 +14,7 @@ Nelaric Unreal Gameplay 是面向 Unreal Engine 5.6 及以上版本的玩法框�
 - [原生输入](Input/NativeInput.zh-CN.md)
 - [权威端验证的角色控制权切换](Player/ControlSwitching.zh-CN.md)
 - [控制切换中的 GAS 状态](GAS/ControlState.zh-CN.md)
+- [固定容量原生对象池](ObjectPool/FixedObjectPool.zh-CN.md)
 
 ## GameAI StateTree
 

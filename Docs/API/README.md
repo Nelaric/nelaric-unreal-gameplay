@@ -14,6 +14,7 @@ Public APIs follow the [project coding standards](../CodingStandards/README.md),
 - [Native input](Input/NativeInput.md)
 - [Authority-validated pawn control](Player/ControlSwitching.md)
 - [GAS state across control changes](GAS/ControlState.md)
+- [Fixed-capacity native object pools](ObjectPool/FixedObjectPool.md)
 
 ## GameAI StateTree
 

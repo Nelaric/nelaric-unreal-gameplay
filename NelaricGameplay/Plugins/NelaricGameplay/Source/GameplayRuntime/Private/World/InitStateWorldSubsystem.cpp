@@ -23,6 +23,18 @@ void UInitStateWorldSubsystem::RegisterParticipant(UActorComponent* Component)
 	{
 		return;
 	}
+	if (AActor* Owner = Component->GetOwner())
+	{
+		TArray<UPawnInitializationComponent*> Managers;
+		Owner->GetComponents(Managers);
+		for (const UPawnInitializationComponent* Manager : Managers)
+		{
+			if (IsValid(Manager) && !Manager->CanRegisterConfiguredParticipant(Component))
+			{
+				return;
+			}
+		}
+	}
 	static const FString ManagedPrefix(TEXT("Init_"));
 	const FString ComponentName = Component->GetName();
 	if (ComponentName.StartsWith(ManagedPrefix))

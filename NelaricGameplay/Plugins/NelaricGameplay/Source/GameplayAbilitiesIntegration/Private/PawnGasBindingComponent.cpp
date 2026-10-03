@@ -903,18 +903,20 @@ void UPawnGasBindingComponent::EndPlay(EEndPlayReason::Type Reason)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(ReplicationRetry);
 	}
+	// GetPawn excludes destroying actors; EndPlay still owns its raw owner.
+	APawn* Pawn = Cast<APawn>(GetOwner());
 	auto* ASC = GetAbilitySystem();
-	if (ASC && ASC->GetAvatarActor() == GetPawn())
+	if (Pawn && ASC && ASC->GetAvatarActor() == Pawn)
 	{
 		ASC->ClearActionInput();
-		if (GetPawn()->HasAuthority())
+		if (Pawn->HasAuthority())
 		{
 			RemoveGrants(ASC);
-			ASC->RemovePawnEffects(GetPawn());
+			ASC->RemovePawnEffects(Pawn);
 		}
 		ASC->InitAbilityActorInfo(ASC->GetOwnerActor(), nullptr);
 	}
-	if (auto* Policy = GetPawn() ? GetPawn()->FindComponentByClass<UPawnControlComponent>() : nullptr)
+	if (auto* Policy = Pawn ? Pawn->FindComponentByClass<UPawnControlComponent>() : nullptr)
 	{
 		Policy->UnregisterStateTransferParticipant(TEXT("GAS"));
 	}

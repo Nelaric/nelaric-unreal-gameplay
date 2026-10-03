@@ -5,6 +5,7 @@
 #include "Components/ActorComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "Net/UnrealNetwork.h"
 #include "Pawn/PawnInitializationConfig.h"
 #include "Pawn/InitStateParticipantInterface.h"
 #include "Pawn/InitStateWorldSubsystem.h"
@@ -15,16 +16,28 @@ namespace Nelaric::Pawn
 {
 static bool ShouldCreateComponent(const APawn* Owner, const FPawnInitializationEntry& Entry)
 {
+	if (Entry.bReplicateComponent)
+	{
+		return Owner->HasAuthority();
+	}
 	const bool bCreateOnAuthority = Owner->HasAuthority() && Entry.bCreateOnAuthority;
 	// Listen servers and standalone worlds also run client-side components.
 	const bool bCreateOnClient = Owner->GetNetMode() != NM_DedicatedServer && Entry.bCreateOnClient;
 	return bCreateOnAuthority || bCreateOnClient;
+}
+
+static bool ShouldIncludeComponent(const APawn* Owner, const FPawnInitializationEntry& Entry)
+{
+	return Entry.bReplicateComponent || ShouldCreateComponent(Owner, Entry);
 }
 } // namespace Nelaric::Pawn
 
 UPawnInitializationComponent::UPawnInitializationComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
+	SetIsReplicatedByDefault(true);
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.TickInterval = 0.1f;
 }
 
 bool UPawnInitializationComponent::TryInitializePawn()
@@ -66,7 +79,7 @@ bool UPawnInitializationComponent::TryInitializationPass()
 			}
 		}
 	}
-	if (ActiveConfig != InitializationConfig || !bConfiguredComponentsCreated)
+	if (ActiveConfig != InitializationConfig || (!bConfigurationValidated && !bConfiguredComponentsCreated))
 	{
 		RevokePawnReady();
 		DestroyConfiguredComponents();
@@ -76,6 +89,10 @@ bool UPawnInitializationComponent::TryInitializationPass()
 		}
 		ActiveConfig = InitializationConfig;
 		bConfigValid = true;
+		CreateConfiguredComponents();
+	}
+	else if (!bConfiguredComponentsCreated)
+	{
 		CreateConfiguredComponents();
 	}
 	if (bInitializationEnded || !bInitializationAllowed || !GetPawn() || !AreRequiredComponentsReady())
@@ -203,6 +220,7 @@ void UPawnInitializationComponent::BeginPlay()
 	WorldBeginTearDownHandle =
 	    FWorldDelegates::OnWorldBeginTearDown.AddUObject(this, &UPawnInitializationComponent::HandleWorldBeginTearDown);
 	bInitializationAllowed = true;
+	SetComponentTickEnabled(!GetPawn() || !GetPawn()->HasAuthority());
 	TryInitializePawn();
 }
 
@@ -253,6 +271,7 @@ void UPawnInitializationComponent::DestroyConfiguredComponents()
 	ConfiguredComponents.Empty();
 	RequiredComponentIds.Empty();
 	bConfiguredComponentsCreated = false;
+	bConfigurationValidated = false;
 	TArray<UActorComponent*> ToStop;
 	ToStop.Reserve(OldComponents.Num());
 	for (const auto& Pair : OldComponents)
@@ -282,6 +301,15 @@ void UPawnInitializationComponent::DestroyConfiguredComponents()
 		if (!IsValid(Component))
 		{
 			continue;
+		}
+		// Clients only detach replicated instances; the actor channel owns them.
+		if (Component->GetIsReplicated() && GetOwner() && !GetOwner()->HasAuthority())
+		{
+			continue;
+		}
+		if (Component->GetIsReplicated() && GetOwner() && GetOwner()->HasAuthority())
+		{
+			GetOwner()->DestroyReplicatedSubObjectOnRemotePeers(Component);
 		}
 		// Release the stable name so the next round can create a new instance.
 		Component->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
@@ -317,6 +345,18 @@ bool UPawnInitializationComponent::ValidateConfiguration() const
 		else if (!Class->ImplementsInterface(UInitStateParticipantInterface::StaticClass()))
 		{
 			Reason = TEXT("component class does not implement the init-state participant interface");
+		}
+		else if (Entry.bReplicateComponent && (!Entry.bCreateOnAuthority || !Entry.bCreateOnClient))
+		{
+			Reason = TEXT("component replication requires both creation flags");
+		}
+		else if (Entry.bReplicateComponent && Owner->GetNetMode() != NM_Standalone && !Owner->GetIsReplicated())
+		{
+			Reason = TEXT("component replication requires a replicated pawn");
+		}
+		else if (Entry.bReplicateComponent && Owner->GetNetMode() != NM_Standalone && !ActiveConfig->IsAsset())
+		{
+			Reason = TEXT("network component replication requires an authored configuration asset");
 		}
 		if (Reason)
 		{
@@ -414,15 +454,19 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 	}
 	if (!ActiveConfig)
 	{
+		bConfigurationValidated = true;
 		bConfiguredComponentsCreated = true;
+		PublishReplicatedConfiguration();
 		return;
 	}
 	APawn* Owner = GetPawn();
-	if (!ValidateConfiguration())
+	if (!bConfigurationValidated && !ValidateConfiguration())
 	{
+		bConfigurationValidated = true;
 		bConfigValid = false;
 		return;
 	}
+	bConfigurationValidated = true;
 	UWorld* World = GetWorld();
 	UInitStateWorldSubsystem* Subsystem = World ? World->GetSubsystem<UInitStateWorldSubsystem>() : nullptr;
 	if (!Subsystem)
@@ -437,23 +481,54 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 	// Build the entire ID table before resolving any dependencies or registering components.
 	for (const FPawnInitializationEntry& Entry : ActiveConfig->Components)
 	{
-		if (!Nelaric::Pawn::ShouldCreateComponent(Owner, Entry))
+		if (!Nelaric::Pawn::ShouldIncludeComponent(Owner, Entry))
 		{
 			continue;
 		}
-		const FName InstanceName(*FString::Printf(TEXT("Init_%s"), *Entry.ComponentId.ToString()));
-		UActorComponent* Component = NewObject<UActorComponent>(Owner, Entry.ComponentClass, InstanceName);
-		// The matching client entry creates its own instance; never replicate this dynamic instance.
-		Component->SetIsReplicated(false);
-		Owner->AddInstanceComponent(Component);
-		ConfiguredComponents.Add(Entry.ComponentId, Component);
-		if (Entry.bRequiredForPawnReady)
+		UActorComponent* Component = ConfiguredComponents.FindRef(Entry.ComponentId).Get();
+		if (!Component && Entry.bReplicateComponent && !Owner->HasAuthority())
 		{
-			RequiredComponentIds.Add(Entry.ComponentId);
+			if (ReplicatedConfiguration.Config == ActiveConfig)
+			{
+				const FPawnReplicatedInitializationEntry* Binding = ReplicatedConfiguration.Components.FindByPredicate(
+				    [&Entry](const FPawnReplicatedInitializationEntry& Candidate)
+				    { return Candidate.ComponentId == Entry.ComponentId; });
+				Component = Binding ? Binding->Component.Get() : nullptr;
+			}
+			if (!IsValid(Component))
+			{
+				continue;
+			}
+			if (Component->GetOwner() != Owner || !Component->IsA(Entry.ComponentClass) ||
+			    !Component->GetIsReplicated())
+			{
+				bConfigValid = false;
+				UE_LOG(LogNelaricPawnInitialization, Error, TEXT("Invalid replicated component binding '%s' on %s."),
+				       *Entry.ComponentId.ToString(), *GetNameSafe(Owner));
+				return;
+			}
+			ConfiguredComponents.Add(Entry.ComponentId, Component);
+		}
+		else if (!Component)
+		{
+			const FName InstanceName(*FString::Printf(TEXT("Init_%s"), *Entry.ComponentId.ToString()));
+			Component = NewObject<UActorComponent>(Owner, Entry.ComponentClass, InstanceName);
+			Component->SetIsReplicated(Entry.bReplicateComponent);
+			Owner->AddInstanceComponent(Component);
+			ConfiguredComponents.Add(Entry.ComponentId, Component);
 		}
 		if (!Component->IsRegistered())
 		{
 			ToRegister.Add(Component);
+		}
+	}
+	// Never resolve a partial graph, including optional replicated entries.
+	for (const FPawnInitializationEntry& Entry : ActiveConfig->Components)
+	{
+		if (Nelaric::Pawn::ShouldIncludeComponent(Owner, Entry) &&
+		    !IsValid(ConfiguredComponents.FindRef(Entry.ComponentId).Get()))
+		{
+			return;
 		}
 	}
 	TArray<Nelaric::FInitParticipantConfiguration> LocalGraph;
@@ -463,6 +538,10 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 		if (!Component)
 		{
 			continue;
+		}
+		if (Entry.bRequiredForPawnReady)
+		{
+			RequiredComponentIds.Add(Entry.ComponentId);
 		}
 		Nelaric::FInitParticipantConfiguration Configuration;
 		Configuration.Component = Component;
@@ -486,6 +565,7 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 		return;
 	}
 	bConfiguredComponentsCreated = true;
+	PublishReplicatedConfiguration();
 	for (const TWeakObjectPtr<UActorComponent>& ComponentPtr : ToRegister)
 	{
 		if (bInitializationEnded || ActiveConfig != InitializationConfig || !GetPawn())
@@ -498,6 +578,127 @@ void UPawnInitializationComponent::CreateConfiguredComponents()
 			Component->RegisterComponent();
 		}
 	}
+	// Replicas may have registered before their identity references resolved.
+	if (!Owner->HasAuthority())
+	{
+		for (const auto& Pair : ConfiguredComponents)
+		{
+			if (IsValid(Pair.Value.Get()) && Pair.Value->IsRegistered())
+			{
+				Subsystem->RegisterParticipant(Pair.Value.Get());
+			}
+		}
+	}
+}
+
+void UPawnInitializationComponent::PublishReplicatedConfiguration()
+{
+	APawn* Owner = GetPawn();
+	if (!Owner || !Owner->HasAuthority() || bInitializationEnded)
+	{
+		return;
+	}
+	const bool bHasReplicatedEntries =
+	    ActiveConfig && ActiveConfig->Components.ContainsByPredicate([](const FPawnInitializationEntry& Entry)
+	                                                                 { return Entry.bReplicateComponent; });
+	// Preserve independent local configs when component replication is unused.
+	if (!bHasReplicatedEntries && ReplicatedConfiguration.Revision == 0)
+	{
+		return;
+	}
+	ReplicatedConfiguration.Config = ActiveConfig;
+	ReplicatedConfiguration.Components.Reset();
+	if (ActiveConfig)
+	{
+		for (const FPawnInitializationEntry& Entry : ActiveConfig->Components)
+		{
+			if (Entry.bReplicateComponent)
+			{
+				ReplicatedConfiguration.Components.Add(
+				    {Entry.ComponentId, ConfiguredComponents.FindRef(Entry.ComponentId)});
+			}
+		}
+	}
+	++ReplicatedConfiguration.Revision;
+	Owner->FlushNetDormancy();
+	Owner->ForceNetUpdate();
+}
+
+void UPawnInitializationComponent::OnRep_ReplicatedConfiguration()
+{
+	if (bInitializationEnded)
+	{
+		return;
+	}
+	if (bConfiguredComponentsCreated && ActiveConfig == ReplicatedConfiguration.Config)
+	{
+		for (const FPawnReplicatedInitializationEntry& Entry : ReplicatedConfiguration.Components)
+		{
+			if (ConfiguredComponents.FindRef(Entry.ComponentId) != Entry.Component)
+			{
+				RevokePawnReady();
+				DestroyConfiguredComponents();
+				break;
+			}
+		}
+	}
+	SetInitializationConfig(ReplicatedConfiguration.Config);
+	if (bInitializationAllowed)
+	{
+		TryInitializePawn();
+	}
+}
+
+bool UPawnInitializationComponent::CanRegisterConfiguredParticipant(const UActorComponent* Component) const
+{
+	const APawn* Owner = GetPawn();
+	if (!Owner || Owner->HasAuthority() || !Component)
+	{
+		return true;
+	}
+	if (bConfiguredComponentsCreated)
+	{
+		for (const auto& Pair : ConfiguredComponents)
+		{
+			if (Pair.Value.Get() == Component)
+			{
+				return true;
+			}
+		}
+	}
+	const UPawnInitializationConfig* Config = InitializationConfig;
+	bool bMatchesReplicatedEntry = false;
+	if (Config)
+	{
+		for (const FPawnInitializationEntry& Entry : Config->Components)
+		{
+			if (Entry.bReplicateComponent && Entry.ComponentClass && Component->IsA(Entry.ComponentClass))
+			{
+				bMatchesReplicatedEntry = true;
+				if (bConfiguredComponentsCreated && IsConfiguredInstance(Entry.ComponentId, Component))
+				{
+					return true;
+				}
+			}
+		}
+	}
+	return !bMatchesReplicatedEntry;
+}
+
+void UPawnInitializationComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                                 FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (bInitializationAllowed && !bInitializationEnded && !bConfiguredComponentsCreated)
+	{
+		TryInitializePawn();
+	}
+}
+
+void UPawnInitializationComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UPawnInitializationComponent, ReplicatedConfiguration);
 }
 
 bool UPawnInitializationComponent::AreRequiredComponentsReady() const

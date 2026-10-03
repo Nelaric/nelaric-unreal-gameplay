@@ -89,7 +89,7 @@ public:
 public:
 	GAMEPLAYRUNTIME_API UPawnControlComponent(const FObjectInitializer& ObjectInitializer);
 	GAMEPLAYRUNTIME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	void StartReadyBotLogic();
+	GAMEPLAYRUNTIME_API void StartReadyBotLogic();
 	AAIController* FindReturnController() const;
 	void TrackSpawnedController(AAIController* Controller);
 	void ForgetSpawnedController(AAIController* Controller);

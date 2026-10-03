@@ -4,6 +4,27 @@ English | [简体中文](GameplayRuntime.zh-CN.md)
 
 # GameplayRuntime
 
+## Pawn initialization component replication
+
+Each `FPawnInitializationEntry` in `UPawnInitializationConfig` has
+`bReplicateComponent`, disabled by default. Disabled entries preserve local
+creation and the union of authority/client flags in standalone and listen
+server worlds. Enabled entries require both creation flags and are created
+only by authority. Network play additionally requires a replicated pawn.
+The pawn's initialization coordinator replicates the active configuration and
+ID-to-component references; clients adopt the received dynamic components
+instead of creating duplicates. UObject names need not match between peers.
+
+The local graph waits until all included replicated references have resolved.
+Participants do not enter Ready before their dependency graph is installed.
+Initialization state and generation remain local. Authority configuration
+replacement destroys replicated instances on remote peers; clients detach
+their old graph and let the actor channel destroy those instances.
+The switch enables UE component replication, not automatic replication of
+arbitrary fields: component implementations still declare replicated gameplay
+properties and lifetime rules. Locally controlled input and animation
+presentation components should normally leave this switch disabled.
+
 `GameplayRuntime` is the runtime module in the `NelaricGameplay/Plugins/NelaricGameplay` plugin. It contains the gameplay contracts, reusable project-facing actors, and session transport. The `NelaricGameplay/NelaricGameplay.uproject` project enables the plugin; its `Source/` directory contains the `DemoGame` Runtime module.
 
 The module owns common contracts for rule evaluation, gameplay state, player lifecycle, and activity composition. Match flow, objectives, and scoring belong in optional modules; a persistent world can run without a global match or result. The module builds on Unreal Engine's gameplay and networking systems without requiring a specific genre, backend, ability system, or content-distribution provider. Optional modules may depend on GameplayRuntime; GameplayRuntime must not depend on them.

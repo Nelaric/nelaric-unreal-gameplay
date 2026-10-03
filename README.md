@@ -24,13 +24,15 @@ Linux CI builds this project for Game, Editor, and Server, including enabled plu
 
 Place third-party Unreal assets under `NelaricGameplay/Content/ThirdParty/<AssetName>/`, using the asset name listed below as the directory name. Keep each asset pack's internal directory structure when importing its resources. The corresponding Unreal content path is `/Game/ThirdParty/<AssetName>/`.
 
-Only `.gitkeep` files are tracked anywhere under `Content/ThirdParty`; all other files are ignored. After cloning, download the assets separately and import the required resources into their named directories.
+The entire `NelaricGameplay/Content/` directory is excluded from version control, including `.gitkeep` files. After cloning, obtain the project content separately and import third-party assets into their named directories.
 
 The project currently uses the following third-party assets:
 
 | Asset name | Required directory | Download |
 | --- | --- | --- |
 | `LyraStarterGame` | `NelaricGameplay/Content/ThirdParty/LyraStarterGame/` | [Lyra Starter Game — Epic Games on Fab](https://www.fab.com/listings/93faede1-4434-47c0-85f1-bf27c0820ad0) |
+
+To extract Lyra art into `/Game/ThirdParty/LyraStarterGame/LyraStarterGame`, see the [Lyra art migration guide](Docs/LyraArtMigration.md).
 
 ## PuerTS setup
 

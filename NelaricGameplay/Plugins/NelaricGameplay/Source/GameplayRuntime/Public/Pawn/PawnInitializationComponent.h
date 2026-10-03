@@ -21,6 +21,40 @@ namespace Nelaric::Control
 struct FContextChange;
 }
 
+/// Replicated identity binding; component names may differ between peers.
+USTRUCT()
+struct FPawnReplicatedInitializationEntry
+{
+	GENERATED_BODY()
+
+	/// Stable authored ID, independent of the component's network name.
+	UPROPERTY()
+	FName ComponentId;
+
+	/// Authority-created dynamic component; may resolve after the first update.
+	UPROPERTY()
+	TObjectPtr<UActorComponent> Component;
+};
+
+/// Authority configuration and replicated components for one creation round.
+USTRUCT()
+struct FPawnReplicatedInitializationConfiguration
+{
+	GENERATED_BODY()
+
+	/// Asset shared by authority and clients for this creation round.
+	UPROPERTY()
+	TObjectPtr<UPawnInitializationConfig> Config;
+
+	/// Only entries with component replication enabled.
+	UPROPERTY()
+	TArray<FPawnReplicatedInitializationEntry> Components;
+
+	/// Changes when authority replaces its configured component instances.
+	UPROPERTY()
+	uint32 Revision = 0;
+};
+
 /// Game-thread callback observing local pawn readiness.
 DECLARE_DYNAMIC_DELEGATE_OneParam(FPawnInitializationCallback, UPawnInitializationComponent*, Component);
 
@@ -37,11 +71,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPawnInitializationRevoked, UPawnIni
  * character Blueprint to create components. It tries at BeginPlay; call
  * TryInitializePawn to retry the pawn gate. InvalidatePawnContext restarts
  * participant bindings after context replacement. Initialization is
- * local and is not replicated. Each side creates its own configured
- * components, whose dynamic instances do not replicate. Replicate gameplay
- * data through separate UE paths and retry locally when that data arrives.
- * The pawn owns the component. Operations and notifications run on the game
- * thread.
+ * local. Non-replicated entries are created independently on each side.
+ * Replicated entries are created by authority
+ * and adopted by clients from
+ * replicated references. The complete graph waits for missing references.
+ * The pawn
+ * owns the component. Operations and notifications run on the game thread.
  */
 UCLASS(MinimalAPI, Blueprintable, ClassGroup = (Nelaric), meta = (BlueprintSpawnableComponent))
 class UPawnInitializationComponent : public UNelaricPawnComponent
@@ -148,6 +183,11 @@ public:
 	bool HasConfiguredId(FName ComponentId) const;
 	GAMEPLAYRUNTIME_API virtual void BeginPlay() override;
 	GAMEPLAYRUNTIME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	GAMEPLAYRUNTIME_API virtual void
+	GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	GAMEPLAYRUNTIME_API virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                                               FActorComponentTickFunction* ThisTickFunction) override;
+	bool CanRegisterConfiguredParticipant(const UActorComponent* Component) const;
 
 protected:
 	GAMEPLAYRUNTIME_API virtual bool CanInitializePawn_Implementation() const;
@@ -174,6 +214,7 @@ private:
 	TMap<FName, TObjectPtr<UActorComponent>> ConfiguredComponents;
 	TArray<FName> RequiredComponentIds;
 	bool bConfiguredComponentsCreated = false;
+	bool bConfigurationValidated = false;
 	bool bInitializationEnded = false;
 	FDelegateHandle WorldBeginTearDownHandle;
 	void RevokePawnReady();
@@ -182,5 +223,10 @@ private:
 	void DestroyConfiguredComponents();
 	bool ValidateConfiguration() const;
 	void CreateConfiguredComponents();
+	UPROPERTY(ReplicatedUsing = OnRep_ReplicatedConfiguration)
+	FPawnReplicatedInitializationConfiguration ReplicatedConfiguration;
+	UFUNCTION()
+	void OnRep_ReplicatedConfiguration();
+	void PublishReplicatedConfiguration();
 	bool AreRequiredComponentsReady() const;
 };

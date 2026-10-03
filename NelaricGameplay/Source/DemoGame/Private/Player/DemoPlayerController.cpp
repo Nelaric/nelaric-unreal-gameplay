@@ -274,6 +274,10 @@ bool ADemoPlayerController::IsSelectableBot(APawn* ControlledPawn) const
 	{
 		return false;
 	}
+	if (!static_cast<const ADemoCharacter*>(ControlledPawn)->IsPoolActive())
+	{
+		return false;
+	}
 	const UPawnControlComponent* Policy = ControlledPawn->FindComponentByClass<UPawnControlComponent>();
 	return Policy && Policy->bAllowPlayerControl;
 }

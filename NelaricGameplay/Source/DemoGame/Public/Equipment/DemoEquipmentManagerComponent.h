@@ -14,6 +14,7 @@
 class UDemoEquipmentDefinition;
 class UDemoEquipmentInstance;
 class UDemoEquipmentLoadout;
+class UDemoWeaponInstance;
 
 /** @brief Manages pawn-owned equipment with one active item at a time.
  * @details Enable replication in the pawn initialization DA.
@@ -72,6 +73,30 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Demo|Equipment")
 	UDemoEquipmentInstance* GetActiveEquipment() const;
 
+	/// Returns the active local weapon, or null; game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Weapon")
+	UDemoWeaponInstance* GetActiveWeapon() const;
+
+	/// Stops every item's actions, retaining ammo; authority game thread only.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Weapon")
+	void CancelWeaponActions();
+
+	/// Refills every weapon from its definition; authority game thread only.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Weapon")
+	void ResetWeaponAmmunition();
+
+	/** @brief Observes an accepted shot after native local presentation.
+	 * @details Rendering worlds only; game
+	 * thread. Unreliable cosmetic events
+	 * never determine damage or ammunition. Weapon effects run through cues;
+	 * use this observation hook for hit
+	 * markers or other feedback.
+	 *
+	 * @param Shot Authority collision result and firing equipment identity.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Weapon")
+	void OnWeaponShot(const FDemoWeaponShot& Shot);
+
 	/// Returns local instances; the manager retains ownership until removal.
 	UFUNCTION(BlueprintPure, Category = "Demo|Equipment")
 	TArray<UDemoEquipmentInstance*> GetEquipment() const;
@@ -88,8 +113,18 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	void RefreshEquipmentPresentation();
+
+protected:
+	/// Stops weapon execution when the initialization attempt is revoked.
+	virtual void CancelInitGenerationWork() override;
 
 private:
+	friend class UDemoWeaponInstance;
+	void NotifyWeaponStateChanged();
+	void DispatchWeaponShot(const FDemoWeaponShot& Shot);
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastWeaponShot(const FDemoWeaponShot& Shot);
 	EDemoEquipmentResult CheckMutation() const;
 	bool IsDefinitionValid(const UDemoEquipmentDefinition* Definition) const;
 	void PublishState();
@@ -109,4 +144,5 @@ private:
 	bool bEnding = false;
 	bool bMutating = false;
 	bool bInitialLoadoutApplied = false;
+	bool bWeaponStateDirty = false;
 };

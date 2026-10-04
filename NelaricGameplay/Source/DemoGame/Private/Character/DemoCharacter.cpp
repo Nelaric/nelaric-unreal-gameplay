@@ -8,6 +8,11 @@
 #include "Engine/World.h"
 #include "GAS/DemoCombatAttributes.h"
 #include "GAS/DemoJumpAbility.h"
+#include "GAS/DemoWeaponAbilities.h"
+#include "GAS/DemoWeaponTags.h"
+#include "Equipment/DemoEquipmentManagerComponent.h"
+#include "Equipment/DemoEquipmentInstance.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "PawnGasBindingComponent.h"
 #include "NelaricAbilitySystemComponent.h"
 #include "Pawn/PawnControlComponent.h"
@@ -15,6 +20,7 @@
 #include "Pawn/PawnInitializationConfig.h"
 #include "GasStateProfile.h"
 #include "NativeGameplayTags.h"
+#include "Net/UnrealNetwork.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDemoCharacterPoolActivation, Log, All);
 
@@ -31,6 +37,8 @@ ADemoCharacter::ADemoCharacter(const FObjectInitializer& ObjectInitializer) : Su
 	    {UDemoCombatAttributes::GetHealthAttribute(), EGasStateOwnership::Pawn, 100.0f},
 	    {UDemoCombatAttributes::GetAttackAttribute(), EGasStateOwnership::Pawn, 10.0f}};
 	DefaultStateProfile->Abilities.Add({UDemoJumpAbility::StaticClass(), Nelaric::DemoActions::Jump, 1});
+	DefaultStateProfile->Abilities.Add({UDemoFireAbility::StaticClass(), Nelaric::DemoWeaponTags::Fire, 1});
+	DefaultStateProfile->Abilities.Add({UDemoReloadAbility::StaticClass(), Nelaric::DemoWeaponTags::Reload, 1});
 	GetGasBinding()->StateProfile = DefaultStateProfile;
 }
 
@@ -108,7 +116,164 @@ void ADemoCharacter::PostNetInit()
 
 void ADemoCharacter::DeactivateToPool()
 {
+	CancelCombatActions();
 	Nelaric::ObjectPool::FCharacterPoolHelper::Deactivate(*this, PoolState);
+}
+
+float ADemoCharacter::GetHealth() const
+{
+	check(IsInGameThread());
+	const UPawnGasBindingComponent* Binding = GetGasBinding();
+	const UNelaricAbilitySystemComponent* ASC =
+	    Binding && Binding->HasCommittedState() ? Binding->GetAbilitySystem() : nullptr;
+	return ASC ? ASC->GetNumericAttribute(UDemoCombatAttributes::GetHealthAttribute()) : 0.0f;
+}
+
+float ADemoCharacter::GetMaxHealth() const
+{
+	check(IsInGameThread());
+	const UPawnGasBindingComponent* Binding = GetGasBinding();
+	const UNelaricAbilitySystemComponent* ASC =
+	    Binding && Binding->HasCommittedState() ? Binding->GetAbilitySystem() : nullptr;
+	return ASC ? ASC->GetNumericAttribute(UDemoCombatAttributes::GetMaxHealthAttribute()) : 0.0f;
+}
+
+bool ADemoCharacter::IsAlive() const
+{
+	return !bCombatDead && GetHealth() > 0.0f;
+}
+
+void ADemoCharacter::CancelCombatActions()
+{
+	check(IsInGameThread());
+	if (!HasAuthority())
+	{
+		return;
+	}
+	if (UDemoEquipmentManagerComponent* Manager = FindComponentByClass<UDemoEquipmentManagerComponent>())
+	{
+		Manager->CancelWeaponActions();
+	}
+	UPawnGasBindingComponent* Binding = GetGasBinding();
+	UNelaricAbilitySystemComponent* ASC = Binding ? Binding->GetAbilitySystem() : nullptr;
+	if (ASC && ASC->GetAvatarActor() == this)
+	{
+		ASC->SubmitAction(Nelaric::DemoActions::Jump, false);
+		ASC->SubmitAction(Nelaric::DemoWeaponTags::Fire, false);
+		ASC->SubmitAction(Nelaric::DemoWeaponTags::Reload, false);
+		ASC->CancelAbilities();
+	}
+}
+
+bool ADemoCharacter::ResetCombatState()
+{
+	check(IsInGameThread());
+	UPawnGasBindingComponent* Binding = GetGasBinding();
+	if (!HasAuthority() || IsActorBeingDestroyed() || !Binding || !Binding->IsReadyForActions())
+	{
+		return false;
+	}
+	CancelCombatActions();
+	Binding->GetAbilitySystem()->SetNumericAttributeBase(UDemoCombatAttributes::GetHealthAttribute(), GetMaxHealth());
+	if (UDemoEquipmentManagerComponent* Manager = FindComponentByClass<UDemoEquipmentManagerComponent>())
+	{
+		Manager->ResetWeaponAmmunition();
+	}
+	bDeathHandled = false;
+	bCombatDead = false;
+	FlushNetDormancy();
+	ForceNetUpdate();
+	if (IsPoolActive() && IsAlive())
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+		if (IsValid(PoolControlPolicy))
+		{
+			PoolControlPolicy->StartReadyBotLogic();
+		}
+	}
+	NotifyCombatHealthChanged();
+	return true;
+}
+
+void ADemoCharacter::NotifyCombatHealthChanged(AActor* DamageInstigator)
+{
+	const UPawnGasBindingComponent* Binding = GetGasBinding();
+	if (IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown || !Binding ||
+	    !Binding->IsReadyForActions())
+	{
+		return;
+	}
+	if (HasAuthority())
+	{
+		const bool bNewDead = GetHealth() <= 0.0f;
+		if (bCombatDead != bNewDead)
+		{
+			bCombatDead = bNewDead;
+			FlushNetDormancy();
+			ForceNetUpdate();
+		}
+	}
+	const bool bAlive = !bCombatDead;
+	if (bAlive)
+	{
+		bDeathHandled = false;
+	}
+	const bool bNewDeath = !bAlive && !bDeathHandled;
+	if (bNewDeath)
+	{
+		bDeathHandled = true;
+		if (HasAuthority())
+		{
+			CancelCombatActions();
+			GetCharacterMovement()->DisableMovement();
+			StopPoolBotLogic();
+		}
+		else
+		{
+			CancelLocalWeaponActions();
+		}
+	}
+	OnHealthChanged(GetHealth(), GetMaxHealth());
+	if (bNewDeath && bCombatDead && bDeathHandled && !IsActorBeingDestroyed())
+	{
+		OnDeath(DamageInstigator);
+	}
+}
+
+void ADemoCharacter::OnRep_CombatDead()
+{
+	if (!bCombatDead)
+	{
+		bDeathHandled = false;
+		return;
+	}
+	if (bDeathHandled || IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown)
+	{
+		return;
+	}
+	bDeathHandled = true;
+	CancelLocalWeaponActions();
+	OnDeath(nullptr);
+}
+
+void ADemoCharacter::CancelLocalWeaponActions()
+{
+	if (UDemoEquipmentManagerComponent* Manager = FindComponentByClass<UDemoEquipmentManagerComponent>())
+	{
+		for (UDemoEquipmentInstance* Item : Manager->GetEquipment())
+		{
+			if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(Item))
+			{
+				Weapon->CancelWeaponActions();
+			}
+		}
+	}
+}
+
+void ADemoCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ADemoCharacter, bCombatDead);
 }
 
 void ADemoCharacter::SetActorHiddenInGame(bool bNewHidden)
@@ -120,6 +285,10 @@ void ADemoCharacter::SetActorHiddenInGame(bool bNewHidden)
 		// Read logical pool state; ordinary visibility edits do not toggle it.
 		InitializePoolControlPolicy();
 		ApplyPoolControlPolicy();
+	}
+	if (UDemoEquipmentManagerComponent* Manager = FindComponentByClass<UDemoEquipmentManagerComponent>())
+	{
+		Manager->RefreshEquipmentPresentation();
 	}
 }
 
@@ -237,6 +406,7 @@ void ADemoCharacter::StopPoolBotLogic()
 
 void ADemoCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelCombatActions();
 	PoolState.bActive = false;
 	if (bPoolInitializationSubscribed)
 	{

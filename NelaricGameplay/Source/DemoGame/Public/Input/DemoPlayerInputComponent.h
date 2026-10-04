@@ -63,7 +63,7 @@ protected:
 	 */
 	virtual void BindInputActions() override;
 
-	/// Stops held jump and drag input when the input generation ends.
+	/// Stops held jump, fire and drag input when the input generation ends.
 	virtual void UnbindInputActions() override;
 
 private:
@@ -79,6 +79,9 @@ private:
 	void InputLookStick(const FInputActionValue& Value);
 	void InputJumpStarted();
 	void InputJumpStopped();
+	void InputFireStarted();
+	void InputFireStopped();
+	void InputReload();
 	void InputOverviewMove(const FInputActionValue& Value);
 	void InputOverviewDrag(const FInputActionValue& Value);
 	void InputOverviewDragStopped();

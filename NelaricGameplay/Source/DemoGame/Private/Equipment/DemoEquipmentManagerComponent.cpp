@@ -3,13 +3,84 @@
 #include "Equipment/DemoEquipmentManagerComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "AbilitySystemGlobals.h"
+#include "Character/DemoCharacter.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Equipment/DemoEquipmentDefinition.h"
 #include "Equipment/DemoEquipmentInstance.h"
 #include "GameFramework/Pawn.h"
+#include "GameplayCueManager.h"
 #include "Templates/UnrealTemplate.h"
 #include "Net/UnrealNetwork.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDemoEquipment, Log, All);
+
+namespace Nelaric::DemoEquipment
+{
+static FTransform ResolveShotMuzzle(const FDemoWeaponShot& Shot, const UDemoWeaponInstance* Weapon,
+                                    USceneComponent*& AttachComponent)
+{
+	AttachComponent = nullptr;
+	FTransform Muzzle((Shot.TraceEnd - Shot.TraceStart).Rotation(), Shot.TraceStart);
+	if (!Weapon || !Weapon->IsActive() || Weapon->GetWeaponDefinition() != Shot.Definition)
+	{
+		return Muzzle;
+	}
+	for (AActor* Visual : Weapon->GetVisualActors())
+	{
+		if (!IsValid(Visual))
+		{
+			continue;
+		}
+		Muzzle = Visual->GetActorTransform();
+		TInlineComponentArray<USkeletalMeshComponent*> Meshes(Visual);
+		for (USkeletalMeshComponent* Mesh : Meshes)
+		{
+			if (IsValid(Mesh) && Mesh->DoesSocketExist(Shot.Definition->MuzzleSocketName))
+			{
+				AttachComponent = Mesh;
+				return Mesh->GetSocketTransform(Shot.Definition->MuzzleSocketName);
+			}
+		}
+	}
+	return Muzzle;
+}
+
+static void ExecuteWeaponCues(APawn& Pawn, const FDemoWeaponShot& Shot, const FTransform& Muzzle,
+                              USceneComponent* AttachComponent)
+{
+	FGameplayEffectContextHandle Context(UAbilitySystemGlobals::Get().AllocGameplayEffectContext());
+	Context.AddInstigator(&Pawn, &Pawn);
+	Context.AddSourceObject(Shot.Definition);
+	Context.AddOrigin(Muzzle.GetLocation());
+	Context.AddHitResult(Shot.Hit, true);
+	FGameplayCueParameters FireParameters;
+	FireParameters.EffectContext = Context;
+	FireParameters.Instigator = &Pawn;
+	FireParameters.EffectCauser = &Pawn;
+	FireParameters.SourceObject = Shot.Definition;
+	FireParameters.Location = Muzzle.GetLocation();
+	FireParameters.Normal = (Shot.TraceEnd - Shot.TraceStart).GetSafeNormal();
+	FireParameters.TargetAttachComponent = AttachComponent;
+	FGameplayCueParameters ImpactParameters = FireParameters;
+	ImpactParameters.Location = Shot.Hit.ImpactPoint;
+	ImpactParameters.Normal = Shot.Hit.ImpactNormal;
+	ImpactParameters.PhysicalMaterial = Shot.Hit.PhysMaterial;
+	ImpactParameters.TargetAttachComponent.Reset();
+
+	// The shot multicast already transported this event. Cue execution is local.
+	if (Shot.Definition->FireGameplayCue.IsValid())
+	{
+		UGameplayCueManager::ExecuteGameplayCue_NonReplicated(&Pawn, Shot.Definition->FireGameplayCue, FireParameters);
+	}
+	if (IsValid(&Pawn) && IsValid(Shot.Definition) && Shot.Hit.bBlockingHit &&
+	    Shot.Definition->ImpactGameplayCue.IsValid())
+	{
+		UGameplayCueManager::ExecuteGameplayCue_NonReplicated(&Pawn, Shot.Definition->ImpactGameplayCue,
+		                                                      ImpactParameters);
+	}
+}
+} // namespace Nelaric::DemoEquipment
 
 UDemoEquipmentManagerComponent::UDemoEquipmentManagerComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -42,7 +113,9 @@ bool UDemoEquipmentManagerComponent::IsDefinitionValid(const UDemoEquipmentDefin
 	}
 	const bool bWeaponClass = Definition->InstanceClass->IsChildOf(UDemoWeaponInstance::StaticClass());
 	const UDemoWeaponDefinition* WeaponDefinition = Cast<UDemoWeaponDefinition>(Definition);
-	if (bWeaponClass != (WeaponDefinition != nullptr) || (WeaponDefinition && !WeaponDefinition->ActiveAnimationLayer))
+	if (bWeaponClass != (WeaponDefinition != nullptr) ||
+	    (WeaponDefinition &&
+	     (!WeaponDefinition->ActiveAnimationLayer || !WeaponDefinition->IsCombatConfigurationValid())))
 	{
 		return false;
 	}
@@ -197,6 +270,95 @@ UDemoEquipmentInstance* UDemoEquipmentManagerComponent::GetActiveEquipment() con
 	return FindEquipment(ActiveEquipmentId);
 }
 
+UDemoWeaponInstance* UDemoEquipmentManagerComponent::GetActiveWeapon() const
+{
+	return Cast<UDemoWeaponInstance>(GetActiveEquipment());
+}
+
+void UDemoEquipmentManagerComponent::CancelWeaponActions()
+{
+	check(IsInGameThread());
+	if (!GetPawn() || !GetPawn()->HasAuthority())
+	{
+		return;
+	}
+	{
+		TGuardValue<bool> Guard(bMutating, true);
+		const TArray<TObjectPtr<UDemoEquipmentInstance>> Current = Instances;
+		for (UDemoEquipmentInstance* Instance : Current)
+		{
+			if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(Instance))
+			{
+				Weapon->CancelWeaponActions();
+			}
+		}
+	}
+	if (bWeaponStateDirty && !bMutating)
+	{
+		PublishState();
+	}
+}
+
+void UDemoEquipmentManagerComponent::ResetWeaponAmmunition()
+{
+	check(IsInGameThread());
+	if (CheckMutation() != EDemoEquipmentResult::Success)
+	{
+		return;
+	}
+	TGuardValue<bool> Guard(bMutating, true);
+	const TArray<TObjectPtr<UDemoEquipmentInstance>> Current = Instances;
+	for (UDemoEquipmentInstance* Instance : Current)
+	{
+		if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(Instance))
+		{
+			Weapon->ResetAmmunition();
+		}
+	}
+	PublishState();
+}
+
+void UDemoEquipmentManagerComponent::NotifyWeaponStateChanged()
+{
+	bWeaponStateDirty = true;
+	if (!bMutating)
+	{
+		PublishState();
+	}
+}
+
+void UDemoEquipmentManagerComponent::DispatchWeaponShot(const FDemoWeaponShot& Shot)
+{
+	if (!bEnding && GetPawn() && GetPawn()->HasAuthority())
+	{
+		MulticastWeaponShot(Shot);
+	}
+}
+
+void UDemoEquipmentManagerComponent::MulticastWeaponShot_Implementation(const FDemoWeaponShot& Shot)
+{
+	APawn* Pawn = GetPawn();
+	if (bEnding || !IsValid(Pawn) || !IsValid(Shot.Definition) || GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(FindEquipment(Shot.EquipmentId));
+	USceneComponent* AttachComponent = nullptr;
+	const FTransform Muzzle = Nelaric::DemoEquipment::ResolveShotMuzzle(Shot, Weapon, AttachComponent);
+	if (Weapon)
+	{
+		Weapon->PresentShot(Shot, Muzzle);
+	}
+	if (!bEnding && IsValid(Pawn) && IsValid(Shot.Definition))
+	{
+		Nelaric::DemoEquipment::ExecuteWeaponCues(*Pawn, Shot, Muzzle, AttachComponent);
+	}
+	if (!bEnding)
+	{
+		OnWeaponShot(Shot);
+	}
+}
+
 TArray<UDemoEquipmentInstance*> UDemoEquipmentManagerComponent::GetEquipment() const
 {
 	check(IsInGameThread());
@@ -221,9 +383,16 @@ void UDemoEquipmentManagerComponent::PublishState()
 	Snapshot.Entries.Reset(Instances.Num());
 	for (UDemoEquipmentInstance* Instance : Instances)
 	{
-		Snapshot.Entries.Add({Instance->GetEquipmentId(), Instance->GetDefinition()});
+		FDemoEquipmentEntry& Entry = Snapshot.Entries.AddDefaulted_GetRef();
+		Entry.EquipmentId = Instance->GetEquipmentId();
+		Entry.Definition = Instance->GetDefinition();
+		if (const UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(Instance))
+		{
+			Entry.WeaponState = Weapon->GetWeaponState();
+		}
 	}
 	Snapshot.ActiveEquipmentId = ActiveEquipmentId;
+	bWeaponStateDirty = false;
 	++Snapshot.Revision;
 	Pawn->FlushNetDormancy();
 	Pawn->ForceNetUpdate();
@@ -300,6 +469,17 @@ bool UDemoEquipmentManagerComponent::ApplySnapshot()
 	if (UDemoEquipmentInstance* Active = GetActiveEquipment())
 	{
 		Active->SetActive(true);
+	}
+	for (const FDemoEquipmentEntry& Entry : Snapshot.Entries)
+	{
+		if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(FindEquipment(Entry.EquipmentId)))
+		{
+			Weapon->ApplyWeaponState(Entry.WeaponState);
+		}
+		if (bEnding)
+		{
+			return false;
+		}
 	}
 	LastAppliedRevision = Snapshot.Revision;
 	return true;
@@ -395,6 +575,39 @@ void UDemoEquipmentManagerComponent::OnUnregister()
 	Super::OnUnregister();
 }
 
+void UDemoEquipmentManagerComponent::CancelInitGenerationWork()
+{
+	CancelWeaponActions();
+	Super::CancelInitGenerationWork();
+}
+
+void UDemoEquipmentManagerComponent::RefreshEquipmentPresentation()
+{
+	if (bEnding)
+	{
+		return;
+	}
+	TGuardValue<bool> Guard(bMutating, true);
+	const TArray<TObjectPtr<UDemoEquipmentInstance>> Current = Instances;
+	for (UDemoEquipmentInstance* Instance : Current)
+	{
+		if (!IsValid(Instance) || bEnding)
+		{
+			break;
+		}
+		Instance->RefreshVisuals();
+		if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(Instance))
+		{
+			Weapon->RefreshReloadPresentation();
+			const ADemoCharacter* Character = GetPawn<ADemoCharacter>();
+			if (Character && !Character->IsPoolActive())
+			{
+				Weapon->CancelWeaponActions();
+			}
+		}
+	}
+}
+
 void UDemoEquipmentManagerComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                                    FActorComponentTickFunction* ThisTickFunction)
 {
@@ -414,9 +627,15 @@ void UDemoEquipmentManagerComponent::TickComponent(float DeltaTime, ELevelTick T
 			Instance->RefreshVisuals();
 			if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(Instance))
 			{
+				Weapon->ValidatePendingActions();
 				Weapon->RefreshAnimationLayer();
+				Weapon->RefreshReloadPresentation();
 			}
 		}
+	}
+	if (bWeaponStateDirty && !bMutating)
+	{
+		PublishState();
 	}
 }
 

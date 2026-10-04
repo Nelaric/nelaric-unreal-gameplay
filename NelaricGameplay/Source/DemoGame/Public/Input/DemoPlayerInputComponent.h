@@ -84,4 +84,6 @@ private:
 	void InputOverviewDragStopped();
 	void InputOverviewClick(const FInputActionValue& Value);
 	void InputReturnOverview();
+	void InputUnarmed();
+	void InputPrimaryWeapon();
 };

@@ -21,6 +21,7 @@
 #include "GasStateProfile.h"
 #include "NativeGameplayTags.h"
 #include "Net/UnrealNetwork.h"
+#include "SkeletalMeshComponentBudgeted.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDemoCharacterPoolActivation, Log, All);
 
@@ -29,8 +30,14 @@ namespace Nelaric::DemoActions
 UE_DEFINE_GAMEPLAY_TAG_STATIC(Jump, "Action.Jump");
 }
 
-ADemoCharacter::ADemoCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+ADemoCharacter::ADemoCharacter(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer.SetDefaultSubobjectClass<USkeletalMeshComponentBudgeted>(ACharacter::MeshComponentName))
 {
+	USkeletalMeshComponentBudgeted* BudgetedMesh = CastChecked<USkeletalMeshComponentBudgeted>(GetMesh());
+	BudgetedMesh->SetAutoRegisterWithBudgetAllocator(false);
+	BudgetedMesh->SetAutoCalculateSignificance(false);
+	BudgetedMesh->SetShouldUseActorRenderedFlag(false);
+	BudgetedMesh->bUseScreenRenderStateForUpdate = true;
 	DefaultStateProfile = CreateDefaultSubobject<UGasStateProfile>(TEXT("DefaultStateProfile"));
 	DefaultStateProfile->Attributes = {
 	    {UDemoCombatAttributes::GetMaxHealthAttribute(), EGasStateOwnership::Pawn, 100.0f},
@@ -61,6 +68,16 @@ void ADemoCharacter::PrepareForPool()
 void ADemoCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		// Apply after Blueprint defaults, before mesh BeginPlay can auto-register.
+		USkeletalMeshComponentBudgeted* BudgetedMesh = CastChecked<USkeletalMeshComponentBudgeted>(GetMesh());
+		BudgetedMesh->SetAutoRegisterWithBudgetAllocator(false);
+		BudgetedMesh->SetAutoCalculateSignificance(false);
+		BudgetedMesh->SetShouldUseActorRenderedFlag(false);
+		BudgetedMesh->bUseScreenRenderStateForUpdate = true;
+		BudgetedMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+	}
 	GetMesh()->SetAnimInstanceClass(AnimationDataClass.Get());
 	bPoolComponentsInitialized = true;
 	if (PoolState.bPrepared)

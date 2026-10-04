@@ -28,6 +28,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "AnimationBudgetAllocator",
+			"Enabled": true
+		},
+		{
 			"Name": "AudioModulation",
 			"Enabled": true
 		},

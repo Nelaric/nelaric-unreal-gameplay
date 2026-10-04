@@ -8,6 +8,7 @@
 
 #include "NelaricGasPlayerController.h"
 #include "Engine/EngineTypes.h"
+#include "Equipment/DemoEquipmentTypes.h"
 
 #include "DemoPlayerController.generated.h"
 
@@ -61,6 +62,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Demo|Control")
 	DEMOGAME_API bool ReturnToOverview();
 
+	/** @brief Requests primary-weapon selection for the current character.
+	 * @details Call on the game thread for
+	 * the owning local player.
+	 * Authority resolves its current pawn and changes equipment there.
+	 *
+	 * @par Result
+	 * OnRifleActiveResult
+	 * reports the outcome to the owning client.
+	 * Equipment snapshots replicate presentation. Pending control
+	 * changes reject the local send.
+	 * @param bActive True selects PrimaryWeapon; false restores
+	 * unarmed state.
+	 * @return Whether a request was sent, not whether equipment changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Demo|Equipment")
+	DEMOGAME_API bool RequestRifleActive(bool bActive);
+
 	/// Returns the owning player's current presentation mode.
 	UFUNCTION(BlueprintPure, Category = "Demo|Control")
 	EDemoControlMode GetDemoControlMode() const
@@ -111,6 +129,17 @@ public:
 	DEMOGAME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
+	/** @brief Presents the authority result on the owning client.
+	 * @details Runs on the game thread. Success may
+	 * repeat an existing state;
+	 * the equipment manager owns replicated model and animation presentation.
+	 *
+	 * @param bActive Requested primary-weapon selection.
+	 * @param Result Equipment operation outcome.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Equipment")
+	void OnRifleActiveResult(bool bActive, EDemoEquipmentResult Result);
+
 	/** @brief Maps return intent to a coordinated switch to the owned overview.
 	 * @details Runs on authority. The
 	 * character's bot handback and GAS transfer
@@ -163,6 +192,12 @@ protected:
 	void OnOverviewCameraUnavailable();
 
 private:
+	UFUNCTION(Server, Reliable)
+	void ServerSetRifleActive(bool bActive);
+	UFUNCTION(Client, Reliable)
+	void ClientReportRifleResult(bool bActive, EDemoEquipmentResult Result);
+	void ReportRifleResult(bool bActive, EDemoEquipmentResult Result);
+
 	UPROPERTY(Transient, Replicated)
 	TObjectPtr<ADemoOverviewPawn> OverviewPawn;
 	UPROPERTY(Transient)

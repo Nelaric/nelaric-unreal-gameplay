@@ -21,6 +21,8 @@ UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Look_Mouse, "InputTag.Character
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Look_Stick, "InputTag.Character.Look.Stick");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Jump, "InputTag.Character.Jump");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_ReturnOverview, "InputTag.Character.ReturnOverview");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Unarmed, "InputTag.Character.Unarmed");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_PrimaryWeapon, "InputTag.Character.PrimaryWeapon");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Overview_Move, "InputTag.Overview.Move");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Overview_Drag, "InputTag.Overview.Drag");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Overview_Click, "InputTag.Overview.Click");
@@ -101,6 +103,8 @@ void UDemoPlayerInputComponent::BindInputActions()
 	BindNativeAction(InputTag_Character_Jump, ETriggerEvent::Completed, this, &ThisClass::InputJumpStopped);
 	BindNativeAction(InputTag_Character_Jump, ETriggerEvent::Canceled, this, &ThisClass::InputJumpStopped);
 	BindNativeAction(InputTag_Character_ReturnOverview, ETriggerEvent::Started, this, &ThisClass::InputReturnOverview);
+	BindNativeAction(InputTag_Character_Unarmed, ETriggerEvent::Started, this, &ThisClass::InputUnarmed);
+	BindNativeAction(InputTag_Character_PrimaryWeapon, ETriggerEvent::Started, this, &ThisClass::InputPrimaryWeapon);
 }
 
 void UDemoPlayerInputComponent::UnbindInputActions()
@@ -274,6 +278,28 @@ void UDemoPlayerInputComponent::InputReturnOverview()
 		if (ADemoPlayerController* Controller = GetPlayerController<ADemoPlayerController>())
 		{
 			Controller->ReturnToOverview();
+		}
+	}
+}
+
+void UDemoPlayerInputComponent::InputUnarmed()
+{
+	if (GetInputCharacter())
+	{
+		if (ADemoPlayerController* Controller = GetPlayerController<ADemoPlayerController>())
+		{
+			Controller->RequestRifleActive(false);
+		}
+	}
+}
+
+void UDemoPlayerInputComponent::InputPrimaryWeapon()
+{
+	if (GetInputCharacter())
+	{
+		if (ADemoPlayerController* Controller = GetPlayerController<ADemoPlayerController>())
+		{
+			Controller->RequestRifleActive(true);
 		}
 	}
 }

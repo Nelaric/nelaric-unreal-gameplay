@@ -4,6 +4,8 @@
 
 #include "DemoControlGameMode.h"
 #include "Character/DemoCharacter.h"
+#include "Equipment/DemoEquipmentInstance.h"
+#include "Equipment/DemoEquipmentManagerComponent.h"
 #include "Player/DemoOverviewPawn.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/World.h"
@@ -20,6 +22,69 @@ DEFINE_LOG_CATEGORY_STATIC(LogDemoControl, Log, All);
 ADemoPlayerController::ADemoPlayerController()
 {
 	bAutoManageActiveCameraTarget = false;
+}
+
+bool ADemoPlayerController::RequestRifleActive(bool bActive)
+{
+	if (!IsInGameThread())
+	{
+		return false;
+	}
+	const ADemoCharacter* ControlledCharacter = Cast<ADemoCharacter>(GetPawn());
+	if (bEndingPlay || IsActorBeingDestroyed() || !IsLocalPlayerController() ||
+	    ControlMode != EDemoControlMode::ControllingCharacter || !IsValid(ControlledCharacter) ||
+	    ControlledCharacter->IsActorBeingDestroyed() || ControlledCharacter->GetController() != this)
+	{
+		return false;
+	}
+	ServerSetRifleActive(bActive);
+	return true;
+}
+
+void ADemoPlayerController::ServerSetRifleActive_Implementation(bool bActive)
+{
+	if (!HasAuthority() || bEndingPlay || IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown)
+	{
+		return;
+	}
+	// Resolve possession on authority; clients send only the desired state.
+	ADemoCharacter* ControlledCharacter = Cast<ADemoCharacter>(GetPawn());
+	UDemoEquipmentManagerComponent* Manager =
+	    IsValid(ControlledCharacter) && !ControlledCharacter->IsActorBeingDestroyed() &&
+	            ControlledCharacter->GetController() == this
+	        ? ControlledCharacter->FindComponentByClass<UDemoEquipmentManagerComponent>()
+	        : nullptr;
+	if (!IsValid(Manager))
+	{
+		ReportRifleResult(bActive, EDemoEquipmentResult::NotReady);
+		return;
+	}
+	if (!bActive)
+	{
+		ReportRifleResult(false, Manager->DeactivateEquipment());
+		return;
+	}
+	UDemoEquipmentInstance* PrimaryWeapon = Manager->FindEquipmentInSlot(TEXT("PrimaryWeapon"));
+	ReportRifleResult(true, IsValid(PrimaryWeapon) ? Manager->ActivateEquipment(PrimaryWeapon->GetEquipmentId())
+	                                               : EDemoEquipmentResult::NotFound);
+}
+
+void ADemoPlayerController::ReportRifleResult(bool bActive, EDemoEquipmentResult Result)
+{
+	UE_LOG(LogDemoControl, Log, TEXT("Rifle selection authority: controller=%s pawn=%s active=%d result=%s."),
+	       *GetName(), *GetNameSafe(GetPawn()), bActive, *UEnum::GetValueAsString(Result));
+	ClientReportRifleResult(bActive, Result);
+}
+
+void ADemoPlayerController::ClientReportRifleResult_Implementation(bool bActive, EDemoEquipmentResult Result)
+{
+	if (bEndingPlay || IsActorBeingDestroyed())
+	{
+		return;
+	}
+	UE_LOG(LogDemoControl, Log, TEXT("Rifle selection client: controller=%s active=%d result=%s."), *GetName(), bActive,
+	       *UEnum::GetValueAsString(Result));
+	OnRifleActiveResult(bActive, Result);
 }
 
 APawn* ADemoPlayerController::GetSelectedBot() const

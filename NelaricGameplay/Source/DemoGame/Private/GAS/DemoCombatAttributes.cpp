@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 #include "GAS/DemoCombatAttributes.h"
+#include "Character/DemoCharacter.h"
 #include "AbilitySystemComponent.h"
 #include "NelaricAbilitySystemComponent.h"
 #include "GameplayEffectExtension.h"
@@ -48,19 +49,31 @@ void UDemoCombatAttributes::PreAttributeChange(const FGameplayAttribute& Attribu
 void UDemoCombatAttributes::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
 	Super::PostGameplayEffectExecute(Data);
-	if (Data.EvaluatedData.Attribute == GetHealthAttribute())
+	if (Data.EvaluatedData.Attribute == GetHealthAttribute() || Data.EvaluatedData.Attribute == GetMaxHealthAttribute())
 	{
 		GetOwningAbilitySystemComponent()->SetNumericAttributeBase(
 		    GetHealthAttribute(), FMath::Clamp(Health.GetCurrentValue(), 0.0f, MaxHealth.GetCurrentValue()));
+		if (ADemoCharacter* Character = Cast<ADemoCharacter>(GetOwningAbilitySystemComponent()->GetAvatarActor()))
+		{
+			Character->NotifyCombatHealthChanged(Data.EffectSpec.GetContext().GetOriginalInstigator());
+		}
 	}
 }
 void UDemoCombatAttributes::OnRep_Health(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UDemoCombatAttributes, Health, OldValue);
+	if (ADemoCharacter* Character = Cast<ADemoCharacter>(GetOwningAbilitySystemComponent()->GetAvatarActor()))
+	{
+		Character->NotifyCombatHealthChanged();
+	}
 }
 void UDemoCombatAttributes::OnRep_MaxHealth(const FGameplayAttributeData& OldValue)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UDemoCombatAttributes, MaxHealth, OldValue);
+	if (ADemoCharacter* Character = Cast<ADemoCharacter>(GetOwningAbilitySystemComponent()->GetAvatarActor()))
+	{
+		Character->NotifyCombatHealthChanged();
+	}
 }
 void UDemoCombatAttributes::OnRep_Attack(const FGameplayAttributeData& OldValue)
 {

@@ -55,6 +55,53 @@ public:
 	 */
 	DEMOGAME_API Nelaric::UnitAnimation::IAnimationDataUpdater& GetAnimationDataUpdater() const;
 
+	/// Returns committed local health, or zero without an ASC; game thread.
+	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
+	float GetHealth() const;
+
+	/// Returns committed local maximum health, or zero; game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
+	float GetMaxHealth() const;
+
+	/// Returns whether committed health is positive; game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
+	bool IsAlive() const;
+
+	/// Cancels active abilities and weapon actions; authority game thread.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
+	void CancelCombatActions();
+
+	/** @brief Restores maximum health and authored weapon ammunition.
+	 * @details Authority game thread only. Call for
+	 * a new life, outside
+	 * control transfers. Pool activation preserves combat state by default.
+	 * @return False
+	 * without committed GAS readiness; otherwise true.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
+	bool ResetCombatState();
+
+	/** @brief Observes health after a local effect or replicated change.
+	 * @details Game thread only. Query getters
+	 * when attaching a new UI;
+	 * control transfers may update the binding without an effect callback.
+	 *
+	 * @param Health Current health after clamping.
+	 * @param MaxHealth Current health limit.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Combat")
+	void OnHealthChanged(float Health, float MaxHealth);
+
+	/** @brief Observes death once per life after combat actions are stopped.
+	 * @details Runs locally on rendering
+	 * worlds and on authority. Blueprint
+	 * gameplay mutations require authority. ResetCombatState starts a new
+	 * life.
+	 * @param DamageInstigator Source actor; may be null on replicas.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Combat")
+	void OnDeath(AActor* DamageInstigator);
+
 	/** @brief Main animation class implementing the native updater.
 	 * @details Set character defaults before
 	 * spawning.
@@ -95,13 +142,16 @@ public:
 	}
 
 public:
+	void NotifyCombatHealthChanged(AActor* DamageInstigator = nullptr);
 	DEMOGAME_API virtual void PrepareForPool() override;
 	DEMOGAME_API virtual void PostInitializeComponents() override;
 	DEMOGAME_API virtual void PostNetInit() override;
 	DEMOGAME_API virtual void SetActorHiddenInGame(bool bNewHidden) override;
 	DEMOGAME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	void CancelLocalWeaponActions();
 	void InitializePoolControlPolicy();
 	bool HasConfiguredPoolControlPolicy() const;
 	UFUNCTION()
@@ -117,6 +167,11 @@ private:
 	bool bPoolAllowReturnControl = false;
 	bool bPoolReturnToBot = false;
 	bool bPoolStartBotLogicOnReady = false;
+	bool bDeathHandled = false;
+	UPROPERTY(ReplicatedUsing = OnRep_CombatDead)
+	bool bCombatDead = false;
+	UFUNCTION()
+	void OnRep_CombatDead();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPawnControlComponent> PoolControlPolicy;

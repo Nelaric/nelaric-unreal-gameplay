@@ -58,6 +58,10 @@ void UDemoEquipmentInstance::Initialize(APawn* InPawn, UDemoEquipmentDefinition*
 	Pawn = InPawn;
 	Definition = InDefinition;
 	EquipmentId = InId;
+	if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(this))
+	{
+		Weapon->InitializeWeaponState();
+	}
 	VisualActors.SetNum(Definition->Visuals.Num());
 	RefreshVisuals();
 	if (!bRemoved)
@@ -78,9 +82,12 @@ void UDemoEquipmentInstance::SetActive(bool bNewActive)
 		if (bActive)
 		{
 			Weapon->RefreshAnimationLayer();
+			Weapon->RefreshReloadPresentation();
 		}
 		else
 		{
+			Weapon->CancelWeaponActions();
+			Weapon->RefreshReloadPresentation();
 			Weapon->ReleaseAnimationLayer();
 		}
 	}
@@ -106,6 +113,11 @@ void UDemoEquipmentInstance::Remove()
 		return;
 	}
 	SetActive(false);
+	if (UDemoWeaponInstance* Weapon = Cast<UDemoWeaponInstance>(this))
+	{
+		Weapon->CancelWeaponActions();
+		Weapon->RefreshReloadPresentation();
+	}
 	bRemoved = true;
 	OnUnequipped();
 	DestroyVisuals();
@@ -178,7 +190,7 @@ void UDemoEquipmentInstance::RefreshVisuals()
 			                         Visual.SocketName);
 			Actor->SetActorRelativeTransform(Visual.RelativeTransform);
 		}
-		Actor->SetActorHiddenInGame(Visual.bActiveOnly && !bActive);
+		Actor->SetActorHiddenInGame(OwnerPawn->IsHidden() || (Visual.bActiveOnly && !bActive));
 	}
 }
 

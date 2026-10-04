@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Equipment/DemoWeaponTypes.h"
 
 #include "DemoEquipmentTypes.generated.h"
 
@@ -47,6 +48,10 @@ struct FDemoEquipmentEntry
 	/// Shared authored asset; must be included in the cooked game.
 	UPROPERTY()
 	TObjectPtr<UDemoEquipmentDefinition> Definition;
+
+	/// Per-item combat state; ignored for ordinary equipment definitions.
+	UPROPERTY()
+	FDemoWeaponState WeaponState;
 };
 
 /// One consistent authority snapshot, replicated by the equipment manager.

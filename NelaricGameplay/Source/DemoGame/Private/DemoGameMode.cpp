@@ -2,11 +2,11 @@
 
 #include "DemoGameMode.h"
 #include "GAS/DemoGasPlayerState.h"
-#include "Character/DemoPlayerCharacter.h"
+#include "Character/DemoCharacter.h"
 
 ADemoGameMode::ADemoGameMode()
 {
 	PlayerStateClass = ADemoGasPlayerState::StaticClass();
 	// Concrete demo maps select their authored pawn in a GameMode Blueprint.
-	DefaultPawnClass = ADemoPlayerCharacter::StaticClass();
+	DefaultPawnClass = ADemoCharacter::StaticClass();
 }

@@ -8,11 +8,15 @@
 
 #include "Engine/DataAsset.h"
 #include "GameFramework/Actor.h"
+#include "GameplayTagContainer.h"
 
 #include "DemoEquipmentDefinition.generated.h"
 
 class UAnimInstance;
+class UAnimMontage;
 class UDemoEquipmentInstance;
+class UGameplayEffect;
+class USoundBase;
 
 /// One local cosmetic actor attached to a named pawn skeletal mesh.
 USTRUCT(BlueprintType)
@@ -68,16 +72,80 @@ public:
 	UDemoEquipmentDefinition();
 };
 
-/// Equipment specialization supplying the active weapon animation layer.
+/// Shared hitscan configuration and local presentation for one weapon type.
 UCLASS(MinimalAPI, BlueprintType)
 class UDemoWeaponDefinition : public UDemoEquipmentDefinition
 {
 	GENERATED_BODY()
 
 public:
+	/// Checks finite combat values and an instant damage effect; game thread.
+	UFUNCTION(BlueprintPure, Category = "Demo|Weapon")
+	bool IsCombatConfigurationValid() const;
+
 	/// Layer blueprint implementing the target pawn's weapon layer interface.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon")
 	TSubclassOf<UAnimInstance> ActiveAnimationLayer;
+
+	/// Maximum magazine rounds; a newly equipped weapon starts full.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat", meta = (ClampMin = "1"))
+	int32 MagazineCapacity = 30;
+
+	/// Per-item reserve rounds assigned on equip or an explicit ammo reset.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat", meta = (ClampMin = "0"))
+	int32 InitialReserveAmmo = 90;
+
+	/// Minimum server seconds between accepted shots.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat", meta = (ClampMin = "0.02"))
+	float FireInterval = 0.1f;
+
+	/// Hold fire to repeat shots; false accepts one shot per press.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat")
+	bool bAutomatic = true;
+
+	/// Maximum authority trace distance in centimeters.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat", meta = (ClampMin = "1.0"))
+	float Range = 10000.0f;
+
+	/// Positive health reduction passed as negative Data.Weapon.Damage.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat", meta = (ClampMin = "0.0"))
+	float DamagePerShot = 10.0f;
+
+	/// Server seconds before reserve rounds move into the magazine.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat", meta = (ClampMin = "0.05"))
+	float ReloadDuration = 2.0f;
+
+	/// Blocking trace channel; target and cover must block this channel.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat")
+	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
+
+	/// Instant effect consuming Data.Weapon.Damage; a native effect is default.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Combat")
+	TSubclassOf<UGameplayEffect> DamageEffect;
+
+	/// Optional character montage; the main animation graph needs its slot.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation")
+	TObjectPtr<UAnimMontage> FireMontage;
+
+	/// Optional character montage, scaled to the authority reload duration.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation")
+	TObjectPtr<UAnimMontage> ReloadMontage;
+
+	/// Optional sound emitted locally for each accepted shot.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation")
+	TObjectPtr<USoundBase> FireSound;
+
+	/// Executed locally for accepted shots; None disables the fire cue.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation", meta = (Categories = "GameplayCue"))
+	FGameplayTag FireGameplayCue;
+
+	/// Executed locally for blocking hits, including cover; None disables it.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation", meta = (Categories = "GameplayCue"))
+	FGameplayTag ImpactGameplayCue;
+
+	/// Socket on a cosmetic weapon mesh; missing sockets use its actor origin.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation")
+	FName MuzzleSocketName = "Muzzle";
 
 public:
 	UDemoWeaponDefinition();

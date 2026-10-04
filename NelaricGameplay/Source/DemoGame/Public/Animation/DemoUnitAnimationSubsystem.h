@@ -63,6 +63,24 @@ static_assert(
     "Animation level distances must be strictly increasing.");
 
 static_assert(DistanceUpdateIntervalMs > 0, "Distance update interval must be greater than zero.");
+
+/** @brief Returns the shared distance level for animation data and budgets.
+ * @param DistanceSquared Squared distance
+ * to the character, in cm squared.
+ * @return Index from zero through five; upper bounds are inclusive.
+ */
+FORCEINLINE int32 GetDistanceLevel(double DistanceSquared)
+{
+	for (int32 Level = 0; Level < NumLevels; ++Level)
+	{
+		const double DistanceLimit = DistanceCm[Level];
+		if (DistanceSquared <= DistanceLimit * DistanceLimit)
+		{
+			return Level;
+		}
+	}
+	return NumLevels - 1;
+}
 } // namespace Nelaric::UnitAnimation
 
 /** @brief Stores animation update levels and unit indices in a demo world.
@@ -75,6 +93,9 @@ static_assert(DistanceUpdateIntervalMs > 0, "Distance update interval must be gr
  * @note The scheduler completes mesh tasks and joins its own jobs.
  * @note The authority pool exposes no ready slots
  * on clients.
+ * @note The same pool slots supply meshes to the world animation budget.
+ * Hidden, inactive, level 6 and off-view
+ * meshes do not contribute demand.
  */
 UCLASS(MinimalAPI)
 class UDemoUnitAnimationSubsystem : public UWorldSubsystem
@@ -89,6 +110,7 @@ public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:
+	void HandleWorldTickStart(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	void UpdateDistanceLevels();
 	void HandleWorldPreActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	void ResetUpdateState();
@@ -109,9 +131,11 @@ private:
 	int32 LevelCounts[NumLevels] = {};
 	FTimerHandle DistanceUpdateTimer;
 	FDelegateHandle WorldPreActorTickHandle;
+	FDelegateHandle WorldTickStartHandle;
 	TWeakObjectPtr<UAnimInstance> SlotAnimationInstances[MaxUnits];
 	float ElapsedUpdateSeconds[MaxUnits] = {};
 	uint64 FrameCounter = 0;
 	bool bDistanceLevelsReady = false;
+	bool bBudgetPoolRegistered = false;
 	bool bShuttingDown = false;
 };

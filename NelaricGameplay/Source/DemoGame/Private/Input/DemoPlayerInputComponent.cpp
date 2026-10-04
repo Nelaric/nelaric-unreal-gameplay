@@ -9,6 +9,7 @@
 #include "Input/NelaricInputConfig.h"
 #include "NativeGameplayTags.h"
 #include "NelaricAbilitySystemComponent.h"
+#include "GAS/DemoWeaponTags.h"
 #include "Player/DemoOverviewPawn.h"
 #include "Player/DemoPlayerController.h"
 
@@ -23,6 +24,8 @@ UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Jump, "InputTag.Character.Jump"
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_ReturnOverview, "InputTag.Character.ReturnOverview");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Unarmed, "InputTag.Character.Unarmed");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_PrimaryWeapon, "InputTag.Character.PrimaryWeapon");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Fire, "InputTag.Character.Fire");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Character_Reload, "InputTag.Character.Reload");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Overview_Move, "InputTag.Overview.Move");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Overview_Drag, "InputTag.Overview.Drag");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(InputTag_Overview_Click, "InputTag.Overview.Click");
@@ -105,11 +108,22 @@ void UDemoPlayerInputComponent::BindInputActions()
 	BindNativeAction(InputTag_Character_ReturnOverview, ETriggerEvent::Started, this, &ThisClass::InputReturnOverview);
 	BindNativeAction(InputTag_Character_Unarmed, ETriggerEvent::Started, this, &ThisClass::InputUnarmed);
 	BindNativeAction(InputTag_Character_PrimaryWeapon, ETriggerEvent::Started, this, &ThisClass::InputPrimaryWeapon);
+	if (InputConfig->FindNativeInputActionForTag(InputTag_Character_Fire))
+	{
+		BindNativeAction(InputTag_Character_Fire, ETriggerEvent::Started, this, &ThisClass::InputFireStarted);
+		BindNativeAction(InputTag_Character_Fire, ETriggerEvent::Completed, this, &ThisClass::InputFireStopped);
+		BindNativeAction(InputTag_Character_Fire, ETriggerEvent::Canceled, this, &ThisClass::InputFireStopped);
+	}
+	if (InputConfig->FindNativeInputActionForTag(InputTag_Character_Reload))
+	{
+		BindNativeAction(InputTag_Character_Reload, ETriggerEvent::Started, this, &ThisClass::InputReload);
+	}
 }
 
 void UDemoPlayerInputComponent::UnbindInputActions()
 {
 	InputJumpStopped();
+	InputFireStopped();
 	InputOverviewDragStopped();
 	ActiveMappingTag = FGameplayTag();
 	Super::UnbindInputActions();
@@ -126,7 +140,9 @@ bool UDemoPlayerInputComponent::HasActiveMapping(const FGameplayTag& MappingTag)
 
 ADemoCharacter* UDemoPlayerInputComponent::GetInputCharacter() const
 {
-	return HasActiveMapping(Nelaric::DemoInputTags::InputMapping_Character) ? GetPawn<ADemoCharacter>() : nullptr;
+	ADemoCharacter* Character =
+	    HasActiveMapping(Nelaric::DemoInputTags::InputMapping_Character) ? GetPawn<ADemoCharacter>() : nullptr;
+	return Character && Character->IsAlive() && Character->IsPoolActive() ? Character : nullptr;
 }
 
 ADemoOverviewPawn* UDemoPlayerInputComponent::GetInputOverview() const
@@ -202,6 +218,43 @@ void UDemoPlayerInputComponent::InputJumpStopped()
 		if (auto* ASC = Cast<UNelaricAbilitySystemComponent>(Character->GetAbilitySystemComponent()))
 		{
 			ASC->SubmitAction(FGameplayTag::RequestGameplayTag(TEXT("Action.Jump")), false);
+		}
+	}
+}
+
+void UDemoPlayerInputComponent::InputFireStarted()
+{
+	if (ADemoCharacter* Character = GetInputCharacter())
+	{
+		if (UNelaricAbilitySystemComponent* ASC =
+		        Cast<UNelaricAbilitySystemComponent>(Character->GetAbilitySystemComponent()))
+		{
+			ASC->SubmitAction(Nelaric::DemoWeaponTags::Fire, true);
+		}
+	}
+}
+
+void UDemoPlayerInputComponent::InputFireStopped()
+{
+	if (ADemoCharacter* Character = GetPawn<ADemoCharacter>())
+	{
+		if (UNelaricAbilitySystemComponent* ASC =
+		        Cast<UNelaricAbilitySystemComponent>(Character->GetAbilitySystemComponent()))
+		{
+			ASC->SubmitAction(Nelaric::DemoWeaponTags::Fire, false);
+		}
+	}
+}
+
+void UDemoPlayerInputComponent::InputReload()
+{
+	if (ADemoCharacter* Character = GetInputCharacter())
+	{
+		if (UNelaricAbilitySystemComponent* ASC =
+		        Cast<UNelaricAbilitySystemComponent>(Character->GetAbilitySystemComponent()))
+		{
+			ASC->SubmitAction(Nelaric::DemoWeaponTags::Reload, true);
+			ASC->SubmitAction(Nelaric::DemoWeaponTags::Reload, false);
 		}
 	}
 }

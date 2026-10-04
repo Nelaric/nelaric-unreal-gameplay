@@ -9,16 +9,44 @@
 #include "Async/ParallelFor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Array.h"
+#include "ConvexVolume.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "IAnimationBudgetAllocator.h"
+#include "SceneView.h"
+#include "SkeletalMeshComponentBudgeted.h"
 #include "Subsystems/SubsystemCollection.h"
 #include "UObject/StrongObjectPtr.h"
+
+namespace Nelaric::UnitAnimation
+{
+APlayerController* FindReferenceController(const UWorld& World)
+{
+	for (FConstPlayerControllerIterator It = World.GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* Controller = It->Get();
+		if (IsValid(Controller) && Controller->IsLocalController())
+		{
+			return Controller;
+		}
+	}
+	return nullptr;
+}
+} // namespace Nelaric::UnitAnimation
 
 void UDemoUnitAnimationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	Collection.InitializeDependency<UDemoCharacterPoolSubsystem>();
 	bShuttingDown = false;
+	bBudgetPoolRegistered = false;
+	if (IAnimationBudgetAllocator* Budget = IAnimationBudgetAllocator::Get(GetWorld()))
+	{
+		Budget->SetEnabled(GetWorld()->GetNetMode() != NM_DedicatedServer);
+	}
+	WorldTickStartHandle = FWorldDelegates::OnWorldTickStart.AddUObject(this, &ThisClass::HandleWorldTickStart);
 	WorldPreActorTickHandle =
 	    FWorldDelegates::OnWorldPreActorTick.AddUObject(this, &ThisClass::HandleWorldPreActorTick);
 }
@@ -36,12 +64,16 @@ void UDemoUnitAnimationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 void UDemoUnitAnimationSubsystem::Deinitialize()
 {
 	bShuttingDown = true;
+	FWorldDelegates::OnWorldTickStart.Remove(WorldTickStartHandle);
+	WorldTickStartHandle.Reset();
 	FWorldDelegates::OnWorldPreActorTick.Remove(WorldPreActorTickHandle);
 	WorldPreActorTickHandle.Reset();
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(DistanceUpdateTimer);
 	}
+	// Budgeted mesh EndPlay unregisters itself; the pool owns actor teardown.
+	bBudgetPoolRegistered = false;
 	ResetLevelCounts();
 	ResetUpdateState();
 	bDistanceLevelsReady = false;
@@ -51,6 +83,66 @@ void UDemoUnitAnimationSubsystem::Deinitialize()
 bool UDemoUnitAnimationSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
+}
+
+void UDemoUnitAnimationSubsystem::HandleWorldTickStart(UWorld* World, ELevelTick TickType, float DeltaSeconds)
+{
+	check(IsInGameThread());
+	if (bShuttingDown || World != GetWorld() || World->bIsTearingDown || !World->HasBegunPlay() ||
+	    World->GetNetMode() == NM_DedicatedServer || TickType != LEVELTICK_All)
+	{
+		return;
+	}
+	const UDemoCharacterPoolSubsystem* Pool = World->GetSubsystem<UDemoCharacterPoolSubsystem>();
+	if (!Pool || !Pool->IsReady())
+	{
+		return;
+	}
+	IAnimationBudgetAllocator* Budget = IAnimationBudgetAllocator::Get(World);
+	if (!Budget)
+	{
+		return;
+	}
+
+	APlayerController* Controller = Nelaric::UnitAnimation::FindReferenceController(*World);
+	const ACharacter* ReferenceCharacter = Controller ? Controller->GetCharacter() : nullptr;
+	const ULocalPlayer* LocalPlayer = Controller ? Controller->GetLocalPlayer() : nullptr;
+	FSceneViewProjectionData Projection;
+	FConvexVolume ViewFrustum;
+	const bool bHasView = IsValid(ReferenceCharacter) && LocalPlayer && LocalPlayer->ViewportClient &&
+	                      LocalPlayer->ViewportClient->Viewport &&
+	                      LocalPlayer->GetProjectionData(LocalPlayer->ViewportClient->Viewport, Projection);
+	if (bHasView)
+	{
+		GetViewFrustumBounds(ViewFrustum, Projection.ComputeViewProjectionMatrix(), true);
+	}
+
+	// Gate demand before the allocator's pre-actor callback. Its render-time
+	// grace period alone would keep recently visible off-view meshes in budget.
+	for (int32 UnitIndex = 0; UnitIndex < MaxUnits; ++UnitIndex)
+	{
+		const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(UnitIndex));
+		USkeletalMeshComponentBudgeted* Mesh = CastChecked<USkeletalMeshComponentBudgeted>(Character->GetMesh());
+		if (!bBudgetPoolRegistered)
+		{
+			Budget->RegisterComponent(Mesh);
+		}
+		float Significance = 0.0f;
+		if (bHasView && Character->IsPoolActive() && !Character->IsHidden() && Mesh->IsVisible() &&
+		    ViewFrustum.IntersectBox(Mesh->Bounds.Origin, Mesh->Bounds.BoxExtent))
+		{
+			const double DistanceSquared =
+			    FVector::DistSquared(ReferenceCharacter->GetActorLocation(), Character->GetActorLocation());
+			const int32 Level = Nelaric::UnitAnimation::GetDistanceLevel(DistanceSquared);
+			if (Nelaric::UnitAnimation::UpdateIntervalFrames[Level] > 0)
+			{
+				Significance = static_cast<float>(NumLevels - Level) / static_cast<float>(NumLevels);
+			}
+		}
+		Budget->SetComponentSignificance(Mesh, Significance, false, false);
+		Budget->SetComponentTickEnabled(Mesh, Significance > 0.0f);
+	}
+	bBudgetPoolRegistered = true;
 }
 
 void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
@@ -71,16 +163,8 @@ void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
 		return;
 	}
 
-	ACharacter* ReferenceCharacter = nullptr;
-	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
-	{
-		APlayerController* Controller = It->Get();
-		if (IsValid(Controller) && Controller->IsLocalController())
-		{
-			ReferenceCharacter = Controller->GetCharacter();
-			break;
-		}
-	}
+	const APlayerController* Controller = Nelaric::UnitAnimation::FindReferenceController(*World);
+	const ACharacter* ReferenceCharacter = Controller ? Controller->GetCharacter() : nullptr;
 	if (!IsValid(ReferenceCharacter))
 	{
 		return;
@@ -99,16 +183,7 @@ void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
 		}
 
 		const double DistanceSquared = FVector::DistSquared(ReferenceLocation, Character->GetActorLocation());
-		int32 AssignedLevel = NumLevels - 1;
-		for (int32 Level = 0; Level < NumLevels; ++Level)
-		{
-			const double DistanceLimit = Nelaric::UnitAnimation::DistanceCm[Level];
-			if (DistanceSquared <= DistanceLimit * DistanceLimit)
-			{
-				AssignedLevel = Level;
-				break;
-			}
-		}
+		const int32 AssignedLevel = Nelaric::UnitAnimation::GetDistanceLevel(DistanceSquared);
 		LevelIndices[AssignedLevel][LevelCounts[AssignedLevel]++] = UnitIndex;
 	}
 }
@@ -154,6 +229,8 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 		UpdateDistanceLevels();
 	}
 	++FrameCounter;
+	IAnimationBudgetAllocator* Budget =
+	    World->GetNetMode() != NM_DedicatedServer ? IAnimationBudgetAllocator::Get(World) : nullptr;
 
 	using FAnimationUpdateJob = Nelaric::UnitAnimation::FAnimationUpdateJob;
 	TArray<FAnimationUpdateJob, TInlineAllocator<MaxUnits>> Jobs;
@@ -173,6 +250,12 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 			}
 
 			USkeletalMeshComponent* Mesh = Character->GetMesh();
+			if (Budget && !Budget->IsComponentTickEnabled(CastChecked<USkeletalMeshComponentBudgeted>(Mesh)))
+			{
+				SlotAnimationInstances[UnitIndex].Reset();
+				ElapsedUpdateSeconds[UnitIndex] = 0.0f;
+				continue;
+			}
 			UAnimInstance* Instance = IsValid(Mesh) ? Mesh->GetAnimInstance() : nullptr;
 			if (SlotAnimationInstances[UnitIndex].Get() != Instance)
 			{
@@ -227,12 +310,13 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 
 	// Completing mesh tasks can invoke callbacks that change earlier slots.
 	Jobs.RemoveAllSwap(
-	    [Pool](const FAnimationUpdateJob& Job)
+	    [Pool, Budget](const FAnimationUpdateJob& Job)
 	    {
 		    const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(Job.UnitIndex));
-		    const USkeletalMeshComponent* Mesh = IsValid(Character) ? Character->GetMesh() : nullptr;
+		    USkeletalMeshComponent* Mesh = IsValid(Character) ? Character->GetMesh() : nullptr;
 		    return !IsValid(Character) || !Character->IsPoolActive() || !IsValid(Mesh) ||
-		           Mesh->GetAnimInstance() != Job.Instance.Get() || Mesh->IsRunningParallelEvaluation();
+		           Mesh->GetAnimInstance() != Job.Instance.Get() || Mesh->IsRunningParallelEvaluation() ||
+		           (Budget && !Budget->IsComponentTickEnabled(CastChecked<USkeletalMeshComponentBudgeted>(Mesh)));
 	    });
 	if (Jobs.IsEmpty())
 	{

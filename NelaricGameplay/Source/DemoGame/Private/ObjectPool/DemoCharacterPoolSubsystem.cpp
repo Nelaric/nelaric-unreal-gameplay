@@ -6,15 +6,13 @@
 #include "Pawn/PawnInitializationComponent.h"
 #include "PawnGasBindingComponent.h"
 #include "Spawning/DemoInitialCharacterSpawnPoint.h"
-#include "UObject/ConstructorHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDemoCharacterPool, Log, All);
 
 UDemoCharacterPoolSubsystem::UDemoCharacterPoolSubsystem()
 {
-	static ConstructorHelpers::FClassFinder<ADemoCharacter> BlueprintClass(
-	    TEXT("/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter"));
-	CharacterClass = BlueprintClass.Class;
+	CharacterClass =
+	    FSoftObjectPath(TEXT("/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter.BP_DemoCharacter_C"));
 }
 
 bool UDemoCharacterPoolSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -73,13 +71,15 @@ Nelaric::ObjectPool::FPoolResult UDemoCharacterPoolSubsystem::PrewarmPools(UWorl
 		// The client owns a service facade; its actors come from replication.
 		return {};
 	}
-	if (!IsValid(CharacterClass.Get()))
+	// Load Blueprint dependencies after startup modules have initialized.
+	UClass* LoadedCharacterClass = CharacterClass.LoadSynchronous();
+	if (!IsValid(LoadedCharacterClass))
 	{
 		return {Nelaric::ObjectPool::EPoolError::CreationFailed};
 	}
 	FPool::FCreateArgs Args;
 	Args.World = &World;
-	Args.Class = CharacterClass.Get();
+	Args.Class = LoadedCharacterClass;
 	Args.ParkTransform = FTransform::Identity;
 	return Pool.Prewarm(Args);
 }

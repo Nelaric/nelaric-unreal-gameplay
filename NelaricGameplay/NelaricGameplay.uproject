@@ -40,6 +40,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "AnimationWarping",
+			"Enabled": true
+		},
+		{
 			"Name": "AudioModulation",
 			"Enabled": true
 		},
@@ -81,6 +85,14 @@
 		},
 		{
 			"Name": "Niagara",
+			"Enabled": true
+		},
+		{
+			"Name": "ControlRigSpline",
+			"Enabled": true
+		},
+		{
+			"Name": "RigVM",
 			"Enabled": true
 		}
 	]

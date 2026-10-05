@@ -66,6 +66,10 @@ struct FDemoWeaponState
 	UPROPERTY(BlueprintReadOnly, Category = "Weapon")
 	float ReloadEndServerTime = 0.0f;
 
+	/// Server world time of the last accepted shot; ShotsFired marks validity.
+	UPROPERTY(BlueprintReadOnly, Category = "Weapon")
+	float LastFireServerTime = 0.0f;
+
 	/// Accepted shots since equip or reset, including misses; saturates.
 	UPROPERTY(BlueprintReadOnly, Category = "Weapon")
 	int32 ShotsFired = 0;

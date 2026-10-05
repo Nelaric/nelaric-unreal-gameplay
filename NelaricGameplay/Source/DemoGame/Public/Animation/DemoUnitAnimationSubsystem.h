@@ -15,6 +15,7 @@
 #include "DemoUnitAnimationSubsystem.generated.h"
 
 class UAnimInstance;
+class USkeletalMeshComponentBudgeted;
 
 namespace Nelaric::UnitAnimation
 {
@@ -91,8 +92,7 @@ FORCEINLINE int32 GetDistanceLevel(double DistanceSquared)
  * Demo characters supply native updater
  * references from typed instances.
  * @note The scheduler completes mesh tasks and joins its own jobs.
- * @note The authority pool exposes no ready slots
- * on clients.
+ * @note Client views expose received slots without authority leases.
  * @note The same pool slots supply meshes to the world animation budget.
  * Hidden, inactive, level 6 and off-view
  * meshes do not contribute demand.
@@ -136,6 +136,7 @@ private:
 	float ElapsedUpdateSeconds[MaxUnits] = {};
 	uint64 FrameCounter = 0;
 	bool bDistanceLevelsReady = false;
-	bool bBudgetPoolRegistered = false;
+	TWeakObjectPtr<USkeletalMeshComponentBudgeted> BudgetMeshes[MaxUnits];
 	bool bShuttingDown = false;
+	bool bReportedClientUpdate = false;
 };

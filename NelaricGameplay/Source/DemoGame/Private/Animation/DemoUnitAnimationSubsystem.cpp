@@ -20,6 +20,8 @@
 #include "Subsystems/SubsystemCollection.h"
 #include "UObject/StrongObjectPtr.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogDemoUnitAnimation, Log, All);
+
 namespace Nelaric::UnitAnimation
 {
 APlayerController* FindReferenceController(const UWorld& World)
@@ -41,7 +43,11 @@ void UDemoUnitAnimationSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 	Super::Initialize(Collection);
 	Collection.InitializeDependency<UDemoCharacterPoolSubsystem>();
 	bShuttingDown = false;
-	bBudgetPoolRegistered = false;
+	bReportedClientUpdate = false;
+	for (auto& Mesh : BudgetMeshes)
+	{
+		Mesh.Reset();
+	}
 	if (IAnimationBudgetAllocator* Budget = IAnimationBudgetAllocator::Get(GetWorld()))
 	{
 		Budget->SetEnabled(GetWorld()->GetNetMode() != NM_DedicatedServer);
@@ -73,7 +79,10 @@ void UDemoUnitAnimationSubsystem::Deinitialize()
 		World->GetTimerManager().ClearTimer(DistanceUpdateTimer);
 	}
 	// Budgeted mesh EndPlay unregisters itself; the pool owns actor teardown.
-	bBudgetPoolRegistered = false;
+	for (auto& Mesh : BudgetMeshes)
+	{
+		Mesh.Reset();
+	}
 	ResetLevelCounts();
 	ResetUpdateState();
 	bDistanceLevelsReady = false;
@@ -105,7 +114,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldTickStart(UWorld* World, ELevelTick
 	}
 
 	APlayerController* Controller = Nelaric::UnitAnimation::FindReferenceController(*World);
-	const ACharacter* ReferenceCharacter = Controller ? Controller->GetCharacter() : nullptr;
+	const APawn* ReferenceCharacter = Controller ? Controller->GetPawn() : nullptr;
 	const ULocalPlayer* LocalPlayer = Controller ? Controller->GetLocalPlayer() : nullptr;
 	FSceneViewProjectionData Projection;
 	FConvexVolume ViewFrustum;
@@ -121,11 +130,24 @@ void UDemoUnitAnimationSubsystem::HandleWorldTickStart(UWorld* World, ELevelTick
 	// grace period alone would keep recently visible off-view meshes in budget.
 	for (int32 UnitIndex = 0; UnitIndex < MaxUnits; ++UnitIndex)
 	{
-		const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(UnitIndex));
-		USkeletalMeshComponentBudgeted* Mesh = CastChecked<USkeletalMeshComponentBudgeted>(Character->GetMesh());
-		if (!bBudgetPoolRegistered)
+		const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(UnitIndex));
+		USkeletalMeshComponentBudgeted* Mesh =
+		    IsValid(Character) ? CastChecked<USkeletalMeshComponentBudgeted>(Character->GetMesh()) : nullptr;
+		if (BudgetMeshes[UnitIndex].Get() != Mesh)
 		{
-			Budget->RegisterComponent(Mesh);
+			if (USkeletalMeshComponentBudgeted* Previous = BudgetMeshes[UnitIndex].Get())
+			{
+				Budget->UnregisterComponent(Previous);
+			}
+			BudgetMeshes[UnitIndex] = Mesh;
+			if (Mesh)
+			{
+				Budget->RegisterComponent(Mesh);
+			}
+		}
+		if (!Mesh)
+		{
+			continue;
 		}
 		float Significance = 0.0f;
 		if (bHasView && Character->IsPoolActive() && !Character->IsHidden() && Mesh->IsVisible() &&
@@ -142,7 +164,6 @@ void UDemoUnitAnimationSubsystem::HandleWorldTickStart(UWorld* World, ELevelTick
 		Budget->SetComponentSignificance(Mesh, Significance, false, false);
 		Budget->SetComponentTickEnabled(Mesh, Significance > 0.0f);
 	}
-	bBudgetPoolRegistered = true;
 }
 
 void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
@@ -164,7 +185,7 @@ void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
 	}
 
 	const APlayerController* Controller = Nelaric::UnitAnimation::FindReferenceController(*World);
-	const ACharacter* ReferenceCharacter = Controller ? Controller->GetCharacter() : nullptr;
+	const APawn* ReferenceCharacter = Controller ? Controller->GetPawn() : nullptr;
 	if (!IsValid(ReferenceCharacter))
 	{
 		return;
@@ -174,7 +195,7 @@ void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
 	const FVector ReferenceLocation = ReferenceCharacter->GetActorLocation();
 	for (int32 UnitIndex = 0; UnitIndex < MaxUnits; ++UnitIndex)
 	{
-		const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(UnitIndex));
+		const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(UnitIndex));
 		if (!IsValid(Character) || !Character->IsPoolActive())
 		{
 			SlotAnimationInstances[UnitIndex].Reset();
@@ -241,7 +262,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 		for (int32 Entry = 0; Entry < LevelCounts[Level]; ++Entry)
 		{
 			const int32 UnitIndex = LevelIndices[Level][Entry];
-			const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(UnitIndex));
+			const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(UnitIndex));
 			if (!IsValid(Character) || !Character->IsPoolActive() || IntervalFrames == 0)
 			{
 				SlotAnimationInstances[UnitIndex].Reset();
@@ -312,7 +333,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 	Jobs.RemoveAllSwap(
 	    [Pool, Budget](const FAnimationUpdateJob& Job)
 	    {
-		    const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(Job.UnitIndex));
+		    const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(Job.UnitIndex));
 		    USkeletalMeshComponent* Mesh = IsValid(Character) ? Character->GetMesh() : nullptr;
 		    return !IsValid(Character) || !Character->IsPoolActive() || !IsValid(Mesh) ||
 		           Mesh->GetAnimInstance() != Job.Instance.Get() || Mesh->IsRunningParallelEvaluation() ||
@@ -326,7 +347,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 	// All mesh callbacks have completed. Capture values before any worker runs.
 	for (const FAnimationUpdateJob& Job : Jobs)
 	{
-		const ADemoCharacter* Character = Pool->GetByIndexUnchecked(static_cast<uint32>(Job.UnitIndex));
+		const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(Job.UnitIndex));
 		static_cast<UDemoAnimationDataInstance*>(Job.Instance.Get())->PrepareAnimationData(*Character);
 	}
 
@@ -345,6 +366,12 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 		                                             });
 	                                 });
 	UpdateTask.Wait();
+	if (!bReportedClientUpdate && World->GetNetMode() == NM_Client)
+	{
+		bReportedClientUpdate = true;
+		UE_LOG(LogDemoUnitAnimation, Verbose, TEXT("Client pool animation update completed (%d instances)."),
+		       Jobs.Num());
+	}
 	for (const FAnimationUpdateJob& Job : Jobs)
 	{
 		ElapsedUpdateSeconds[Job.UnitIndex] = 0.0f;

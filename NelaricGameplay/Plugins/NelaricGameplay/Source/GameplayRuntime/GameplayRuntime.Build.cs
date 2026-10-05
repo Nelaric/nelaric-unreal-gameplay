@@ -22,5 +22,6 @@ public class GameplayRuntime : ModuleRules
 				"AIModule",
 			}
 		);
+		PrivateDependencyModuleNames.Add("NetCore");
 	}
 }

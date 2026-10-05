@@ -2,12 +2,25 @@
 
 #include "ObjectPool/CharacterPoolHelper.h"
 
-#include "ObjectPool/CharacterPoolReplicationComponent.h"
+#include "ObjectPool/PoolNetwork.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Misc/EngineVersionComparison.h"
+
+bool Nelaric::ObjectPool::FCharacterPoolHelper::IsActive(const ACharacter& Character, const FCharacterPoolState& State)
+{
+	bool bActive = false;
+	return Character.GetNetMode() == NM_Client && QueryPoolReplica(Character, bActive) ? bActive : State.bActive;
+}
+
+bool Nelaric::ObjectPool::FCharacterPoolHelper::IsPrepared(const ACharacter& Character,
+                                                           const FCharacterPoolState& State)
+{
+	bool bActive = false;
+	return State.bPrepared || (Character.GetNetMode() == NM_Client && QueryPoolReplica(Character, bActive));
+}
 
 void Nelaric::ObjectPool::FCharacterPoolHelper::PrepareForPool(ACharacter& Character, FCharacterPoolState& State)
 {
@@ -16,14 +29,6 @@ void Nelaric::ObjectPool::FCharacterPoolHelper::PrepareForPool(ACharacter& Chara
 	check(World);
 	if (World->GetNetMode() == NM_Client)
 	{
-		if (auto* Replication = Character.FindComponentByClass<UCharacterPoolReplicationComponent>();
-		    Replication && !Replication->bApplyingReplication)
-		{
-			State.bPrepared = true;
-			Replication->State = &State;
-			Replication->AppliedTransition = 0;
-			Replication->ApplyTransition();
-		}
 		return;
 	}
 	check(Character.HasAuthority());
@@ -34,13 +39,6 @@ void Nelaric::ObjectPool::FCharacterPoolHelper::PrepareForPool(ACharacter& Chara
 	Character.bOnlyRelevantToOwner = false;
 	Character.bNetUseOwnerRelevancy = false;
 	Character.SetNetDormancy(DORM_Awake);
-	if (!Character.FindComponentByClass<UCharacterPoolReplicationComponent>())
-	{
-		auto* Replication =
-		    NewObject<UCharacterPoolReplicationComponent>(&Character, TEXT("PoolReplication"), RF_Transient);
-		Character.AddInstanceComponent(Replication);
-		Replication->RegisterComponent();
-	}
 	Character.AutoPossessAI = EAutoPossessAI::Disabled;
 	Character.AutoPossessPlayer = EAutoReceiveInput::Disabled;
 	Character.InitialLifeSpan = 0.f;
@@ -62,13 +60,9 @@ bool Nelaric::ObjectPool::FCharacterPoolHelper::ActivateInternal(ACharacter& Cha
 {
 	check(IsInGameThread());
 	UWorld* World = Character.GetWorld();
-	auto* Replication = Character.FindComponentByClass<UCharacterPoolReplicationComponent>();
 	const bool bClient = World && World->GetNetMode() == NM_Client;
 	if (!World || World->bIsTearingDown || Character.IsActorBeingDestroyed() || State.bActive ||
-	    !Character.HasActorBegunPlay() ||
-	    (bClient ? !bFromReplication || !Replication || !Replication->bApplyingReplication
-	             : !Character.HasAuthority()) ||
-	    (!bClient && Replication && Replication->Transition >= MAX_uint64 - 4))
+	    !Character.HasActorBegunPlay() || (bClient ? !bFromReplication : !Character.HasAuthority()))
 	{
 		return false;
 	}
@@ -114,10 +108,6 @@ bool Nelaric::ObjectPool::FCharacterPoolHelper::ActivateInternal(ACharacter& Cha
 	Character.SetActorTickEnabled(true);
 	Character.SetActorHiddenInGame(false);
 	Character.SetActorEnableCollision(true);
-	if (!bClient && Replication)
-	{
-		Replication->Publish(true);
-	}
 	return true;
 }
 
@@ -131,9 +121,8 @@ void Nelaric::ObjectPool::FCharacterPoolHelper::DeactivateInternal(ACharacter& C
 {
 	check(IsInGameThread());
 	UWorld* World = Character.GetWorld();
-	auto* Replication = Character.FindComponentByClass<UCharacterPoolReplicationComponent>();
 	const bool bClient = World && World->GetNetMode() == NM_Client;
-	if (bClient ? !bFromReplication || !Replication || !Replication->bApplyingReplication : !Character.HasAuthority())
+	if (bClient ? !bFromReplication : !Character.HasAuthority())
 	{
 		return;
 	}
@@ -167,8 +156,4 @@ void Nelaric::ObjectPool::FCharacterPoolHelper::DeactivateInternal(ACharacter& C
 #endif
 	CharacterMesh->bPauseAnims = true;
 	CharacterMesh->SetComponentTickEnabled(false);
-	if (!bClient && Replication)
-	{
-		Replication->Publish(false);
-	}
 }

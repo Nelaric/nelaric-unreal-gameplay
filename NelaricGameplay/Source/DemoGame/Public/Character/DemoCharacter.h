@@ -210,7 +210,7 @@ public:
 	inline bool IsPoolActive() const override
 	{
 		check(IsInGameThread());
-		return PoolState.bActive;
+		return Nelaric::ObjectPool::FCharacterPoolHelper::IsActive(*this, PoolState);
 	}
 
 public:
@@ -220,7 +220,6 @@ public:
 	                               const FVector* IncomingDamageDirection = nullptr);
 	DEMOGAME_API virtual void PrepareForPool() override;
 	DEMOGAME_API virtual void PostInitializeComponents() override;
-	DEMOGAME_API virtual void PostNetInit() override;
 	DEMOGAME_API virtual void SetActorHiddenInGame(bool bNewHidden) override;
 	DEMOGAME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

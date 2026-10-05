@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "ObjectPool/FixedSlotPool.h"
+#include "ObjectPool/PoolNetwork.h"
 #include "UObject/GCObject.h"
 #include "UObject/ObjectPtr.h"
 #include "UObject/UObjectGlobals.h"
@@ -55,6 +56,8 @@ enum class EPoolError : uint8
 	LostObject,
 	/// The handle is empty, foreign, stale, or already released.
 	InvalidHandle,
+	/// Network registration failed or the active driver is unsupported.
+	NetworkingUnavailable,
 };
 
 /** @brief Reports a synchronous pool operation without allocating memory.
@@ -220,6 +223,15 @@ private:
  * Reentrant mutations fail.
  * @par Lifetime contract
  * Handles do not extend pool lifetime.
+ * @par Network contract
+ * Replicated requires actor
+ * types and FCreateArgs::World. Optional
+ * FCreateArgs::NetworkName distinguishes same-type pools in one world.
+ *
+ * @details Clients prewarm a non-owning view and cannot acquire or
+ * return leases.
+ * Actor construction and movement
+ * use the standard UE replication driver.
  * @note Weak references protect objects; generations protect logical leases.
  *
  * @note WorldRaw requires live actors and Shutdown before their world ends.
@@ -232,9 +244,11 @@ private:
  * @tparam Policy
  * Native factory and lifecycle contract for T.
  * @tparam Mode Compile-time reference retention or world ownership strategy.
+ * @tparam NetworkMode Actor-pool synchronization; disabled by default.
  */
-template <class T, uint32 Capacity, class Policy, EReferenceMode Mode = DefaultReferenceMode<T>>
-class TFixedUObjectPool final
+template <class T, uint32 Capacity, class Policy, EReferenceMode Mode = DefaultReferenceMode<T>,
+          ENetworkMode NetworkMode = ENetworkMode::Disabled>
+class TFixedUObjectPool final : private Private::TPoolNetworkBinding<NetworkMode>
 {
 public:
 	/// Shared fixed-capacity slot allocator used by this specialization.
@@ -274,9 +288,12 @@ public:
 
 	/** @brief Attempts exactly one complete prewarm on the game thread.
 	 * @param Args Synchronous factory inputs; the pool does not retain them.
-	 * @return Success or AlreadyPrewarmed, InTransition, or CreationFailed.
-	 * @details A failed factory rolls back created objects. This instance
+	 * @return Success, or a readiness, factory, or network-registration error.
+	 * @details A failed factory rolls
+	 * back created objects. This instance
 	 * cannot be prewarmed again after an attempt or Shutdown.
+	 * Client
+	 * success binds a view; IsReady waits for the authority announcement.
 	 */
 	[[nodiscard]] FPoolResult Prewarm(const FCreateArgs& Args)
 	{
@@ -291,17 +308,46 @@ public:
 		}
 		FOperationGuard Guard(bBusy);
 		bAttemptedPrewarm = true;
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			static_assert(std::is_base_of_v<AActor, T>, "Replicated pools require actors");
+			FName Name = T::StaticClass()->GetFName();
+			if constexpr (requires { Args.NetworkName; })
+			{
+				if (!Args.NetworkName.IsNone())
+				{
+					Name = Args.NetworkName;
+				}
+			}
+			if (!Args.World || !this->Begin(*Args.World, Name, Capacity))
+			{
+				return {EPoolError::NetworkingUnavailable};
+			}
+			if (this->IsClient())
+			{
+				bReady = true;
+				return {};
+			}
+		}
 		for (uint32 I = 0; I < Capacity; ++I)
 		{
 			T* Object = Policy::Create(Args);
 			if (!IsValid(Object))
 			{
 				DestroyCreated();
+				if constexpr (NetworkMode == ENetworkMode::Replicated)
+				{
+					this->Close();
+				}
 				return {EPoolError::CreationFailed};
 			}
 			References.Set(I, Object);
 			++CreatedCount;
 			Policy::OnReturn(*Object);
+			if constexpr (NetworkMode == ENetworkMode::Replicated)
+			{
+				this->Publish(I, Object, false);
+			}
 		}
 		bReady = true;
 		return {};
@@ -317,6 +363,13 @@ public:
 	[[nodiscard]] FLease TryAcquire(const FAcquireArgs& Args)
 	{
 		check(IsInGameThread());
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			if (this->IsClient())
+			{
+				return {nullptr, {}, {EPoolError::NotReady}};
+			}
+		}
 		if (bBusy)
 		{
 			return {nullptr, {}, {EPoolError::InTransition}};
@@ -339,6 +392,10 @@ public:
 		if (!Object)
 		{
 			bFaulted = true;
+			if constexpr (NetworkMode == ENetworkMode::Replicated)
+			{
+				this->Publish(Handle.Index, nullptr, false);
+			}
 			const bool bReturned = Slots.Release(Handle);
 			check(bReturned);
 			return {nullptr, {}, {EPoolError::LostObject}};
@@ -349,6 +406,10 @@ public:
 			const bool bReturned = Slots.Release(Handle);
 			check(bReturned);
 			return {nullptr, {}, {EPoolError::ActivationFailed}};
+		}
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			this->Publish(Handle.Index, Object, true);
 		}
 		return {Object, Handle, {}};
 	}
@@ -363,6 +424,13 @@ public:
 	[[nodiscard]] FPoolResult Release(FHandle Handle)
 	{
 		check(IsInGameThread());
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			if (this->IsClient())
+			{
+				return {EPoolError::NotReady};
+			}
+		}
 		if (bBusy)
 		{
 			return {EPoolError::InTransition};
@@ -380,11 +448,19 @@ public:
 		if (!Object)
 		{
 			bFaulted = true;
+			if constexpr (NetworkMode == ENetworkMode::Replicated)
+			{
+				this->Publish(Handle.Index, nullptr, false);
+			}
 			const bool bReturned = Slots.Release(Handle);
 			check(bReturned);
 			return {EPoolError::LostObject};
 		}
 		Policy::OnReturn(*Object);
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			this->Publish(Handle.Index, Object, false);
+		}
 		const bool bReturned = Slots.Release(Handle);
 		check(bReturned);
 		return {};
@@ -399,6 +475,13 @@ public:
 	FORCEINLINE T* Get(FHandle Handle) const
 	{
 		check(IsInGameThread());
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			if (this->IsClient())
+			{
+				return nullptr;
+			}
+		}
 		if (!bReady || bBusy || !Slots.IsLive(Handle))
 		{
 			return nullptr;
@@ -406,17 +489,50 @@ public:
 		return References.Get(Handle.Index);
 	}
 
+	/** @brief Reads a local slot or an already resolved client actor.
+	 * @details Game thread only. Client slots may be null while replicating.
+	 * @param Index Slot index; out-of-range indices return null.
+	 * @return Non-owning object while this pool is available, otherwise null.
+	 */
+	FORCEINLINE T* GetByIndex(uint32 Index) const
+	{
+		check(IsInGameThread());
+		if (!IsReady() || bBusy || Index >= Capacity)
+		{
+			return nullptr;
+		}
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			if (this->IsClient())
+			{
+				return Cast<T>(Private::FPoolNetworkBinding::Get(Index));
+			}
+		}
+		return References.Get(Index);
+	}
+
 	/** @brief Reads a raw actor slot directly on the game thread.
 	 * @details Available only with WorldRaw. The caller guarantees successful
 	 * prewarm, a live pool and actor, and no active lifecycle transition.
 	 * No bounds, thread, world, readiness, or lease checks run at access time.
-	 * @param Index Slot in [0, Capacity); unchecked.
-	 * @return Non-owning stored pointer, whether its slot is free or leased.
+	 * @note Replicated clients resolve weak actor references and can
+	 * return null before receipt, after
+	 * destruction, or after closure.
+	 * @param Index Slot in [0, Capacity); unchecked on authority.
+	 * @return
+	 * Non-owning stored pointer, whether its slot is free or leased.
 	 * @note Reading a slot does not acquire it or validate an earlier lease.
 	 */
 	FORCEINLINE T* GetByIndexUnchecked(uint32 Index) const noexcept
 	{
 		static_assert(Mode == EReferenceMode::WorldRaw, "Unchecked index access requires WorldRaw actor references");
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			if (this->IsClient())
+			{
+				return Cast<T>(Private::FPoolNetworkBinding::Get(Index));
+			}
+		}
 		return References.Get(Index);
 	}
 
@@ -437,6 +553,10 @@ public:
 		FOperationGuard Guard(bBusy);
 		bReady = false;
 		bAttemptedPrewarm = true;
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			this->Close();
+		}
 		DestroyCreated();
 		return {};
 	}
@@ -445,7 +565,14 @@ public:
 	FORCEINLINE bool IsReady() const
 	{
 		check(IsInGameThread());
-		return bReady && !bFaulted;
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			return bReady && !bFaulted && Private::FPoolNetworkBinding::IsReady();
+		}
+		else
+		{
+			return bReady && !bFaulted;
+		}
 	}
 	/// Returns whether acquire or release observed object loss; game thread only.
 	FORCEINLINE bool HasLostObject() const
@@ -463,6 +590,13 @@ public:
 	FORCEINLINE uint32 NumFree() const
 	{
 		check(IsInGameThread());
+		if constexpr (NetworkMode == ENetworkMode::Replicated)
+		{
+			if (this->IsClient())
+			{
+				return 0;
+			}
+		}
 		return bReady && !bFaulted ? Slots.NumFree() : 0;
 	}
 

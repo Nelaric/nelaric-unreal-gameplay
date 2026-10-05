@@ -18,7 +18,7 @@ namespace Nelaric::ObjectPool
  * @note Spawns into PersistentLevel; Destroy is a
  * shutdown operation.
  * @note Prepares a deferred spawn before construction and BeginPlay.
- * @note Clients receive replicated actors and never allocate local leases.
+ * @note Replicated pools receive client actors and grant only server leases.
  * @tparam T Any ACharacter-derived type
  * implementing IPoolableCharacter.
  */
@@ -36,6 +36,8 @@ template <class T> struct TCharacterPoolPolicy
 		UClass* Class = nullptr;
 		/// Initial world placement; prewarmed characters remain inactive.
 		FTransform ParkTransform = FTransform::Identity;
+		/// Optional identity for multiple replicated pools of the same type.
+		FName NetworkName;
 	};
 	/// Per-lease world transform; the caller selects valid placement.
 	using FAcquireArgs = FTransform;
@@ -72,13 +74,6 @@ template <class T> struct TCharacterPoolPolicy
 		{
 			return nullptr;
 		}
-		// Enable replication after initialization, without pre-init role changes.
-		Character->bAlwaysRelevant = true;
-		Character->bOnlyRelevantToOwner = false;
-		Character->bNetUseOwnerRelevancy = false;
-		Character->SetNetDormancy(DORM_Awake);
-		Character->SetReplicates(true);
-		Character->SetReplicateMovement(true);
 		return Character;
 	}
 
@@ -119,7 +114,9 @@ template <class T> struct TCharacterPoolPolicy
  * @tparam Capacity Positive compile-time
  * number of prewarmed characters.
  * @tparam Mode Reference mode; WorldRaw requires strict lifetime control.
+ * @tparam NetworkMode Optional automatic actor-pool synchronization.
  */
-template <class T, uint32 Capacity, EReferenceMode Mode = EReferenceMode::WorldWeak>
-using TCharacterPool = TFixedUObjectPool<T, Capacity, TCharacterPoolPolicy<T>, Mode>;
+template <class T, uint32 Capacity, EReferenceMode Mode = EReferenceMode::WorldWeak,
+          ENetworkMode NetworkMode = ENetworkMode::Disabled>
+using TCharacterPool = TFixedUObjectPool<T, Capacity, TCharacterPoolPolicy<T>, Mode, NetworkMode>;
 } // namespace Nelaric::ObjectPool

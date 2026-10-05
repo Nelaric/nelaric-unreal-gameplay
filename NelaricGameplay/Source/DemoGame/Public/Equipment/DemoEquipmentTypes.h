@@ -13,6 +13,12 @@
 
 class UDemoEquipmentDefinition;
 
+namespace Nelaric::DemoEquipment
+{
+/// Authority game-thread notification after equipment state is committed.
+DECLARE_MULTICAST_DELEGATE(FStateChanged);
+} // namespace Nelaric::DemoEquipment
+
 /// Outcome of a synchronous game-thread equipment operation.
 UENUM(BlueprintType)
 enum class EDemoEquipmentResult : uint8

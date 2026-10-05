@@ -23,6 +23,28 @@ bool UDemoCharacterPoolSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 	return Super::ShouldCreateSubsystem(Outer) && World;
 }
 
+Nelaric::ObjectPool::FPoolResult UDemoCharacterPoolSubsystem::ReleaseDeadCharacter(ADemoCharacter* Character)
+{
+	check(IsInGameThread());
+	if (!CanUsePool())
+	{
+		return {Nelaric::ObjectPool::EPoolError::NotReady};
+	}
+	if (!IsValid(Character) || Character->GetWorld() != GetWorld() || Character->IsAlive() ||
+	    Character->IsPlayerControlled())
+	{
+		return {Nelaric::ObjectPool::EPoolError::InvalidHandle};
+	}
+	for (FHandle Handle : ActiveHandles)
+	{
+		if (Handle && Pool.Get(Handle) == Character)
+		{
+			return Release(Handle);
+		}
+	}
+	return {Nelaric::ObjectPool::EPoolError::InvalidHandle};
+}
+
 void UDemoCharacterPoolSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);

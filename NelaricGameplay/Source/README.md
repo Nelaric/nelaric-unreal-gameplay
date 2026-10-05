@@ -224,6 +224,47 @@ Generated Puerts declarations and the project tsconfig must be present.
 JavaScript output goes to Content/JavaScript. Include that script directory,
 the two cue assets, and their Niagara dependencies when packaging.
 
+### Character death presentation
+
+[`BP_DemoCharacter_C.ts`](../TypeScript/Demo/Characters/BP_DemoCharacter_C.ts)
+loads the existing character Blueprint and mixes in OnDeath and
+OnDeathPresentationReset. Entry imports it alongside the weapon cues; no
+reparenting or additional Blueprint death graph is required. The death callback
+stops local movement, disables the capsule, detaches the mesh with its world
+transform preserved, and enables the Ragdoll collision profile and skeletal
+physics. The mesh must have a Physics Asset containing rigid bodies.
+
+Authority records the direction from the last damage source toward the victim
+when GAS applies negative health. A hit trace origin is the fallback when the
+source actor is unavailable. Death and its frozen direction replicate together;
+rendering clients use GetDeathImpulseDirection without locating the attacker.
+Unknown direction means no impulse. TypeScript applies an 80 cm/s velocity change
+to the ragdoll bodies, so imported body masses do not increase the shove.
+Adjust deathImpulseSpeed in the character module to tune this effect.
+
+Before applying the impulse, the callback clears inherited linear and angular
+velocity. A per-instance physical material gives the corpse 0.9 friction, zero
+restitution and sleep thresholds for small residual motion without modifying the
+shared Physics Asset. After deathSettleDelay (1 second), a one-shot world timer
+clears remaining velocity, disables body simulation and mesh updates, and retains
+the final ragdoll pose. Authority schedules a separate one-shot return at 4 seconds
+after death, including dedicated servers. Return releases the recorded current
+pool lease and hides the character; there is no opacity fade. A possessed demo
+character hands control back to its overview camera before returning. Acquiring
+a dead slot starts a new combat life with restored health, ammunition and AI state.
+
+A per-character WeakMap preserves the mesh attachment, relative transform,
+collision settings, capsule collision, animation pause, mesh tick and gravity. New-life
+ResetCombatState and native pool parking call OnDeathPresentationReset, which
+clears the pending settle timer, stops skeletal physics and restores those
+settings, including the original physical material override. Custom collision profiles
+restore their saved channel responses. Control changes retain death state and do
+not replay the effect. Dedicated servers skip the presentation; local bodies are
+not a synchronized corpse simulation. This implementation adds no Tick or
+polling. Restart play after rebuilding TypeScript and reload native code after
+changing native death lifecycle code. Revival, explicit return and world teardown
+cancel pending return callbacks.
+
 FireSound and character montages remain optional native presentation.
 If a fire cue also plays audio, leave the definition's FireSound empty.
 An already accepted burst may finish after a weapon action is canceled;

@@ -18,6 +18,9 @@ Nelaric Unreal Gameplay 是面向 Unreal Engine 5.6 及以上版本的玩法框�
 
 ## GameAI StateTree
 
+DemoGame 提供可选的[单兵 AI 示例](AI/DemoSoldier.zh-CN.md)，复用现有角色、武器和
+控制权生命周期，包含原生 C++ 执行与 GameAI StateTree 接入节点。
+
 接入模块使用现有 GameplayRuntime 依赖，头文件位于其 AI/ 目录。创建 StateTree 资产时选择 Game AI Schema（UGameAIStateTreeSchema），在 Pawn 或 Controller 上添加 UGameAIStateTreeComponent 执行。继承的 Context Actor Class 应设置为组件实际 Owner 的类型。必需上下文如下：
 
 | 条目 | 类型 | 来源 |

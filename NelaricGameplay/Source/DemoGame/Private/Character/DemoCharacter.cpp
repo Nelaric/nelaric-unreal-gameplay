@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 #include "Character/DemoCharacter.h"
+#include "AI/DemoSoldierComponent.h"
 #include "Animation/DemoAnimationDataInstance.h"
 #include "AIController.h"
 #include "BrainComponent.h"
@@ -13,11 +14,16 @@
 #include "Equipment/DemoEquipmentManagerComponent.h"
 #include "Equipment/DemoEquipmentInstance.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "ObjectPool/DemoCharacterPoolSubsystem.h"
+#include "Player/ControlSwitchSubsystem.h"
+#include "Player/DemoOverviewPawn.h"
+#include "Player/DemoPlayerController.h"
 #include "PawnGasBindingComponent.h"
 #include "NelaricAbilitySystemComponent.h"
 #include "Pawn/PawnControlComponent.h"
 #include "Pawn/PawnInitializationComponent.h"
 #include "Pawn/PawnInitializationConfig.h"
+#include "Perception/AIPerceptionComponent.h"
 #include "GasStateProfile.h"
 #include "NativeGameplayTags.h"
 #include "Net/UnrealNetwork.h"
@@ -47,6 +53,66 @@ ADemoCharacter::ADemoCharacter(const FObjectInitializer& ObjectInitializer)
 	DefaultStateProfile->Abilities.Add({UDemoFireAbility::StaticClass(), Nelaric::DemoWeaponTags::Fire, 1});
 	DefaultStateProfile->Abilities.Add({UDemoReloadAbility::StaticClass(), Nelaric::DemoWeaponTags::Reload, 1});
 	GetGasBinding()->StateProfile = DefaultStateProfile;
+}
+
+UDemoSoldierComponent* ADemoCharacter::GetSoldierComponent() const
+{
+	check(IsInGameThread());
+	UDemoSoldierComponent* Soldier = FindComponentByClass<UDemoSoldierComponent>();
+	return IsValid(Soldier) && Soldier->IsRegistered() ? Soldier : nullptr;
+}
+
+bool ADemoCharacter::SetTeamId(uint8 InTeamId)
+{
+	check(IsInGameThread());
+	if (!HasAuthority() || IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown ||
+	    GetWorld()->GetNetMode() == NM_Client)
+	{
+		return false;
+	}
+	if (TeamId == InTeamId)
+	{
+		return true;
+	}
+	TeamId = InTeamId;
+	if (AAIController* Bot = Cast<AAIController>(GetController()))
+	{
+		Bot->SetGenericTeamId(FGenericTeamId(TeamId));
+		if (UAIPerceptionComponent* Perception = Bot->GetAIPerceptionComponent())
+		{
+			Perception->RequestStimuliListenerUpdate();
+		}
+	}
+	if (UDemoSoldierComponent* Soldier = GetSoldierComponent())
+	{
+		Soldier->NotifyTeamChanged();
+	}
+	FlushNetDormancy();
+	ForceNetUpdate();
+	TeamChanged.Broadcast();
+	return true;
+}
+
+uint8 ADemoCharacter::GetTeamId() const
+{
+	check(IsInGameThread());
+	return TeamId;
+}
+
+Nelaric::Demo::FTeamChanged& ADemoCharacter::OnTeamChanged()
+{
+	check(IsInGameThread());
+	return TeamChanged;
+}
+
+void ADemoCharacter::SetGenericTeamId(const FGenericTeamId& InTeamId)
+{
+	SetTeamId(InTeamId.GetId());
+}
+
+FGenericTeamId ADemoCharacter::GetGenericTeamId() const
+{
+	return FGenericTeamId(GetTeamId());
 }
 
 Nelaric::UnitAnimation::IAnimationDataUpdater& ADemoCharacter::GetAnimationDataUpdater() const
@@ -121,6 +187,10 @@ bool ADemoCharacter::ActivateFromPool(const FTransform& Transform)
 		DeactivateToPool();
 		return false;
 	}
+	if (UDemoSoldierComponent* Soldier = GetSoldierComponent())
+	{
+		Soldier->RequestExecutionStart();
+	}
 	return true;
 }
 
@@ -133,6 +203,7 @@ void ADemoCharacter::PostNetInit()
 
 void ADemoCharacter::DeactivateToPool()
 {
+	CancelDeathReturn();
 	CancelCombatActions();
 	Nelaric::ObjectPool::FCharacterPoolHelper::Deactivate(*this, PoolState);
 }
@@ -157,7 +228,13 @@ float ADemoCharacter::GetMaxHealth() const
 
 bool ADemoCharacter::IsAlive() const
 {
-	return !bCombatDead && GetHealth() > 0.0f;
+	return !DeathState.bDead && GetHealth() > 0.0f;
+}
+
+FVector ADemoCharacter::GetDeathImpulseDirection() const
+{
+	check(IsInGameThread());
+	return DeathState.bDead ? FVector(DeathState.ImpulseDirection) : FVector::ZeroVector;
 }
 
 void ADemoCharacter::CancelCombatActions()
@@ -190,30 +267,38 @@ bool ADemoCharacter::ResetCombatState()
 	{
 		return false;
 	}
+	CancelDeathReturn();
 	CancelCombatActions();
 	Binding->GetAbilitySystem()->SetNumericAttributeBase(UDemoCombatAttributes::GetHealthAttribute(), GetMaxHealth());
 	if (UDemoEquipmentManagerComponent* Manager = FindComponentByClass<UDemoEquipmentManagerComponent>())
 	{
 		Manager->ResetWeaponAmmunition();
 	}
+	if (UDemoSoldierComponent* Soldier = GetSoldierComponent())
+	{
+		Soldier->ResetSoldierState();
+	}
 	bDeathHandled = false;
-	bCombatDead = false;
+	DeathState = {};
+	LastDamageDirection = FVector::ZeroVector;
 	FlushNetDormancy();
 	ForceNetUpdate();
+	OnDeathPresentationReset();
 	if (IsPoolActive() && IsAlive())
 	{
 		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-		if (IsValid(PoolControlPolicy))
+		if (UPawnControlComponent* Policy = FindComponentByClass<UPawnControlComponent>())
 		{
-			PoolControlPolicy->StartReadyBotLogic();
+			Policy->StartReadyBotLogic();
 		}
 	}
 	NotifyCombatHealthChanged();
 	return true;
 }
 
-void ADemoCharacter::NotifyCombatHealthChanged(AActor* DamageInstigator)
+void ADemoCharacter::NotifyCombatHealthChanged(AActor* DamageInstigator, const FVector* IncomingDamageDirection)
 {
+	check(IsInGameThread());
 	const UPawnGasBindingComponent* Binding = GetGasBinding();
 	if (IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown || !Binding ||
 	    !Binding->IsReadyForActions())
@@ -222,17 +307,30 @@ void ADemoCharacter::NotifyCombatHealthChanged(AActor* DamageInstigator)
 	}
 	if (HasAuthority())
 	{
-		const bool bNewDead = GetHealth() <= 0.0f;
-		if (bCombatDead != bNewDead)
+		if (!DeathState.bDead && IncomingDamageDirection)
 		{
-			bCombatDead = bNewDead;
+			// A supplied zero direction is unknown damage, not a stale attacker.
+			LastDamageDirection =
+			    IncomingDamageDirection->ContainsNaN() ? FVector::ZeroVector : IncomingDamageDirection->GetSafeNormal();
+		}
+		const bool bNewDead = GetHealth() <= 0.0f;
+		if (DeathState.bDead != bNewDead)
+		{
+			DeathState.bDead = bNewDead;
+			DeathState.ImpulseDirection = bNewDead ? LastDamageDirection : FVector::ZeroVector;
 			FlushNetDormancy();
 			ForceNetUpdate();
 		}
 	}
-	const bool bAlive = !bCombatDead;
+	const bool bAlive = !DeathState.bDead;
 	if (bAlive)
 	{
+		CancelDeathReturn();
+		if (bDeathHandled)
+		{
+			LastDamageDirection = FVector::ZeroVector;
+			OnDeathPresentationReset();
+		}
 		bDeathHandled = false;
 	}
 	const bool bNewDeath = !bAlive && !bDeathHandled;
@@ -241,7 +339,12 @@ void ADemoCharacter::NotifyCombatHealthChanged(AActor* DamageInstigator)
 		bDeathHandled = true;
 		if (HasAuthority())
 		{
+			GetWorld()->GetTimerManager().SetTimer(DeathReturnTimer, this, &ThisClass::HandleDeathReturn, 4.0f, false);
 			CancelCombatActions();
+			if (UDemoSoldierComponent* Soldier = GetSoldierComponent())
+			{
+				Soldier->NotifyOwnerDeath();
+			}
 			GetCharacterMovement()->DisableMovement();
 			StopPoolBotLogic();
 		}
@@ -251,20 +354,25 @@ void ADemoCharacter::NotifyCombatHealthChanged(AActor* DamageInstigator)
 		}
 	}
 	OnHealthChanged(GetHealth(), GetMaxHealth());
-	if (bNewDeath && bCombatDead && bDeathHandled && !IsActorBeingDestroyed())
+	if (bNewDeath && DeathState.bDead && bDeathHandled && !IsActorBeingDestroyed())
 	{
 		OnDeath(DamageInstigator);
 	}
 }
 
-void ADemoCharacter::OnRep_CombatDead()
+void ADemoCharacter::OnRep_DeathState()
 {
-	if (!bCombatDead)
+	if (IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown)
 	{
-		bDeathHandled = false;
 		return;
 	}
-	if (bDeathHandled || IsActorBeingDestroyed() || !GetWorld() || GetWorld()->bIsTearingDown)
+	if (!DeathState.bDead)
+	{
+		bDeathHandled = false;
+		OnDeathPresentationReset();
+		return;
+	}
+	if (bDeathHandled)
 	{
 		return;
 	}
@@ -290,7 +398,8 @@ void ADemoCharacter::CancelLocalWeaponActions()
 void ADemoCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(ADemoCharacter, bCombatDead);
+	DOREPLIFETIME(ADemoCharacter, DeathState);
+	DOREPLIFETIME(ADemoCharacter, TeamId);
 }
 
 void ADemoCharacter::SetActorHiddenInGame(bool bNewHidden)
@@ -298,6 +407,10 @@ void ADemoCharacter::SetActorHiddenInGame(bool bNewHidden)
 	Super::SetActorHiddenInGame(bNewHidden);
 	if (bPoolComponentsInitialized && PoolState.bPrepared)
 	{
+		if (bNewHidden && !PoolState.bActive)
+		{
+			OnDeathPresentationReset();
+		}
 		// Both native authority transitions and client replication use this.
 		// Read logical pool state; ordinary visibility edits do not toggle it.
 		InitializePoolControlPolicy();
@@ -318,8 +431,7 @@ void ADemoCharacter::InitializePoolControlPolicy()
 	UPawnControlComponent* Policy = FindComponentByClass<UPawnControlComponent>();
 	if (!Policy && HasConfiguredPoolControlPolicy())
 	{
-		// The configuration creates its component during BeginPlay. Do not
-		// add a competing fallback before that phase has run.
+		// Wait for the DA-created policy before applying pool restrictions.
 		if (!bPoolInitializationSubscribed)
 		{
 			bPoolInitializationSubscribed = true;
@@ -329,15 +441,13 @@ void ADemoCharacter::InitializePoolControlPolicy()
 		}
 		return;
 	}
-	const bool bCreated = !Policy;
-	if (bCreated)
+	if (!Policy)
 	{
-		Policy = NewObject<UPawnControlComponent>(this, TEXT("PoolControlPolicy"), RF_Transient);
-		AddInstanceComponent(Policy);
+		return;
 	}
 	PoolControlPolicy = Policy;
 	bPoolControlPolicyActive = false;
-	// Preserve authored settings or the fallback's native defaults once.
+	// Preserve the authored control settings once.
 	bPoolAllowPlayerControl = Policy->bAllowPlayerControl;
 	bPoolAllowReturnControl = Policy->bAllowReturnControl;
 	bPoolReturnToBot = Policy->bReturnToBot;
@@ -346,10 +456,6 @@ void ADemoCharacter::InitializePoolControlPolicy()
 	Policy->bAllowReturnControl = false;
 	Policy->bReturnToBot = false;
 	Policy->bStartBotLogicOnReady = false;
-	if (bCreated)
-	{
-		Policy->RegisterComponent();
-	}
 }
 
 bool ADemoCharacter::HasConfiguredPoolControlPolicy() const
@@ -423,6 +529,7 @@ void ADemoCharacter::StopPoolBotLogic()
 
 void ADemoCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelDeathReturn();
 	CancelCombatActions();
 	PoolState.bActive = false;
 	if (bPoolInitializationSubscribed)
@@ -433,4 +540,49 @@ void ADemoCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		bPoolInitializationSubscribed = false;
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void ADemoCharacter::CancelDeathReturn()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DeathReturnTimer);
+	}
+}
+
+void ADemoCharacter::HandleDeathReturn()
+{
+	check(IsInGameThread());
+	DeathReturnTimer.Invalidate();
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || World->bIsTearingDown || IsActorBeingDestroyed() || !DeathState.bDead ||
+	    !IsPoolActive())
+	{
+		return;
+	}
+	if (ADemoPlayerController* Player = Cast<ADemoPlayerController>(GetController()))
+	{
+		// Keep the coordinated GAS transfer when returning to the overview camera.
+		UControlSwitchSubsystem* Coordinator = World->GetSubsystem<UControlSwitchSubsystem>();
+		ADemoOverviewPawn* Overview = Player->GetOverviewPawn();
+		if (!Coordinator || !IsValid(Overview) ||
+		    Coordinator->ExecuteControlSwitch(Player, EControlSwitchAction::TakeControl, Overview) !=
+		        EControlSwitchResult::Succeeded)
+		{
+			UE_LOG(LogDemoCharacterPoolActivation, Warning, TEXT("Cannot return dead %s: player control is retained."),
+			       *GetName());
+			return;
+		}
+	}
+	UDemoCharacterPoolSubsystem* Pool = World->GetSubsystem<UDemoCharacterPoolSubsystem>();
+	if (!Pool || !Pool->ReleaseDeadCharacter(this))
+	{
+		UE_LOG(LogDemoCharacterPoolActivation, Warning, TEXT("Cannot return dead %s: no releasable character lease."),
+		       *GetName());
+	}
+	else
+	{
+		UE_LOG(LogDemoCharacterPoolActivation, Log, TEXT("Dead character returned: %s (free slots: %u)."), *GetName(),
+		       Pool->NumFree());
+	}
 }

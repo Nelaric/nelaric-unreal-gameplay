@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 #include "GAS/DemoCombatAttributes.h"
+#include "AI/DemoSoldierComponent.h"
 #include "Character/DemoCharacter.h"
 #include "AbilitySystemComponent.h"
 #include "NelaricAbilitySystemComponent.h"
@@ -55,7 +56,24 @@ void UDemoCombatAttributes::PostGameplayEffectExecute(const FGameplayEffectModCa
 		    GetHealthAttribute(), FMath::Clamp(Health.GetCurrentValue(), 0.0f, MaxHealth.GetCurrentValue()));
 		if (ADemoCharacter* Character = Cast<ADemoCharacter>(GetOwningAbilitySystemComponent()->GetAvatarActor()))
 		{
-			Character->NotifyCombatHealthChanged(Data.EffectSpec.GetContext().GetOriginalInstigator());
+			FVector IncomingDamageDirection = FVector::ZeroVector;
+			AActor* Source = Data.EffectSpec.GetContext().GetOriginalInstigator();
+			const bool bHealthDamage =
+			    Data.EvaluatedData.Attribute == GetHealthAttribute() && Data.EvaluatedData.Magnitude < 0.0f;
+			if (bHealthDamage)
+			{
+				const FHitResult* Hit = Data.EffectSpec.GetContext().GetHitResult();
+				const FVector TowardSource = IsValid(Source)
+				                                 ? Source->GetActorLocation() - Character->GetActorLocation()
+				                             : Hit ? Hit->TraceStart - Character->GetActorLocation()
+				                                   : FVector::ZeroVector;
+				IncomingDamageDirection = -TowardSource;
+				if (UDemoSoldierComponent* Soldier = Character->FindComponentByClass<UDemoSoldierComponent>())
+				{
+					Soldier->ReportDamage(Source, -Data.EvaluatedData.Magnitude, TowardSource);
+				}
+			}
+			Character->NotifyCombatHealthChanged(Source, bHealthDamage ? &IncomingDamageDirection : nullptr);
 		}
 	}
 }

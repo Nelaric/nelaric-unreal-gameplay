@@ -69,7 +69,7 @@ void ADemoInitialCharacterSpawnPoint::SpawnInitialCharacter()
 	}
 	bSpawnAttempted = true;
 	StopWaitingForInitialCharacters();
-	const UDemoCharacterPoolSubsystem::FLease Lease = Pool->TryAcquire(GetActorTransform());
+	const UDemoCharacterPoolSubsystem::FLease Lease = Pool->TryAcquire(GetActorTransform(), TeamId);
 	if (!Lease)
 	{
 		if (Lease.Result.Error == Nelaric::ObjectPool::EPoolError::Full)
@@ -88,6 +88,8 @@ void ADemoInitialCharacterSpawnPoint::SpawnInitialCharacter()
 		return;
 	}
 	SpawnedHandle = Lease.Handle;
+	UE_LOG(LogDemoInitialCharacterSpawn, Log, TEXT("Initial character spawned: point=%s character=%s team=%u."),
+	       *GetName(), *GetNameSafe(Lease.Object), Lease.Object->GetTeamId());
 }
 
 void ADemoInitialCharacterSpawnPoint::WaitForInitialCharacters(UPawnInitializationComponent* Initialization)

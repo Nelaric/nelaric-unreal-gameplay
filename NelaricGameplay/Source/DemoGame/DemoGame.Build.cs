@@ -19,10 +19,13 @@ public class DemoGame : ModuleRules
 				"GameplayTags",
 				"GameplayAbilitiesIntegration",
 				"GameplayAbilities",
+				"AIModule",
+				"StateTreeModule",
+				"GameplayStateTreeModule",
 			}
 		);
 		PrivateDependencyModuleNames.AddRange(
-			new string[] { "AIModule", "AnimationBudgetAllocator", "GameplayTasks", "JsEnv" }
+			new string[] { "NavigationSystem", "AnimationBudgetAllocator", "GameplayTasks", "JsEnv" }
 		);
 	}
 }

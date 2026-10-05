@@ -187,6 +187,37 @@ Puerts Auto Mode 和编辑器 TS Watcher 与此入口各自独立；重新开始
 Puerts 声明文件，并准备项目 tsconfig。输出位于 Content/JavaScript；打包
 时包含此脚本目录、两个 GC 资产和依赖的 Niagara 资源。
 
+### 角色死亡表现
+
+[BP_DemoCharacter_C.ts](../TypeScript/Demo/Characters/BP_DemoCharacter_C.ts)
+加载现有角色蓝图，通过 mixin 覆写 OnDeath 和 OnDeathPresentationReset。
+Entry 与武器 Cue 一起导入该模块，无需修改角色蓝图父类或另搭死亡图。
+死亡回调停止本地移动、关闭胶囊碰撞，保持世界位置分离 Mesh，再启用 Ragdoll
+碰撞预设和骨骼物理。Mesh 必须具有包含刚体的 Physics Asset。
+
+GAS 扣除生命值时，权威端记录从最后攻击者推向角色的方向；攻击者不可用时，
+使用命中 TraceStart 作为来源位置。死亡标记和冻结后的方向一起复制，客户端
+通过 GetDeathImpulseDirection 获取方向，不依赖攻击者仍然存在。方向未知时
+不施加冲量。TS 对布娃娃刚体施加 80 cm/s 的速度变化，避免导入刚体质量改变
+推力大小；调整角色模块中的 deathImpulseSpeed 即可改变力度。
+
+施加冲量前清除布娃娃继承的线速度和角速度。每个 Mesh 使用独立的物理材质，
+摩擦系数为 0.9、弹性为 0，并通过休眠阈值消除低速残余运动，不修改共享的
+Physics Asset。死亡后 deathSettleDelay（1 秒）触发一次世界计时器回调，清除
+残余速度，禁用刚体模拟和 Mesh 更新，保留最后的布娃娃姿态。权威端从死亡时
+开始另外计时 4 秒，到时释放记录的当前池租约并隐藏角色，不做透明度渐隐；
+独立服务器同样执行回池。被玩家控制的角色先通过已有控制切换返回概览相机。
+再次获取死亡角色的池槽位时，开启新生命，恢复生命值、弹药和 AI 状态。
+
+每个角色通过 WeakMap 保存 Mesh 挂接、相对 Transform、碰撞设置、胶囊碰撞、
+动画暂停、Mesh Tick 开关和重力。新生命 ResetCombatState 与原生对象池停放触发
+OnDeathPresentationReset，取消待执行的稳定回调，停止骨骼物理并恢复这些设置
+及原始物理材质覆盖；自定义碰撞预设会恢复
+各通道的原始响应。控制权变化保留死亡状态，不会重复播放。独立服务器跳过表现；
+各端布娃娃属于本地视觉物理，不同步尸体骨骼姿态。实现不增加 Tick 或轮询。
+TS 编译后重新开始游戏会话；修改原生死亡生命周期后重新加载原生代码。
+复活、主动回池及世界结束时取消待执行的回池回调。
+
 FireSound 和角色蒙太奇仍是可选原生表现。如在 Fire Cue 中播放声音，
 将武器定义的 FireSound 留空。中断动作后，已经确认的短时特效可自行播完；
 此流程不创建持续的 Add/Remove Cue，也不创建额外开火计时器。

@@ -30,6 +30,14 @@ class ADemoInitialCharacterSpawnPoint : public ATargetPoint
 	GENERATED_BODY()
 
 public:
+	/** @brief Team injected into the character before its lease is activated.
+	 * @details Set on each marker or its Blueprint defaults before BeginPlay.
+	 * Equal IDs are friendly, different IDs hostile, and 255 is neutral.
+	 * Editing the marker after acquisition does not change the current lease.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Demo|Spawning", meta = (ExposeOnSpawn = "true"))
+	uint8 TeamId = 0;
+
 	/// Native token type used by the owning world's fixed character pool.
 	using FHandle = UDemoCharacterPoolSubsystem::FHandle;
 

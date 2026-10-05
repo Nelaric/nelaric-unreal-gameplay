@@ -42,13 +42,15 @@ ADemoCharacter 保留 ANelaricGasCharacter 基类并实现同一接口，ADemoPl
 
 插件通过 `ObjectPool/FixedObjectPoolWorldSubsystem.h` 提供抽象的 World 生命周期管理基类。具体子系统以普通 C++ 成员持有类型化对象池，实现 PrewarmPools 和 ShutdownPools。基类在 OnWorldBeginPlay 中预热一次，此时 GameMode 尚未向 Actor 分派 BeginPlay；通过 FWorldDelegates::OnWorldBeginTearDown 在世界内 Actor 的 EndPlay 前关闭池，并在 Deinitialize 中做幂等兜底。所有回调必须保持 World 和子系统存活，不能在池转换中结束世界。
 
-DemoGame 在 `ObjectPool/DemoCharacterPoolSubsystem.h` 提供 UDemoCharacterPoolSubsystem，由引擎在所有网络模式的 Game 和 PIE World 中自动创建。子系统直接持有 `TCharacterPool<ADemoCharacter, 200, EReferenceMode::WorldRaw>`。构造函数将 `/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter` 加载为 ADemoCharacter 子类，并通过反射类引用供 GC 和打包流程识别。权威端将该类传入现有 FCreateArgs::Class，在 PersistentLevel 中以 Identity Transform 预热 200 个停用的蓝图角色；类加载失败返回 CreationFailed，不回退到原生角色。客户端完成启动，但不创建本地权威池。子系统独占权威角色的销毁控制，在世界内 Actor teardown 前关闭池。容量、引用模式和原生基类是编译期选择，创建参数中的类决定全部槽位实际使用的子类；其他游戏通过自己的具体 World 子系统持有对应的池，GameplayRuntime 无需依赖游戏模块或 GAS。通用角色池的默认模式仍为 WorldWeak。
+DemoGame 在 `ObjectPool/DemoCharacterPoolSubsystem.h` 提供 UDemoCharacterPoolSubsystem，由引擎在所有网络模式的 Game 和 PIE World 中自动创建。子系统直接持有 `TFixedUObjectPool<ADemoCharacter, Capacity, Nelaric::Demo::FCharacterPoolPolicy, EReferenceMode::WorldRaw>`，Demo 专用策略在通用角色生命周期上增加每次租约的团队注入。构造函数将 `/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter` 加载为 ADemoCharacter 子类，并通过反射类引用供 GC 和打包流程识别。权威端将该类传入现有 FCreateArgs::Class，在 PersistentLevel 中以 Identity Transform 预热 Capacity 个停用的蓝图角色；类加载失败返回 CreationFailed，不回退到原生角色。客户端完成启动，但不创建本地权威池。子系统独占权威角色的销毁控制，在世界内 Actor teardown 前关闭池。容量、引用模式和原生基类是编译期选择，创建参数中的类决定全部槽位实际使用的子类；其他游戏通过自己的具体 World 子系统持有对应的池，GameplayRuntime 无需依赖游戏模块或 GAS。通用角色池的默认模式仍为 WorldWeak。
 
 权威端玩法调用从 World 已经 BeginPlay 后开始。此前、客户端以及 teardown 开始后，借出和归还返回 NotReady，Get 返回空，NumFree 返回零；GetByIndexUnchecked 绕过这些检查，调用方必须保证权威池预热成功且生命期有效。GetPrewarmResult 保留启动结果；客户端启动成功不表示拥有本地角色槽位。IsReady 检查权威 World 与池存储是否可用，不表示全部角色已经完成 GAS 初始化；GAS 尚未提交时借出仍可能返回 ActivationFailed。预热失败会记录错误并回滚已创建角色，同一实例不会重试。调用方无需手动预热或关闭 Demo 池。
 
-在每个初始角色位置放置 `Spawning/DemoInitialCharacterSpawnPoint.h` 中的 ADemoInitialCharacterSpawnPoint，或其蓝图子类。该类继承 ATargetPoint，使用生成点的世界 Transform，等待预热角色完成 BeginPlay、Pawn 初始化和 GAS 就绪提交后，再尝试借出一次。启动就绪状态与池存储就绪状态分别判断，启动完成后加载的生成点仍使用正常的单次租约检查。单机、监听服务器和独立服务器的权威端执行借出，客户端生成点不创建本地角色。每个成功的生成点激活一个已有 BP_DemoCharacter 实例。GetSpawnedCharacter 通过 generation 句柄解析当前租约，GetSpawnedHandle 提供供玩法归还使用的原生句柄。激活租约归 World 对象池所有；生成点结束时取消尚未执行的启动回调和就绪订阅，World 关闭时统一关闭租约。
+在每个初始角色位置放置 `Spawning/DemoInitialCharacterSpawnPoint.h` 中的 ADemoInitialCharacterSpawnPoint，或其蓝图子类。该类继承 ATargetPoint，使用生成点的世界 Transform，等待预热角色完成 BeginPlay、Pawn 初始化和 GAS 就绪提交后，再尝试借出一次。启动就绪状态与池存储就绪状态分别判断，启动完成后加载的生成点仍使用正常的单次租约检查。单机、监听服务器和独立服务器的权威端执行借出，客户端生成点不创建本地角色。每个成功的生成点激活一个已有 BP_DemoCharacter 实例。生成点的 TeamId 是首个团队注入入口，在蓝图默认值或关卡实例的 Demo / Spawning 中设置 Team Id；默认值为 0，255 表示中立。TryAcquire(Transform, TeamId) 通过 Demo 专用池策略在激活碰撞和 AI 前写入角色，角色向客户端复制 ID。归还先停止角色再清除其 ID；下一次借出重新注入。省略 TeamId 的原生调用生成中立角色，不继承上一次租约的团队。GetSpawnedCharacter 通过 generation 句柄解析当前租约，GetSpawnedHandle 提供供玩法归还使用的原生句柄。激活租约归 World 对象池所有；生成点结束时取消尚未执行的启动回调和就绪订阅，World 关闭时统一关闭租约。
 
 UDemoCharacterPoolSubsystem 在世界启动时统计已经加载的初始生成点，数量超过 Capacity 时记录警告。任何生成点借不到槽位时也会记录警告并保持空置，包括后来加载的关卡生成点。等待阶段订阅首个未就绪角色的现有 Pawn Ready 通知，并以 0.05 秒间隔检查作为 GAS 在该就绪组外推进时的兜底；实际借出延迟到初始化回调之外执行，始终只尝试一次。等待最多持续十秒 World 时间，超时警告会给出待就绪角色的 Pawn 和 GAS 状态。实际激活失败时，角色先记录被拒绝的 GAS 或原生转换状态，生成点随后报告池错误码。流程不扩容、不补 Spawn、不反复尝试借出，也不启用 Actor Tick。生成点必须提供合法位置，激活流程不会搜索无阻挡的出生位置。
+
+Demo 角色死亡后，由权威端的一次性计时器在四秒时自动回池。Subsystem 记录每次成功借出的代次句柄，ReleaseDeadCharacter 根据当前租约释放槽位，并拒绝存活、仍由玩家控制、来自其他世界或未被借出的角色。被玩家控制的 Demo 角色先通过控制协调器切换到保留的概览角色。提前回池、复活和世界结束时取消死亡计时器。TS 死亡表现在一秒后固定布娃娃，停放时恢复，不做透明度渐隐；再次借出死亡槽位时先显式重置战斗状态，存活角色回池后仍保留原有状态。初始生成点保存的句柄在自动回池后失效，不会引用后续租约的角色。
 
 `Spawning/DemoRuntimeCharacterSpawnPoint.h` 中的 ADemoRuntimeCharacterSpawnPoint 是第二个可放置的 ATargetPoint 子类，当前只提供运行时生成扩展用的空壳，不借出角色，也不占用池容量。
 
@@ -63,7 +65,7 @@ if (!Pool || !Pool->IsReady())
     return;
 }
 
-auto Lease = Pool->TryAcquire(SpawnTransform);
+auto Lease = Pool->TryAcquire(SpawnTransform, TeamId);
 if (!Lease)
 {
     // Lease.Result.Error 区分满池、重入、对象丢失和激活失败。

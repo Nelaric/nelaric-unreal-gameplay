@@ -101,6 +101,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Demo|Equipment")
 	TArray<UDemoEquipmentInstance*> GetEquipment() const;
 
+	/** @brief Borrows authority equipment and ammunition change notifications.
+	 * @details Game thread only, after the snapshot is committed. Remove owned
+	 * bindings before the listener ends. Mutation callbacks may report Busy;
+	 * defer gameplay operations until the current equipment operation returns.
+	 * @return Manager-owned native delegate; no ownership transfer.
+	 */
+	Nelaric::DemoEquipment::FStateChanged& OnStateChanged();
+
 	/// Server-only startup loadout; assign in the component Blueprint defaults.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Equipment")
 	TObjectPtr<UDemoEquipmentLoadout> InitialLoadout;
@@ -145,4 +153,5 @@ private:
 	bool bMutating = false;
 	bool bInitialLoadoutApplied = false;
 	bool bWeaponStateDirty = false;
+	Nelaric::DemoEquipment::FStateChanged StateChanged;
 };

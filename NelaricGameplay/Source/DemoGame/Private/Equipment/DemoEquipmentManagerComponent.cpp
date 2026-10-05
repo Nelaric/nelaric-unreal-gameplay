@@ -373,6 +373,12 @@ TArray<UDemoEquipmentInstance*> UDemoEquipmentManagerComponent::GetEquipment() c
 	return Result;
 }
 
+Nelaric::DemoEquipment::FStateChanged& UDemoEquipmentManagerComponent::OnStateChanged()
+{
+	check(IsInGameThread());
+	return StateChanged;
+}
+
 void UDemoEquipmentManagerComponent::PublishState()
 {
 	APawn* Pawn = GetPawn();
@@ -396,6 +402,7 @@ void UDemoEquipmentManagerComponent::PublishState()
 	++Snapshot.Revision;
 	Pawn->FlushNetDormancy();
 	Pawn->ForceNetUpdate();
+	StateChanged.Broadcast();
 }
 
 bool UDemoEquipmentManagerComponent::ApplySnapshot()

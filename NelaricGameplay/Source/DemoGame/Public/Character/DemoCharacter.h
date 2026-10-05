@@ -7,13 +7,17 @@
 #pragma once
 
 #include "NelaricGasCharacter.h"
+#include "GenericTeamAgentInterface.h"
+#include "Engine/NetSerialization.h"
 #include "ObjectPool/CharacterPoolHelper.h"
 #include "ObjectPool/PoolableCharacter.h"
 #include "Templates/SubclassOf.h"
+#include "TimerManager.h"
 
 #include "DemoCharacter.generated.h"
 
 class UDemoAnimationDataInstance;
+class UDemoSoldierComponent;
 class UGasStateProfile;
 class UPawnControlComponent;
 class UPawnInitializationComponent;
@@ -23,8 +27,33 @@ namespace Nelaric::UnitAnimation
 class IAnimationDataUpdater;
 }
 
-/** @brief Base character for game-specific demo characters.
- * @details Keeps the GAS base and implements pooling through an interface.
+namespace Nelaric::Demo
+{
+/// Game-thread notification after a character's team identity is committed.
+DECLARE_MULTICAST_DELEGATE(FTeamChanged);
+} // namespace Nelaric::Demo
+
+/** @brief Replicates death and its frozen impulse direction together.
+ * @details Character-owned state; authority commits on the game thread.
+ * Rendering replicas use the direction without resolving an attacker.
+ */
+USTRUCT()
+struct FDemoCharacterDeathState
+{
+	GENERATED_BODY()
+
+	/// Whether this life has ended; false after an explicit combat reset.
+	UPROPERTY()
+	bool bDead = false;
+
+	/// Unit direction from the last attacker toward the victim; zero if unknown.
+	UPROPERTY()
+	FVector_NetQuantizeNormal ImpulseDirection = FVector::ZeroVector;
+};
+
+/** @brief Soldier character shared by AI and player control.
+ * @details Soldier behavior is installed through the pawn initialization DA.
+ * GAS and equipment survive control changes; pooling uses an interface.
  * @note The world owns instances; access on the game thread.
  * @note Ordinary spawns start active; deferred pool spawns start idle.
  * @note Shared transitions leave GAS state with its existing owner.
@@ -32,7 +61,9 @@ class IAnimationDataUpdater;
  * AnimationDataClass.
  */
 UCLASS(MinimalAPI, Blueprintable)
-class ADemoCharacter : public ANelaricGasCharacter, public Nelaric::ObjectPool::IPoolableCharacter
+class ADemoCharacter : public ANelaricGasCharacter,
+                       public Nelaric::ObjectPool::IPoolableCharacter,
+                       public IGenericTeamAgentInterface
 {
 	GENERATED_BODY()
 
@@ -42,6 +73,32 @@ public:
 	 * @param ObjectInitializer Initializer for inherited default subobjects.
 	 */
 	DEMOGAME_API ADemoCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	/** @brief Returns the installed soldier component on the game thread.
+	 * @return Borrowed component, or null before DA creation or after removal.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Demo|Soldier")
+	DEMOGAME_API UDemoSoldierComponent* GetSoldierComponent() const;
+
+	/** @brief Injects this character's team independently of DA components.
+	 * @details Authority game thread only; replicated to clients. Updates the
+	 * AI team and observed hostility through notifications, retaining orders.
+	 * @param InTeamId Faction identity; 255 is neutral, equal IDs are friendly.
+	 * @return False on clients or during actor/world teardown; otherwise true.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Team")
+	DEMOGAME_API bool SetTeamId(uint8 InTeamId);
+
+	/// Returns the externally assigned team; 255 before injection; game thread.
+	UFUNCTION(BlueprintPure, Category = "Demo|Team")
+	DEMOGAME_API uint8 GetTeamId() const;
+
+	/** @brief Borrows local team-change notifications on the game thread.
+	 * @details Authority broadcasts after assignment. Remove owned bindings
+	 * before teardown; the delegate does not retain its character.
+	 * @return Native notification owned by this character.
+	 */
+	DEMOGAME_API Nelaric::Demo::FTeamChanged& OnTeamChanged();
 
 	/** @brief Returns the main instance's native updater reference.
 	 * @details Game thread only; the mesh owns the
@@ -65,7 +122,7 @@ public:
 
 	/// Returns whether committed health is positive; game thread only.
 	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
-	bool IsAlive() const;
+	DEMOGAME_API bool IsAlive() const;
 
 	/// Cancels active abilities and weapon actions; authority game thread.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
@@ -79,7 +136,7 @@ public:
 	 * without committed GAS readiness; otherwise true.
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
-	bool ResetCombatState();
+	DEMOGAME_API bool ResetCombatState();
 
 	/** @brief Observes health after a local effect or replicated change.
 	 * @details Game thread only. Query getters
@@ -101,6 +158,21 @@ public:
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Combat")
 	void OnDeath(AActor* DamageInstigator);
+
+	/** @brief Returns the frozen death impulse direction on the game thread.
+	 * @details Replicated with death; zero while alive or without damage data.
+	 * @return Unit direction from the last attacker toward this character.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
+	DEMOGAME_API FVector GetDeathImpulseDirection() const;
+
+	/** @brief Restores local presentation for a new life or pool parking.
+	 * @details Game thread only. Does not change health or death state.
+	 * Presentation implementations undo ragdoll, attachment and collision.
+	 * Dedicated server worlds do not require rendering work.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Combat")
+	void OnDeathPresentationReset();
 
 	/** @brief Main animation class implementing the native updater.
 	 * @details Set character defaults before
@@ -142,7 +214,10 @@ public:
 	}
 
 public:
-	void NotifyCombatHealthChanged(AActor* DamageInstigator = nullptr);
+	virtual void SetGenericTeamId(const FGenericTeamId& InTeamId) override;
+	virtual FGenericTeamId GetGenericTeamId() const override;
+	void NotifyCombatHealthChanged(AActor* DamageInstigator = nullptr,
+	                               const FVector* IncomingDamageDirection = nullptr);
 	DEMOGAME_API virtual void PrepareForPool() override;
 	DEMOGAME_API virtual void PostInitializeComponents() override;
 	DEMOGAME_API virtual void PostNetInit() override;
@@ -151,6 +226,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	Nelaric::Demo::FTeamChanged TeamChanged;
+	UPROPERTY(Transient, Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category = "Demo|Team",
+	          meta = (AllowPrivateAccess = "true"))
+	uint8 TeamId = 255;
 	void CancelLocalWeaponActions();
 	void InitializePoolControlPolicy();
 	bool HasConfiguredPoolControlPolicy() const;
@@ -158,6 +237,8 @@ private:
 	void HandlePoolPawnInitialized(UPawnInitializationComponent* Initialization);
 	void ApplyPoolControlPolicy();
 	void StopPoolBotLogic();
+	void HandleDeathReturn();
+	void CancelDeathReturn();
 
 	Nelaric::ObjectPool::FCharacterPoolState PoolState{true};
 	bool bPoolComponentsInitialized = false;
@@ -168,10 +249,12 @@ private:
 	bool bPoolReturnToBot = false;
 	bool bPoolStartBotLogicOnReady = false;
 	bool bDeathHandled = false;
-	UPROPERTY(ReplicatedUsing = OnRep_CombatDead)
-	bool bCombatDead = false;
+	FVector LastDamageDirection = FVector::ZeroVector;
+	FTimerHandle DeathReturnTimer;
+	UPROPERTY(ReplicatedUsing = OnRep_DeathState)
+	FDemoCharacterDeathState DeathState;
 	UFUNCTION()
-	void OnRep_CombatDead();
+	void OnRep_DeathState();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPawnControlComponent> PoolControlPolicy;

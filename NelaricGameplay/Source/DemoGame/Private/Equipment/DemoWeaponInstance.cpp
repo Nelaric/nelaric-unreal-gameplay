@@ -16,6 +16,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "NelaricAbilitySystemComponent.h"
 #include "PawnGasBindingComponent.h"
+#include "Perception/AISense_Hearing.h"
 #include "Templates/UnrealTemplate.h"
 
 namespace Nelaric::DemoEquipment
@@ -161,6 +162,7 @@ EDemoWeaponResult UDemoWeaponInstance::TryFire()
 		++WeaponState.ShotsFired;
 	}
 	NextAllowedFireTime = World->GetTimeSeconds() + WeaponDefinition->FireInterval;
+	UAISense_Hearing::ReportNoiseEvent(World, Start, 1.0f, OwnerPawn, WeaponDefinition->Range, TEXT("Gunshot"));
 
 	ADemoCharacter* Target = Cast<ADemoCharacter>(Shot.Hit.GetActor());
 	const UPawnGasBindingComponent* TargetBinding = Target ? Target->GetGasBinding() : nullptr;

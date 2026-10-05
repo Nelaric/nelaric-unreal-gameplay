@@ -10,7 +10,7 @@
 #include "Containers/StaticArray.h"
 #include "ObjectPool/DemoCharacterPoolPolicy.h"
 #include "ObjectPool/FixedObjectPoolWorldSubsystem.h"
-#include "Templates/SubclassOf.h"
+#include "UObject/SoftObjectPtr.h"
 
 #include "DemoCharacterPoolSubsystem.generated.h"
 
@@ -161,9 +161,9 @@ private:
 		return World && World->HasBegunPlay() && !World->bIsTearingDown && World->GetNetMode() != NM_Client;
 	}
 
-	// Keep the Blueprint class reachable and referenced by the subsystem CDO.
+	// Reference the Blueprint for cooking without loading it during CDO creation.
 	UPROPERTY()
-	TSubclassOf<ADemoCharacter> CharacterClass;
+	TSoftClassPtr<ADemoCharacter> CharacterClass;
 
 	FPool Pool;
 	TStaticArray<FHandle, Capacity> ActiveHandles{};

@@ -68,8 +68,9 @@ Nelaric::ObjectPool::FPoolResult UDemoCharacterPoolSubsystem::PrewarmPools(UWorl
 {
 	if (World.GetNetMode() == NM_Client)
 	{
-		// The client owns a service facade; its actors come from replication.
-		return {};
+		FPool::FCreateArgs Args;
+		Args.World = &World;
+		return Pool.Prewarm(Args);
 	}
 	// Load Blueprint dependencies after startup modules have initialized.
 	UClass* LoadedCharacterClass = CharacterClass.LoadSynchronous();

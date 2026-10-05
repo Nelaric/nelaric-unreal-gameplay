@@ -22,7 +22,7 @@ GameplayRuntime 模块在 `Nelaric::ObjectPool` 中提供普通 C++ 对象池。
 
 弱引用检查对象生命期，generation 检查逻辑租约复用，二者都不延长池实例生命期。Get 在转换中、句柄失效或对象失效时返回空，不改变对象丢失标记。空闲链头部的 generation 饱和后停止借出，禁止计数回绕。
 
-`GetByIndexUnchecked(Index)` 仅供 WorldRaw 池使用，强制内联后直接读取固定指针数组。不执行下标、Game Thread、World、就绪状态、转换状态、generation 或对象生命期检查，没有分配、查找或弱引用解析；地址计算和指针读取本身仍有成本。调用方保证 `Index < CapacityValue`、预热成功、池与 Actor 存活、在 Game Thread 调用且没有正在执行的生命周期转换。其他引用模式调用该接口时会触发编译期断言。
+`GetByIndexUnchecked(Index)` 仅供 WorldRaw 池使用，强制内联后直接读取固定指针数组。不执行下标、Game Thread、World、就绪状态、转换状态、generation 或对象生命期检查，没有分配、查找或弱引用解析；地址计算和指针读取本身仍有成本。调用方保证 `Index < CapacityValue`、预热成功、池与 Actor 存活、在 Game Thread 调用且没有正在执行的生命周期转换。其他引用模式调用该接口时会触发编译期断言。联网池的客户端读取改为解析弱引用，未收到角色或关闭时可返回空。GetByIndex 为全部引用模式提供带下标检查的访问。
 
 接口可以返回空闲或已借出槽位中的对象，不会借出该槽位。Lease.Handle.Index 标识物理槽位，但仅凭下标无法识别槽位复用前后的逻辑租约；需要 generation 校验时仍使用 Get(Handle) 和 Release(Handle)。World teardown 或 Shutdown 开始前必须结束直接访问，WorldRaw 模式禁止外部 Destroy 和会到期的 LifeSpan。
 
@@ -42,9 +42,9 @@ ADemoCharacter 保留 ANelaricGasCharacter 基类并实现同一接口，ADemoPl
 
 插件通过 `ObjectPool/FixedObjectPoolWorldSubsystem.h` 提供抽象的 World 生命周期管理基类。具体子系统以普通 C++ 成员持有类型化对象池，实现 PrewarmPools 和 ShutdownPools。基类在 OnWorldBeginPlay 中预热一次，此时 GameMode 尚未向 Actor 分派 BeginPlay；通过 FWorldDelegates::OnWorldBeginTearDown 在世界内 Actor 的 EndPlay 前关闭池，并在 Deinitialize 中做幂等兜底。所有回调必须保持 World 和子系统存活，不能在池转换中结束世界。
 
-DemoGame 在 `ObjectPool/DemoCharacterPoolSubsystem.h` 提供 UDemoCharacterPoolSubsystem，由引擎在所有网络模式的 Game 和 PIE World 中自动创建。子系统直接持有 `TFixedUObjectPool<ADemoCharacter, Capacity, Nelaric::Demo::FCharacterPoolPolicy, EReferenceMode::WorldRaw>`，Demo 专用策略在通用角色生命周期上增加每次租约的团队注入。构造函数将 `/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter` 加载为 ADemoCharacter 子类，并通过反射类引用供 GC 和打包流程识别。权威端将该类传入现有 FCreateArgs::Class，在 PersistentLevel 中以 Identity Transform 预热 Capacity 个停用的蓝图角色；类加载失败返回 CreationFailed，不回退到原生角色。客户端完成启动，但不创建本地权威池。子系统独占权威角色的销毁控制，在世界内 Actor teardown 前关闭池。容量、引用模式和原生基类是编译期选择，创建参数中的类决定全部槽位实际使用的子类；其他游戏通过自己的具体 World 子系统持有对应的池，GameplayRuntime 无需依赖游戏模块或 GAS。通用角色池的默认模式仍为 WorldWeak。
+DemoGame 在 `ObjectPool/DemoCharacterPoolSubsystem.h` 提供 UDemoCharacterPoolSubsystem，由引擎在所有网络模式的 Game 和 PIE World 中自动创建。子系统直接持有 `TFixedUObjectPool<ADemoCharacter, Capacity, Nelaric::Demo::FCharacterPoolPolicy, EReferenceMode::WorldRaw, ENetworkMode::Replicated>`，Demo 专用策略在通用角色生命周期上增加每次租约的团队注入。构造函数将 `/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter` 加载为 ADemoCharacter 子类，并通过反射类引用供 GC 和打包流程识别。权威端将该类传入现有 FCreateArgs::Class，在 PersistentLevel 中以 Identity Transform 预热 Capacity 个停用的蓝图角色；类加载失败返回 CreationFailed，不回退到原生角色。客户端 Prewarm 绑定自动接收视图，不创建本地权威角色。子系统独占权威角色的销毁控制，在世界内 Actor teardown 前关闭池。容量、引用模式和原生基类是编译期选择，创建参数中的类决定全部槽位实际使用的子类；其他游戏通过自己的具体 World 子系统持有对应的池，GameplayRuntime 无需依赖游戏模块或 GAS。通用角色池的默认模式仍为 WorldWeak。
 
-权威端玩法调用从 World 已经 BeginPlay 后开始。此前、客户端以及 teardown 开始后，借出和归还返回 NotReady，Get 返回空，NumFree 返回零；GetByIndexUnchecked 绕过这些检查，调用方必须保证权威池预热成功且生命期有效。GetPrewarmResult 保留启动结果；客户端启动成功不表示拥有本地角色槽位。IsReady 检查权威 World 与池存储是否可用，不表示全部角色已经完成 GAS 初始化；GAS 尚未提交时借出仍可能返回 ActivationFailed。预热失败会记录错误并回滚已创建角色，同一实例不会重试。调用方无需手动预热或关闭 Demo 池。
+权威端的玩法调用在 World BeginPlay 后可用。此前、客户端或 teardown 后，借还返回 NotReady，Get 返回空，NumFree 为零。GetByIndex 在服务器读取槽位，在客户端读取已接收角色，未到达的槽位返回空；GetByIndexUnchecked 的权威端读取保留原生裸指针生命周期契约，客户端读取解析弱引用。GetPrewarmResult 保留启动结果；客户端成功表示视图绑定。IsReady 检查 World 和池存储或公告可用性，不代表全部角色已到达或 GAS 就绪。GAS 提交前借出仍可能返回 ActivationFailed。预热失败会记录、回滚并禁止同实例重试；调用方不手动预热或关闭 Demo 池。
 
 在每个初始角色位置放置 `Spawning/DemoInitialCharacterSpawnPoint.h` 中的 ADemoInitialCharacterSpawnPoint，或其蓝图子类。该类继承 ATargetPoint，使用生成点的世界 Transform，等待预热角色完成 BeginPlay、Pawn 初始化和 GAS 就绪提交后，再尝试借出一次。启动就绪状态与池存储就绪状态分别判断，启动完成后加载的生成点仍使用正常的单次租约检查。单机、监听服务器和独立服务器的权威端执行借出，客户端生成点不创建本地角色。每个成功的生成点激活一个已有 BP_DemoCharacter 实例。生成点的 TeamId 是首个团队注入入口，在蓝图默认值或关卡实例的 Demo / Spawning 中设置 Team Id；默认值为 0，255 表示中立。TryAcquire(Transform, TeamId) 通过 Demo 专用池策略在激活碰撞和 AI 前写入角色，角色向客户端复制 ID。归还先停止角色再清除其 ID；下一次借出重新注入。省略 TeamId 的原生调用生成中立角色，不继承上一次租约的团队。GetSpawnedCharacter 通过 generation 句柄解析当前租约，GetSpawnedHandle 提供供玩法归还使用的原生句柄。激活租约归 World 对象池所有；生成点结束时取消尚未执行的启动回调和就绪订阅，World 关闭时统一关闭租约。
 
@@ -89,32 +89,32 @@ Prewarm、Release、Shutdown 返回包含 EPoolError 的 FPoolResult，并支持
 
 ## 网络生命周期
 
-| 网络模式 | 池的归属与访问 |
-| --- | --- |
-| NM_Standalone | 本地权威端预热，使用同一套同步借还 API。 |
-| NM_ListenServer | 服务器预热与借还，主机本地使用权威角色。 |
-| NM_DedicatedServer | 无本地玩家和视口也能在服务器预热与借还。 |
-| NM_Client | 接收服务器角色；Demo 子系统的本地借还返回 NotReady。 |
-
-句柄包含本地池地址，不能复制到其他 World 或网络端。客户端请求仍通过游戏已有的权威请求路径提交；同步本地 TryAcquire 无法直接返回远程服务器租约。客户端角色是 World 持有的复制代理，不属于另一套本地槽位池。
-
-Helper 在预热阶段只创建一次私有复制组件。Policy 在角色初始化后开启 Actor 与移动复制，将池角色保持为 AlwaysRelevant，并关闭仅 Owner 可见的相关性设置。空闲代理在租约之间继续存在；归还不会关闭复制或主动销毁客户端副本。这样以固定客户端角色数量和复制管理成本换取避免每次租约重新建立通道；默认保持 Awake，不自动对空闲对象启用 Dormancy。
-
-组件复制一个单调递增且包含激活位的转换值。在两次网络更新之间完成归还再借出，即使最终激活位没有变化，转换值仍会变化。客户端在应用新状态前清理原生移动与预测数据，保留 UE 已接收的位置和移动模式。复制可以合并中间租约；转换值标识最新状态，不是逐次事件流。适配器不需要反射接口、GAS 或运行时类型注册表。
-
-使用 Helper 的角色还需要在首次复制完成后绑定原生状态，ADemoCharacter 已接入：
+最后一个模板参数 `ENetworkMode` 指定联网能力。默认 `Disabled` 不保存池联网绑定；`Replicated` 支持 Actor 派生类型，通过共享 `UPoolNetworkChannel` 发布槽位归属和活动状态，自动维护客户端非拥有视图。调用方无需附加复制组件、编写 `PostNetInit` 绑定或复制回调，也无需增加联网子系统；现有原生池拥有者继续管理普通 World 生命周期。
 
 ```cpp
-void AMyCharacter::PostNetInit()
-{
-    Nelaric::ObjectPool::FCharacterPoolHelper::PrepareForPool(*this, PoolState);
-    Super::PostNetInit();
-}
+using FNetworkPool = Nelaric::ObjectPool::TCharacterPool<
+    AMyCharacter, 100, Nelaric::ObjectPool::EReferenceMode::WorldWeak,
+    Nelaric::ObjectPool::ENetworkMode::Replicated>;
 ```
 
-权威端的 PrepareForPool 仍用于延迟出生阶段；客户端调用时，将状态绑定到已接收的私有适配器，没有该适配器的普通出生角色保持原有行为。在 Super::PostNetInit 分派 BeginPlay 前完成绑定，使启动回调观察到池化停用状态。Actor BeginPlay 前收到初始状态时先停用，待 BeginPlay 完成后才应用最终激活状态；EndPlay 会取消延迟回调。客户端适配处理通用表现和移动，各类型仍负责自己的业务状态复制。
+自定义联网策略需要提供 `FCreateArgs::World`。可选 `FCreateArgs::NetworkName` 指定 World 内的池标识，默认使用原生类型名称；同一 World 中相同原生类型的多个权威池须使用不同名称。客户端绑定使用相同名称和容量。当前传输支持标准 NetGUID 复制驱动，每个 World 最多 128 个具名池，每池最多 4096 个槽位。Iris 等不支持的驱动、无效 World、名称冲突或超出限制会返回 `NetworkingUnavailable`。Actor 创建、移动、RPC 和业务状态继续使用 UE 现有联网能力。
 
-权威端激活、归还会先唤醒角色，再修改复制属性，完成后强制网络更新。租约期间修改网络所有权仍须经过控制协调器，复用前先完成控制权归还；清空移动预测不能替代撤销旧连接的所有权。自定义 Replication Graph、Iris Filter 或相关性覆盖逻辑应保留池代理的相关性，才能保证客户端实例持续存在。
+| 网络模式 | `Replicated` 契约 |
+| --- | --- |
+| NM_Standalone | 本地权威端预热，使用同步租约。 |
+| NM_ListenServer | 服务器预热和借还，主机使用权威角色。 |
+| NM_DedicatedServer | 无视口也能在服务器预热和借还。 |
+| NM_Client | Prewarm 绑定视图；本地借还返回 NotReady。 |
+
+权威端预热创建固定数量的 Actor，开启 Actor 和移动复制，保持 AlwaysRelevant 和 Awake。模块在各 NetDriver 上自动注册通道，每个完成初始化的连接开启一个共享通道。可靠且有界的消息传递池标识、槽位索引、NetGUID、修订号和活动状态。归还保留客户端代理；晚加入客户端会收到当前池快照和后续变化。
+
+池公告与 Actor 创建可以按任意顺序到达。运行时通过 UE 缓存解析 NetGUID，等待 Actor BeginPlay，再应用通用角色移动、骨骼暂停、碰撞、显示和 Tick 状态。`IsReady` 表示池公告已经到达，部分 `GetByIndex` 仍可能因角色尚未到达而返回空；此状态也不保证 GAS 就绪。运行时可以先接收视图，再绑定本地原生池。客户端 Shutdown 只解绑本地视图，不销毁服务器代理；权威池关闭会使对应客户端视图失效。
+
+每次借出和归还都会推进槽位修订号，即使两次更新之间归还后再次借出，最终活动位仍为 true，也会重置客户端预测。更新可以合并中间租约，修订号标识最新状态，不是事件流。通用活动状态通过 `FCharacterPoolHelper::IsActive(Character, PoolState)` 查询，准备状态通过 `IsPrepared` 查询；保留原生状态用于权威端和普通出生角色。各类型继续实现普通池生命周期和业务状态复制。
+
+句柄包含本地池地址，不能跨网络复制；客户端 TryAcquire 无法同步返回服务器租约，请求继续通过游戏的权威请求路径提交。自定义 Replication Graph 和相关性覆盖逻辑须保留池 Actor。复用前完成控制权归还，清空移动预测不能撤销旧连接所有权。
+
+Demo 池选择 Replicated。动画服务遍历已经解析的客户端槽位，在各骨骼网格到达时分别注册动画预算，并使用本地控制器的 Pawn 作为距离参考，支持概览 Pawn。
 
 ## 扩展与重入
 

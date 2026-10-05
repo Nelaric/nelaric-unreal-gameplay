@@ -10,10 +10,13 @@
 #include "Math/Transform.h"
 
 class ACharacter;
-class UCharacterPoolReplicationComponent;
 
 namespace Nelaric::ObjectPool
 {
+namespace Private
+{
+struct FPoolNetworkRuntime;
+}
 /** @brief Stores preparation and activation inside the owning character.
  * @details Keep this state for the actor's lifetime on the game thread.
  * @note Ordinary spawns may start active; pool preparation clears the flag.
@@ -32,13 +35,24 @@ struct FCharacterPoolState
  * @note Call from a type's IPoolableCharacter implementation.
  * @note Owns no actor and allocates no pool management storage.
  * @note The type manages AI, GAS, timers, and initialization.
- * @note Preparation installs a private replicated
- * transition component.
- * @note Client PostNetInit calls PrepareForPool to bind native state.
+ * @note Replicated pools apply client transitions through their channel.
  */
 struct FCharacterPoolHelper
 {
 public:
+	/** @brief Reads local or automatically received activity on the game thread.
+	 * @param Character Local character whose pool state is queried.
+	 * @param State Authority or ordinary-spawn state retained by the character.
+	 * @return Applied replica activity, or the supplied local activity.
+	 */
+	GAMEPLAYRUNTIME_API static bool IsActive(const ACharacter& Character, const FCharacterPoolState& State);
+
+	/** @brief Reads whether pool preparation applies on the game thread.
+	 * @param Character Local character whose membership is queried.
+	 * @param State Local native state retained by the character.
+	 * @return True for native preparation or framework replica membership.
+	 */
+	GAMEPLAYRUNTIME_API static bool IsPrepared(const ACharacter& Character, const FCharacterPoolState& State);
 	/** @brief Activates native walking, display, collision, and component ticks.
 	 * @details Call after BeginPlay with inactive state on the game thread.
 	 * @note Uses no sweep; the caller supplies valid placement.
@@ -69,11 +83,11 @@ public:
 	GAMEPLAYRUNTIME_API static void Deactivate(ACharacter& Character, FCharacterPoolState& State);
 
 public:
-	// Authority: deferred spawn. Client: bind state after initial replication.
+	// Authority preparation during deferred spawn; needs no client callback.
 	GAMEPLAYRUNTIME_API static void PrepareForPool(ACharacter& Character, FCharacterPoolState& State);
 
 private:
-	friend class ::UCharacterPoolReplicationComponent;
+	friend struct Private::FPoolNetworkRuntime;
 	static bool ActivateInternal(ACharacter& Character, FCharacterPoolState& State, const FTransform& Transform,
 	                             bool bFromReplication);
 	static void DeactivateInternal(ACharacter& Character, FCharacterPoolState& State, bool bFromReplication);

@@ -37,7 +37,8 @@ public:
 	static constexpr uint32 Capacity = 100;
 	/// Raw fixed storage; the subsystem exclusively controls actor destruction.
 	using FPool = Nelaric::ObjectPool::TFixedUObjectPool<ADemoCharacter, Capacity, Nelaric::Demo::FCharacterPoolPolicy,
-	                                                     Nelaric::ObjectPool::EReferenceMode::WorldRaw>;
+	                                                     Nelaric::ObjectPool::EReferenceMode::WorldRaw,
+	                                                     Nelaric::ObjectPool::ENetworkMode::Replicated>;
 	/// Non-owning object and generation handle; does not return automatically.
 	using FLease = FPool::FLease;
 	/// Non-owning lease token; invalid after return or world teardown.
@@ -106,22 +107,36 @@ public:
 		return CanUsePool() ? Pool.Get(Handle) : nullptr;
 	}
 
-	/** @brief Reads a prewarmed demo slot directly on the game thread.
-	 * @details The caller guarantees a ready world and pool, live characters,
-	 * and no lifecycle transition. Access performs no runtime validation.
-	 * @param Index Slot in [0, Capacity); unchecked.
-	 * @return Non-owning character, including characters in free slots.
+	/** @brief Reads a local demo slot or an automatically received replica.
+	 * @details Game thread only; clients may have unresolved empty slots.
+	 * @param Index Slot in [0, Capacity).
+	 * @return Non-owning character, or null while unavailable or unresolved.
 	 * @note Does not acquire a lease or verify its generation.
+	 */
+	FORCEINLINE ADemoCharacter* GetByIndex(uint32 Index) const
+	{
+		return IsReady() ? Pool.GetByIndex(Index) : nullptr;
+	}
+
+	/** @brief Reads a demo slot with the native pool's raw-access contract.
+	 * @details Authority callers guarantee
+	 * a ready pool and valid index.
+	 * Client access resolves a weak replica and may return null.
+	 * @param Index
+	 * Slot in [0, Capacity); unchecked on authority.
+	 * @return Non-owning character; does not acquire or verify a
+	 * lease.
 	 */
 	FORCEINLINE ADemoCharacter* GetByIndexUnchecked(uint32 Index) const noexcept
 	{
 		return Pool.GetByIndexUnchecked(Index);
 	}
 
-	/// Returns authority pool readiness; always false on clients; game thread.
+	/// Returns local storage or client-view availability on the game thread.
 	FORCEINLINE bool IsReady() const
 	{
-		return CanUsePool() && Pool.IsReady();
+		const UWorld* World = GetWorld();
+		return World && World->HasBegunPlay() && !World->bIsTearingDown && Pool.IsReady();
 	}
 
 	/// Returns free slots, or zero when unavailable; game thread only.

@@ -146,7 +146,7 @@ void ADemoCharacter::PostInitializeComponents()
 	}
 	GetMesh()->SetAnimInstanceClass(AnimationDataClass.Get());
 	bPoolComponentsInitialized = true;
-	if (PoolState.bPrepared)
+	if (Nelaric::ObjectPool::FCharacterPoolHelper::IsPrepared(*this, PoolState))
 	{
 		InitializePoolControlPolicy();
 		DeactivateToPool();
@@ -171,7 +171,7 @@ bool ADemoCharacter::ActivateFromPool(const FTransform& Transform)
 	{
 		UE_LOG(LogDemoCharacterPoolActivation, Warning,
 		       TEXT("Cannot activate %s: native character transition failed (active=%d, begun play=%d, crouched=%d)."),
-		       *GetPathName(), PoolState.bActive, HasActorBegunPlay(), bIsCrouched);
+		       *GetPathName(), IsPoolActive(), HasActorBegunPlay(), bIsCrouched);
 		return false;
 	}
 	if (Binding->IsReadyForActions() && IsValid(PoolControlPolicy))
@@ -192,13 +192,6 @@ bool ADemoCharacter::ActivateFromPool(const FTransform& Transform)
 		Soldier->RequestExecutionStart();
 	}
 	return true;
-}
-
-void ADemoCharacter::PostNetInit()
-{
-	// The initial bunch is complete; bind before BeginPlay observes the actor.
-	Nelaric::ObjectPool::FCharacterPoolHelper::PrepareForPool(*this, PoolState);
-	Super::PostNetInit();
 }
 
 void ADemoCharacter::DeactivateToPool()
@@ -405,9 +398,9 @@ void ADemoCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 void ADemoCharacter::SetActorHiddenInGame(bool bNewHidden)
 {
 	Super::SetActorHiddenInGame(bNewHidden);
-	if (bPoolComponentsInitialized && PoolState.bPrepared)
+	if (bPoolComponentsInitialized && Nelaric::ObjectPool::FCharacterPoolHelper::IsPrepared(*this, PoolState))
 	{
-		if (bNewHidden && !PoolState.bActive)
+		if (bNewHidden && !IsPoolActive())
 		{
 			OnDeathPresentationReset();
 		}
@@ -479,7 +472,8 @@ bool ADemoCharacter::HasConfiguredPoolControlPolicy() const
 
 void ADemoCharacter::HandlePoolPawnInitialized(UPawnInitializationComponent* Initialization)
 {
-	if (Initialization == GetPawnInitializationComponent() && PoolState.bPrepared && bPoolComponentsInitialized)
+	if (Initialization == GetPawnInitializationComponent() &&
+	    Nelaric::ObjectPool::FCharacterPoolHelper::IsPrepared(*this, PoolState) && bPoolComponentsInitialized)
 	{
 		InitializePoolControlPolicy();
 		ApplyPoolControlPolicy();
@@ -488,16 +482,17 @@ void ADemoCharacter::HandlePoolPawnInitialized(UPawnInitializationComponent* Ini
 
 void ADemoCharacter::ApplyPoolControlPolicy()
 {
-	if (!IsValid(PoolControlPolicy) || bPoolControlPolicyActive == PoolState.bActive)
+	const bool bActive = IsPoolActive();
+	if (!IsValid(PoolControlPolicy) || bPoolControlPolicyActive == bActive)
 	{
 		return;
 	}
-	bPoolControlPolicyActive = PoolState.bActive;
-	PoolControlPolicy->bAllowPlayerControl = PoolState.bActive && bPoolAllowPlayerControl;
-	PoolControlPolicy->bAllowReturnControl = PoolState.bActive && bPoolAllowReturnControl;
-	PoolControlPolicy->bReturnToBot = PoolState.bActive && bPoolReturnToBot;
-	PoolControlPolicy->bStartBotLogicOnReady = PoolState.bActive && bPoolStartBotLogicOnReady;
-	if (!PoolState.bActive && HasAuthority())
+	bPoolControlPolicyActive = bActive;
+	PoolControlPolicy->bAllowPlayerControl = bActive && bPoolAllowPlayerControl;
+	PoolControlPolicy->bAllowReturnControl = bActive && bPoolAllowReturnControl;
+	PoolControlPolicy->bReturnToBot = bActive && bPoolReturnToBot;
+	PoolControlPolicy->bStartBotLogicOnReady = bActive && bPoolStartBotLogicOnReady;
+	if (!bActive && HasAuthority())
 	{
 		StopPoolBotLogic();
 	}

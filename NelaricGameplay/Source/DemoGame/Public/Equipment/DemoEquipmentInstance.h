@@ -121,6 +121,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Demo|Weapon")
 	FDemoWeaponState GetWeaponState() const;
 
+	/** @brief Returns elapsed seconds since the last accepted shot.
+	 * @details Game thread only. Uses synchronized server world time on clients.
+	 * @return Non-negative elapsed seconds, or -1 before firing or when unready.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Demo|Weapon")
+	float GetTimeSinceFiredWeapon() const;
+
 	/// Returns remaining reload seconds using server world time; game thread.
 	UFUNCTION(BlueprintPure, Category = "Demo|Weapon")
 	float GetReloadRemainingTime() const;

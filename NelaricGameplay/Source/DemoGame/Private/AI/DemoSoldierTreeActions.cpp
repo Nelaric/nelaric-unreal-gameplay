@@ -34,11 +34,13 @@ bool UDemoSoldierComponent::TestTreeCondition(EDemoSoldierTreeTest Test) const
 	    OrderStatus == EDemoSoldierOrderStatus::Running && CurrentOrder.Type != EDemoSoldierOrderType::None;
 	const bool bReturn = !IsInsideOrderArea(Character->GetActorLocation());
 	const bool bCover =
-	    !Memory.bInCover && Now >= NextCoverTime &&
+	    !MustKeepMoving() && (!bHasOrder || CurrentOrder.bAllowLocalReposition) && !Memory.bInCover &&
+	    Now >= NextCoverTime &&
 	    (Memory.bUnderFire || bSuppressed || Character->GetHealth() < Character->GetMaxHealth() * 0.3f) &&
 	    (bHasTarget || !Memory.DamageDirection.IsNearlyZero());
 	const double CueTime = FMath::Max(Memory.LastHeardTime, Memory.LastDamageTime);
-	const bool bAlert = !bReturn && !bHasTarget && CueTime > ConsumedAlertTime && Now - CueTime < Settings.AlertSeconds;
+	const bool bAlert = !MustKeepMoving() && !bReturn && !bHasTarget && CueTime > ConsumedAlertTime &&
+	                    Now - CueTime < Settings.AlertSeconds;
 	const UDemoWeaponInstance* Weapon = GetWeapon();
 	const UDemoWeaponDefinition* Definition = Weapon ? Weapon->GetWeaponDefinition() : nullptr;
 	const bool bEmpty =
@@ -48,7 +50,7 @@ bool UDemoSoldierComponent::TestTreeCondition(EDemoSoldierTreeTest Test) const
 	                       FVector::DistSquared(Character->GetPawnViewLocation(), Memory.TargetLocation) >
 	                           FMath::Square(Definition->Range * 0.9f);
 	const bool bReload = WantsReload();
-	const bool bCombat = !bReturn && (bHasTarget || bReload || bCover);
+	const bool bCombat = !MustKeepMoving() && !bReturn && (bHasTarget || bReload || bCover);
 	const bool bGrenade = IsDangerous(Character->GetActorLocation()) ||
 	                      (TreeAction == EDemoSoldierTreeAction::AvoidGrenade && !Grenades.IsEmpty());
 	switch (Test)
@@ -71,6 +73,13 @@ bool UDemoSoldierComponent::TestTreeCondition(EDemoSoldierTreeTest Test) const
 		return bApproach;
 	case EDemoSoldierTreeTest::CanSearchMove:
 		return bHasTarget && !Memory.bTargetVisible && CanPursue() && IsInsideOrderArea(Memory.TargetLocation);
+	case EDemoSoldierTreeTest::FiringBlocked:
+		return bHasTarget && Memory.bTargetVisible && !Memory.bFiringLineClear;
+	case EDemoSoldierTreeTest::CanReposition:
+		return bHasTarget && !bEmpty && !Memory.bFiringLineClear && !MustKeepMoving() &&
+		       (!bHasOrder || CurrentOrder.bAllowLocalReposition) && Now >= NextRepositionTime;
+	case EDemoSoldierTreeTest::FacingUnspecified:
+		return bHasOrder && CurrentOrder.FacingDirection.GetSafeNormal2D().IsNearlyZero();
 	case EDemoSoldierTreeTest::Alert:
 		return bAlert;
 	case EDemoSoldierTreeTest::DamageCue:
@@ -139,7 +148,10 @@ bool UDemoSoldierComponent::TestTreeCondition(EDemoSoldierTreeTest Test) const
 		{
 		case EDemoSoldierTreeAction::Aim:
 		case EDemoSoldierTreeAction::FireBurst:
-			return ActionTarget != Memory.Target || !Memory.bTargetVisible || bApproach || bEmpty;
+			return ActionTarget != Memory.Target || !Memory.bTargetVisible || !Memory.bFiringLineClear || bApproach ||
+			       bEmpty;
+		case EDemoSoldierTreeAction::Reposition:
+			return ActionTarget != Memory.Target || bEmpty;
 		case EDemoSoldierTreeAction::ApproachTarget:
 			return ActionTarget != Memory.Target || !bApproach || bEmpty;
 		case EDemoSoldierTreeAction::MoveToMemory:
@@ -160,7 +172,8 @@ bool UDemoSoldierComponent::TestTreeCondition(EDemoSoldierTreeTest Test) const
 	if (TreeAction == EDemoSoldierTreeAction::InvestigateDamage ||
 	    TreeAction == EDemoSoldierTreeAction::InvestigateSound)
 	{
-		return !bAlert || CueTime > InvestigatedAlertTime;
+		// A continuing gunshot cue must not restart its movement every shot.
+		return !bAlert;
 	}
 	return TreeAction != EDemoSoldierTreeAction::Idle || bHasOrder || bAlert;
 }
@@ -212,6 +225,11 @@ bool UDemoSoldierComponent::BeginTreeAction(EDemoSoldierTreeAction Action, UObje
 	switch (Action)
 	{
 	case EDemoSoldierTreeAction::Idle:
+		if (!Memory.bTargetVisible && !CurrentOrder.FacingDirection.GetSafeNormal2D().IsNearlyZero())
+		{
+			SetObservationFocus(Character->GetActorLocation() +
+			                    CurrentOrder.FacingDirection.GetSafeNormal2D() * 1000.0f);
+		}
 		break;
 	case EDemoSoldierTreeAction::Dead:
 		Behavior = EDemoSoldierBehavior::Dead;
@@ -273,6 +291,19 @@ bool UDemoSoldierComponent::BeginTreeAction(EDemoSoldierTreeAction Action, UObje
 			TreeResult = EDemoSoldierTreeResult::Failed;
 		}
 		break;
+	case EDemoSoldierTreeAction::Reposition:
+		SetBehavior(EDemoSoldierBehavior::Reposition, Now);
+		ActionTarget = Memory.Target;
+		{
+			FVector Position;
+			const bool bPermitted = TestTreeCondition(EDemoSoldierTreeTest::CanReposition);
+			NextRepositionTime = Now + FMath::Max(0.1f, Settings.RepositionRetrySeconds);
+			if (!bPermitted || !FindObservationPosition(Memory.TargetLocation, Position) || !StartMove(Position, 40.0f))
+			{
+				TreeResult = EDemoSoldierTreeResult::Failed;
+			}
+		}
+		break;
 	case EDemoSoldierTreeAction::MoveToMemory:
 		SetBehavior(EDemoSoldierBehavior::MoveToMemory, Now);
 		ActionTarget = Memory.Target;
@@ -306,8 +337,15 @@ bool UDemoSoldierComponent::BeginTreeAction(EDemoSoldierTreeAction Action, UObje
 			}
 			else
 			{
-				bMoveFinished = true;
-				MoveGoal = Point;
+				FVector Observation;
+				const bool bCanMove =
+				    !MustKeepMoving() && CurrentOrder.bAllowLocalReposition && Now >= NextRepositionTime;
+				NextRepositionTime = Now + FMath::Max(0.1f, Settings.RepositionRetrySeconds);
+				if (!bCanMove || !FindObservationPosition(Point, Observation) || !StartMove(Observation, 40.0f))
+				{
+					bMoveFinished = true;
+					MoveGoal = Point;
+				}
 				SetObservationFocus(Point);
 			}
 		}
@@ -403,7 +441,7 @@ void UDemoSoldierComponent::UpdateTreeAction(double Now)
 		}
 		break;
 	case EDemoSoldierTreeAction::Aim:
-		if (ActionTarget != Memory.Target || !Memory.bTargetVisible)
+		if (ActionTarget != Memory.Target || !Memory.bTargetVisible || !Memory.bFiringLineClear)
 		{
 			TreeResult = EDemoSoldierTreeResult::Failed;
 		}
@@ -476,6 +514,21 @@ void UDemoSoldierComponent::UpdateTreeAction(double Now)
 		if (FinishMovement(Now))
 		{
 			TreeResult = bMoveSucceeded ? EDemoSoldierTreeResult::Succeeded : EDemoSoldierTreeResult::Failed;
+		}
+		break;
+	case EDemoSoldierTreeAction::Reposition:
+		if (ActionTarget != Memory.Target)
+		{
+			TreeResult = EDemoSoldierTreeResult::Failed;
+		}
+		else if (Memory.bFiringLineClear)
+		{
+			TreeResult = EDemoSoldierTreeResult::Succeeded;
+		}
+		else if (FinishMovement(Now))
+		{
+			TreeResult = bMoveSucceeded && !Memory.bTargetVisible ? EDemoSoldierTreeResult::Succeeded
+			                                                      : EDemoSoldierTreeResult::Failed;
 		}
 		break;
 	case EDemoSoldierTreeAction::Search:

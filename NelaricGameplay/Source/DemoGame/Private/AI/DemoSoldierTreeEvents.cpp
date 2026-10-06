@@ -251,6 +251,7 @@ void UDemoSoldierComponent::HandleObservedTransform(USceneComponent* Component)
 		{
 			Contact->Location = Position;
 			Contact->LastSeenTime = GetWorld()->GetTimeSeconds();
+			Contact->ObservedAt = Contact->LastSeenTime;
 			Wake();
 		}
 	}
@@ -306,6 +307,11 @@ void UDemoSoldierComponent::ScheduleTreeWake(double Now)
 	{
 		Deadline(Memory.LastDamageTime + Settings.UnderFireSeconds);
 	}
+	if (Memory.bTargetVisible)
+	{
+		// Geometry can change without a perception success/failure event.
+		Deadline(Now + FMath::Max(0.1f, Settings.FiringLineCheckInterval));
+	}
 	if (Memory.Suppression > 0.0f)
 	{
 		const float Threshold = bSuppressed ? 0.35f : 0.0f;
@@ -343,6 +349,12 @@ void UDemoSoldierComponent::ScheduleTreeWake(double Now)
 			break;
 		case EDemoSoldierTreeAction::Search:
 			Deadline(SearchDeadline);
+			break;
+		case EDemoSoldierTreeAction::ExecuteOrder:
+			if (MustKeepMoving() && Memory.bTargetVisible && NextShotTime > Now)
+			{
+				Deadline(NextShotTime);
+			}
 			break;
 		case EDemoSoldierTreeAction::AvoidGrenade:
 			if (bMoveFinished && !bMoveSucceeded && EscapeAttempts < 3)

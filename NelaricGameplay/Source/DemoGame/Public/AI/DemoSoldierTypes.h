@@ -18,6 +18,25 @@ enum class EDemoSoldierOrderType : uint8
 	Defend, ///< Guard a bounded area.
 };
 
+/// Firing constraint supplied with intent and enforced before every shot.
+UENUM(BlueprintType)
+enum class EDemoSoldierFirePolicy : uint8
+{
+	HoldFire,    ///< No autonomous shooting.
+	SelfDefense, ///< Only immediate threats.
+	FireAtWill,  ///< Observed hostile targets.
+};
+
+/// Structured failure for the retained intent, independent of action results.
+UENUM(BlueprintType)
+enum class EDemoSoldierOrderFailure : uint8
+{
+	None,              ///< No failure.
+	Unreachable,       ///< Movement cannot finish.
+	MoveTimeout,       ///< Movement deadline ended.
+	TargetUnavailable, ///< Assigned target was lost.
+};
+
 /// Outcome of an accepted order; interruptions retain Running.
 UENUM(BlueprintType)
 enum class EDemoSoldierOrderStatus : uint8
@@ -49,31 +68,35 @@ enum class EDemoSoldierTreeAction : uint8
 	ExecuteOrder,      ///< Execute retained intent.
 	OutOfAmmo,         ///< Await a usable weapon.
 	Dead,              ///< Terminal for this life.
+	Reposition,        ///< Reach a clear fire lane.
 };
 
 /// Cheap predicates used by state selection and priority interruptions.
 UENUM(BlueprintType)
 enum class EDemoSoldierTreeTest : uint8
 {
-	Alive,            ///< The character is alive.
-	Grenade,          ///< Immediate grenade danger.
-	Combat,           ///< Combat or weapon upkeep.
-	NeedsReload,      ///< A safe reload is needed.
-	NeedsCover,       ///< Cover retry is eligible.
-	OutOfAmmo,        ///< No usable weapon ammo.
-	TargetVisible,    ///< Visual target confirmed.
-	CanApproach,      ///< Pursuit can enter range.
-	CanSearchMove,    ///< May visit memory point.
-	Alert,            ///< Unconsumed sensory cue.
-	DamageCue,        ///< Damage is the latest cue.
-	HasOrder,         ///< An order is running.
-	MoveOrder,        ///< A move order is running.
-	HoldOrder,        ///< A hold order is running.
-	AttackOrder,      ///< Attack intent is running.
-	FollowOrder,      ///< Follow intent is running.
-	DefendOrder,      ///< Defend intent is running.
-	ReturnToArea,     ///< Guard boundary exceeded.
-	ShouldReconsider, ///< Higher priority changed.
+	Alive,             ///< The character is alive.
+	Grenade,           ///< Immediate grenade danger.
+	Combat,            ///< Combat or weapon upkeep.
+	NeedsReload,       ///< A safe reload is needed.
+	NeedsCover,        ///< Cover retry is eligible.
+	OutOfAmmo,         ///< No usable weapon ammo.
+	TargetVisible,     ///< Visual target confirmed.
+	CanApproach,       ///< Pursuit can enter range.
+	CanSearchMove,     ///< May visit memory point.
+	Alert,             ///< Unconsumed sensory cue.
+	DamageCue,         ///< Damage is the latest cue.
+	HasOrder,          ///< An order is running.
+	MoveOrder,         ///< A move order is running.
+	HoldOrder,         ///< A hold order is running.
+	AttackOrder,       ///< Attack intent is running.
+	FollowOrder,       ///< Follow intent is running.
+	DefendOrder,       ///< Defend intent is running.
+	ReturnToArea,      ///< Guard boundary exceeded.
+	ShouldReconsider,  ///< Higher priority changed.
+	FiringBlocked,     ///< Fire lane is blocked.
+	CanReposition,     ///< Local movement permitted.
+	FacingUnspecified, ///< Heading is unspecified.
 };
 
 /// Result of one identity-scoped StateTree action.
@@ -104,6 +127,7 @@ enum class EDemoSoldierBehavior : uint8
 	TakeCover,      ///< Reach authored cover.
 	OutOfAmmo,      ///< Await a usable weapon.
 	Dead,           ///< Terminal for this life.
+	Reposition,     ///< Reach a clear fire lane.
 };
 
 /// Authority-only intent; actor references never own their targets.
@@ -133,6 +157,27 @@ struct FDemoSoldierOrder
 	/// Permit combat pursuit; Hold and Defend always enforce their boundary.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
 	bool bAllowPursuit = true;
+	/// Whether ordinary combat may interrupt progress; false for withdrawal.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	bool bAllowStopToFight = true;
+	/// Whether pursuit and cover movement may adjust the assigned position.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	bool bAllowLocalReposition = true;
+	/// Additional movement boundary, independent of the destination region.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	bool bLimitMovement = false;
+	/// Center of the additional permitted movement area, in centimeters.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	FVector MovementAreaCenter = FVector::ZeroVector;
+	/// Positive radius of the additional movement area, in centimeters.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	float MovementAreaRadius = 500.0f;
+	/// Autonomous firing policy; does not grant visual target knowledge.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	EDemoSoldierFirePolicy FirePolicy = EDemoSoldierFirePolicy::FireAtWill;
+	/// Desired observation direction while holding without a visible target.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Soldier")
+	FVector FacingDirection = FVector::ZeroVector;
 };
 
 /// Known enemy data; unseen enemies never refresh their world positions.
@@ -150,6 +195,9 @@ struct FDemoSoldierContact
 	/// Last confirmed visual observation in world seconds; -1 means none.
 	UPROPERTY(BlueprintReadOnly, Category = "Soldier")
 	double LastSeenTime = -1.0;
+	/// Actual latest visual observation time; loss does not change this value.
+	UPROPERTY(BlueprintReadOnly, Category = "Soldier")
+	double ObservedAt = -1.0;
 	/// Last damage from this known actor in world seconds; -1 means none.
 	UPROPERTY(BlueprintReadOnly, Category = "Soldier")
 	double LastDamageTime = -1.0;
@@ -185,6 +233,9 @@ struct FDemoSoldierMemory
 	/// Whether the selected target is currently visually known.
 	UPROPERTY(BlueprintReadOnly, Category = "Soldier")
 	bool bTargetVisible = false;
+	/// Cached eye and muzzle clearance; each shot validates again.
+	UPROPERTY(BlueprintReadOnly, Category = "Soldier")
+	bool bFiringLineClear = false;
 	/// Recent incoming fire; expires without further damage or near misses.
 	UPROPERTY(BlueprintReadOnly, Category = "Soldier")
 	bool bUnderFire = false;
@@ -253,4 +304,13 @@ struct FDemoSoldierSettings
 	/// Maximum run speed during reported grenade danger, in cm/s.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "1"))
 	float SprintSpeed = 650.0f;
+	/// Maximum local firing-position query radius, in centimeters.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "100", ClampMax = "1500"))
+	float FiringPositionSearchRadius = 600.0f;
+	/// Minimum seconds between bounded firing-position queries.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.1"))
+	float RepositionRetrySeconds = 2.0f;
+	/// Seconds between clearance refreshes while an observed target exists.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timing", meta = (ClampMin = "0.1"))
+	float FiringLineCheckInterval = 0.2f;
 };

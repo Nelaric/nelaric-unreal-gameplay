@@ -124,6 +124,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
 	DEMOGAME_API bool IsAlive() const;
 
+	/// Returns committed death independently of GAS rebinding; game thread.
+	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
+	DEMOGAME_API bool HasCommittedDeath() const;
+
 	/// Cancels active abilities and weapon actions; authority game thread.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
 	void CancelCombatActions();

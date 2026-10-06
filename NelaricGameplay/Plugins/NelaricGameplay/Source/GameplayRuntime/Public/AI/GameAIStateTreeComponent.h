@@ -8,12 +8,13 @@
 
 #include "GameAIStateTreeComponent.generated.h"
 
-/** @brief Runs GameAI Schema assets on a pawn or its controller.
+/** @brief Runs the shared GameAI Schema on actors, pawns or controllers.
  *
  * @details The owning actor controls component lifetime. Uses Unreal's
- * StateTree execution and event APIs on the game thread. Execution requires
- * possession and the selected world subsystem. Disable automatic startup
- * when possession occurs after BeginPlay, then call StartLogic when ready.
+ * StateTree execution and event APIs on the game thread. The asset selects
+ * whether possession is required; actor-only trees use optional pawn and
+ * controller context. The selected world subsystem is always required.
+ * Call StartLogic after all required context and authored inputs are ready.
  */
 UCLASS(MinimalAPI, Blueprintable, ClassGroup = AI, meta = (BlueprintSpawnableComponent))
 class UGameAIStateTreeComponent : public UStateTreeComponent

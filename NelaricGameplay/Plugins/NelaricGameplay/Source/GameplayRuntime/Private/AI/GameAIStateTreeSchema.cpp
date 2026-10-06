@@ -27,17 +27,32 @@ UGameAIStateTreeSchema::UGameAIStateTreeSchema() : GameContextClass(UGameAIConte
 	     FGuid(0x7BE2AB05, 0x148A4AC0, 0xA27D5F61, 0x06432D91)}};
 }
 
-void UGameAIStateTreeSchema::PostLoad()
+void UGameAIStateTreeSchema::UpdateContextRequirements()
 {
-	Super::PostLoad();
+	ContextDataDescs[0].Struct = GetContextActorClass();
+	ContextDataDescs[1].Requirement =
+	    bRequirePossession ? EStateTreeExternalDataRequirement::Required : EStateTreeExternalDataRequirement::Optional;
+	ContextDataDescs[2].Requirement = ContextDataDescs[1].Requirement;
 	ContextDataDescs[3].Struct = GameContextClass.Get();
 }
 
+void UGameAIStateTreeSchema::PostLoad()
+{
+	Super::PostLoad();
+	UpdateContextRequirements();
+}
+
 #if WITH_EDITOR
+void UGameAIStateTreeSchema::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	UpdateContextRequirements();
+}
+
 void UGameAIStateTreeSchema::PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeChainProperty(PropertyChangedEvent);
-	ContextDataDescs[3].Struct = GameContextClass.Get();
+	UpdateContextRequirements();
 }
 #endif
 
@@ -93,8 +108,8 @@ bool UGameAIStateTreeSchema::SetContextRequirements(UStateTreeComponent& Compone
 	const bool bOwnerValid = IsValid(OwnerActor) && OwnerActor->IsA(GetContextActorClass());
 	const bool bPawnValid = IsValid(Pawn);
 	const bool bControllerValid = IsValid(Controller);
-	const bool bContextValid =
-	    bOwnerValid && bPawnValid && bControllerValid && IsValid(GameContext) && IsValid(&Component);
+	const bool bContextValid = bOwnerValid && (!bRequirePossession || (bPawnValid && bControllerValid)) &&
+	                           IsValid(GameContext) && IsValid(&Component);
 	if (!bContextValid && bLogErrors)
 	{
 		UE_LOG(LogStateTree, Error,

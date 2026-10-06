@@ -5,3 +5,8 @@ import "./Demo/GAS/GCN_Weapon_Rifle_Impact_C";
 import "./Demo/Characters/BP_DemoCharacter_C";
 
 console.log("Nelaric TypeScript entry started.");
+import "./Demo/AI/Squad/BP_DemoPlayerController_Squad";
+
+import "./Demo/AI/Squad/BP_SquadBootstrapRuntime";
+import "./Demo/AI/Squad/BP_DemoSquadCommand_Squad";
+import "./Demo/AI/Soldier/TS_SoldierResolveHeading";

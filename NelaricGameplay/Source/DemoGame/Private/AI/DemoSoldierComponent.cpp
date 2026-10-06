@@ -5,6 +5,7 @@
 #include "AI/DemoSoldierCoverPoint.h"
 #include "AI/DemoSoldierTags.h"
 #include "AIController.h"
+#include "AITypes.h"
 #include "BrainComponent.h"
 #include "Character/DemoCharacter.h"
 #include "Components/StateTreeComponent.h"
@@ -517,8 +518,10 @@ bool UDemoSoldierComponent::StartExecution(AAIController* InController, UObject*
 	}
 	Wake();
 	UE_LOG(LogDemoSoldier, Log,
-	       TEXT("Soldier execution started: pawn=%s controller=%s driver=%s nativePlanner=%d team=%u."),
-	       *GetNameSafe(Character), *GetNameSafe(InController), *GetNameSafe(Driver), bNativePlanner, GetTeamId());
+	       TEXT("Soldier execution started: pawn=%s controller=%s driver=%s nativePlanner=%d team=%u pawnYaw=%.2f "
+	            "controlYaw=%.2f."),
+	       *GetNameSafe(Character), *GetNameSafe(InController), *GetNameSafe(Driver), bNativePlanner, GetTeamId(),
+	       Character->GetActorRotation().Yaw, InController->GetControlRotation().Yaw);
 	return true;
 }
 
@@ -770,6 +773,24 @@ bool UDemoSoldierComponent::IsInsideOrderArea(FVector Location) const
 bool UDemoSoldierComponent::CanPursue() const
 {
 	return OrderStatus != EDemoSoldierOrderStatus::Running || CurrentOrder.bAllowPursuit;
+}
+
+void UDemoSoldierComponent::SetObservationFocus(FVector Location)
+{
+	AAIController* Bot = Controller.Get();
+	const APawn* Pawn = Bot ? Bot->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+	const FVector Direction = Location - Pawn->GetPawnViewLocation();
+	if (!FAISystem::IsValidLocation(Location) || Direction.ContainsNaN() || Direction.SizeSquared2D() <= 1.0)
+	{
+		// A coincident or vertical-only cue has no yaw; UE would use zero.
+		Bot->ClearFocus(EAIFocusPriority::Gameplay);
+		return;
+	}
+	Bot->SetFocalPoint(Location);
 }
 
 bool UDemoSoldierComponent::StartMove(FVector Destination, float Radius, bool bEmergency)
@@ -1201,7 +1222,7 @@ void UDemoSoldierComponent::ExecuteCombat(double Now)
 			}
 			else
 			{
-				Controller->SetFocalPoint(Memory.TargetLocation);
+				SetObservationFocus(Memory.TargetLocation);
 			}
 		}
 		if (Behavior == EDemoSoldierBehavior::MoveToMemory && FinishMovement(Now))
@@ -1209,7 +1230,7 @@ void UDemoSoldierComponent::ExecuteCombat(double Now)
 			SetBehavior(EDemoSoldierBehavior::Search, Now);
 			ActionTarget = Memory.Target;
 			SearchDeadline = Now + FMath::Max(0.1f, Settings.SearchSeconds);
-			Controller->SetFocalPoint(Memory.TargetLocation);
+			SetObservationFocus(Memory.TargetLocation);
 		}
 		if (Behavior == EDemoSoldierBehavior::Search && Now >= SearchDeadline)
 		{
@@ -1252,7 +1273,7 @@ void UDemoSoldierComponent::ExecuteCombat(double Now)
 		else
 		{
 			SetBehavior(EDemoSoldierBehavior::Observe, Now);
-			Controller->SetFocalPoint(Memory.TargetLocation);
+			SetObservationFocus(Memory.TargetLocation);
 			ActionDeadline = Now + 0.5;
 		}
 		return;
@@ -1531,12 +1552,12 @@ void UDemoSoldierComponent::Update()
 			{
 				bMoveFinished = true;
 				MoveGoal = Point;
-				Controller->SetFocalPoint(Point);
+				SetObservationFocus(Point);
 			}
 		}
 		if (FinishMovement(Now))
 		{
-			Controller->SetFocalPoint(MoveGoal);
+			SetObservationFocus(MoveGoal);
 		}
 		return;
 	}

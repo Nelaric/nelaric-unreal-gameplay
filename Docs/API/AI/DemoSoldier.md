@@ -230,6 +230,12 @@ no condition or task is needed.
 | Defend | DefendOrder | ExecuteOrder |
 | Idle | — | Idle |
 
+InvestigateDamage requires the DamageCue entry condition; without it, every
+Alert selects this first leaf, including sound-only alerts. InvestigateSound
+handles audible cues in the next leaf. Location focus requires a valid horizontal
+direction. Unknown damage directions, coincident locations and vertical-only
+cues retain the current heading instead of resetting yaw to zero.
+
 Combat includes valid combat targets and eligible weapon/cover upkeep. NeedsReload
 handles empty magazines and safe low-ammo windows; no reserve means no reload.
 Failed cover queries enter a retry cooldown, allowing combat without CoverPoints.

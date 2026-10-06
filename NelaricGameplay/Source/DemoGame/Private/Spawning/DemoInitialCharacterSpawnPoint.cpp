@@ -88,8 +88,10 @@ void ADemoInitialCharacterSpawnPoint::SpawnInitialCharacter()
 		return;
 	}
 	SpawnedHandle = Lease.Handle;
-	UE_LOG(LogDemoInitialCharacterSpawn, Log, TEXT("Initial character spawned: point=%s character=%s team=%u."),
-	       *GetName(), *GetNameSafe(Lease.Object), Lease.Object->GetTeamId());
+	UE_LOG(LogDemoInitialCharacterSpawn, Log,
+	       TEXT("Initial character spawned: point=%s character=%s team=%u pointYaw=%.2f pawnYaw=%.2f."), *GetName(),
+	       *GetNameSafe(Lease.Object), Lease.Object->GetTeamId(), GetActorRotation().Yaw,
+	       Lease.Object->GetActorRotation().Yaw);
 }
 
 void ADemoInitialCharacterSpawnPoint::WaitForInitialCharacters(UPawnInitializationComponent* Initialization)

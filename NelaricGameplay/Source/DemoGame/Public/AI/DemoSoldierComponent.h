@@ -212,6 +212,7 @@ private:
 	void SetBehavior(EDemoSoldierBehavior Next, double Now);
 	void CancelAction();
 	void RestoreMovement();
+	void SetObservationFocus(FVector Location);
 	bool StartMove(FVector Destination, float Radius, bool bEmergency = false);
 	void HandleMoveFinished(FAIRequestID RequestId, const FPathFollowingResult& Result);
 	bool FinishMovement(double Now);

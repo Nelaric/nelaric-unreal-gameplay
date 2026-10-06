@@ -33,11 +33,11 @@ struct GAMEPLAYRUNTIME_API FGameAIStateTreeContext
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Context)
 	TObjectPtr<AActor> OwnerActor = nullptr;
 
-	/// Pawn resolved from the owner or the controller's current possession.
+	/// Pawn resolved from possession; may be null for actor-only trees.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Context)
 	TObjectPtr<APawn> Pawn = nullptr;
 
-	/// Current controller of the pawn; required before tree execution.
+	/// Current controller; may be null for an actor-only authored tree.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Context)
 	TObjectPtr<AController> Controller = nullptr;
 

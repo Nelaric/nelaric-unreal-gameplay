@@ -5,6 +5,7 @@ Binaries/
 DerivedDataCache/
 Intermediate/
 Saved/
+/NelaricGameplay/Build/*/FileOpenOrder/
 
 # Local Unreal development project
 /Development/

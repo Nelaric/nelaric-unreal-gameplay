@@ -174,6 +174,16 @@ bool ADemoCharacter::ActivateFromPool(const FTransform& Transform)
 		       *GetPathName(), IsPoolActive(), HasActorBegunPlay(), bIsCrouched);
 		return false;
 	}
+	if (AController* SpawnController = GetController())
+	{
+		// A pooled controller must start from this lease's authored facing.
+		if (AAIController* Bot = Cast<AAIController>(SpawnController))
+		{
+			Bot->ClearFocus(EAIFocusPriority::Move);
+			Bot->ClearFocus(EAIFocusPriority::Gameplay);
+		}
+		SpawnController->SetControlRotation(GetActorRotation());
+	}
 	if (Binding->IsReadyForActions() && IsValid(PoolControlPolicy))
 	{
 		// Ready was committed while idle, so it will not announce again.

@@ -193,6 +193,7 @@ public:
 	 * preserve the actor and pool.
 	 * @note Does not reset retained GAS state.
 	 * @note Restores captured control settings and starts existing Ready bots.
+	 * @note Aligns an existing controller with placement before bot startup.
 	 * @param Transform World placement chosen by the caller without a sweep.
 	 * @return False while GAS is unready or native activation fails.
 	 */

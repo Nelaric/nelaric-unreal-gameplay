@@ -284,7 +284,7 @@ bool UDemoSoldierComponent::BeginTreeAction(EDemoSoldierTreeAction Action, UObje
 	case EDemoSoldierTreeAction::Search:
 		SetBehavior(EDemoSoldierBehavior::Search, Now);
 		ActionTarget = Memory.Target;
-		Controller->SetFocalPoint(Memory.TargetLocation);
+		SetObservationFocus(Memory.TargetLocation);
 		SearchDeadline = Now + FMath::Max(0.1f, Settings.SearchSeconds);
 		break;
 	case EDemoSoldierTreeAction::ForgetTarget:
@@ -308,7 +308,7 @@ bool UDemoSoldierComponent::BeginTreeAction(EDemoSoldierTreeAction Action, UObje
 			{
 				bMoveFinished = true;
 				MoveGoal = Point;
-				Controller->SetFocalPoint(Point);
+				SetObservationFocus(Point);
 			}
 		}
 		break;
@@ -488,7 +488,7 @@ void UDemoSoldierComponent::UpdateTreeAction(double Now)
 	case EDemoSoldierTreeAction::InvestigateSound:
 		if (FinishMovement(Now))
 		{
-			Controller->SetFocalPoint(MoveGoal);
+			SetObservationFocus(MoveGoal);
 		}
 		if (Now >= ActionDeadline)
 		{

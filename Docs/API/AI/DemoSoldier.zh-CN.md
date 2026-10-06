@@ -202,6 +202,11 @@ Invert。空白表示无需条件。Action 都是 Demo Soldier Action 的 Action
 | Defend | DefendOrder | ExecuteOrder |
 | Idle | 无 | Idle |
 
+InvestigateDamage 必须配置 DamageCue 进入条件；否则任何 Alert 都会先选择这个
+叶状态，包括只有声音的情况。听觉线索通过下一项 InvestigateSound 处理。
+位置观察仅在存在有效水平方向时设置焦点。未知伤害方向、与士兵重合的位置或
+纯垂直线索保留当前朝向，避免无方向向量将 Yaw 重置为 0。
+
 Combat 条件包括有效战斗目标和必要的武器/掩体维护。Reload 的条件内部处理空弹匣
 强制换弹和低弹药安全窗口；备用弹药为零不会选择换弹。未找到掩体会进入重试冷却，
 所以没有 CoverPoint 时可以继续战斗。OutOfAmmo 只在有可见目标且无可用武器弹药时

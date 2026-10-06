@@ -1,7 +1,7 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 /** @file DemoAnimationInstance.h
- * Declares prepared movement inputs and airborne transition results.
+ * Declares prepared animation inputs, transitions, and weapon blend weights.
  */
 
 #pragma once
@@ -10,6 +10,7 @@
 #include "GameplayTagContainer.h"
 #include "Math/Rotator.h"
 #include "Math/Vector.h"
+#include "Misc/Guid.h"
 
 #include "DemoAnimationInstance.generated.h"
 
@@ -48,6 +49,8 @@ struct FLocomotionInput
 	FVector Acceleration = FVector::ZeroVector;
 	/// Actor orientation used to calculate relative movement direction.
 	FRotator Rotation = FRotator::ZeroRotator;
+	/// World aim rotation sampled from the pawn, including remote view pitch.
+	FRotator AimRotation = FRotator::ZeroRotator;
 	/// Vertical gravity in centimeters per second squared.
 	float GravityZ = 0.0f;
 	/// Current local velocity direction, sampled with the root yaw offset.
@@ -62,6 +65,20 @@ struct FLocomotionInput
 	uint64 ADSChangeSerial = 0;
 	/// Monotonic revision retained across scheduled update skips.
 	uint64 LayerChangeSerial = 0;
+	/// Active weapon identity; invalid when no weapon is selected.
+	FGuid ActiveWeaponId;
+	/// Seconds since the active weapon fired; -1 means no accepted shot.
+	float TimeSinceFiredWeapon = -1.0f;
+	/// Evaluated hip-fire override curve sampled before worker dispatch.
+	float HipFireOverridePoseCurveValue = 0.0f;
+	/// Evaluated left-hand suppression curve sampled before worker dispatch.
+	float DisableLeftHandPoseOverrideCurveValue = 0.0f;
+	/// Whether the sampled instance enables the left-hand pose override.
+	bool bEnableLeftHandPoseOverride = false;
+	/// Whether the main animation instance currently has a playing montage.
+	bool bMontagePlaying = false;
+	/// Whether the character currently uses its crouched capsule.
+	bool bCrouching = false;
 	/// Whether the movement component reports ground movement.
 	bool bGrounded = false;
 	/// Whether the movement component reports falling.
@@ -70,7 +87,7 @@ struct FLocomotionInput
 
 } // namespace Nelaric::UnitAnimation
 
-/** @brief Calculates movement values and airborne transition results.
+/** @brief Calculates movement, airborne transitions, and weapon weights.
  * @details Unreal owns the instance. Derive an animation blueprint from this
  * class. Idle to Move uses bHasVelocity; Move to Idle uses its inverse.
  * Airborne transitions use their matching results. The subsystem
@@ -90,6 +107,14 @@ public:
 	 * @note Non-finite numeric values are rejected without replacing inputs.
 	 */
 	DEMOGAME_API void SetAnimationContext(const Nelaric::UnitAnimation::FLocomotionAnimationContext& Context);
+
+	/** @brief Enables procedural rig evaluation while movement is not airborne.
+	 * @details Reads completed animation data without accessing engine objects.
+	 * Call on the game thread or during synchronized animation evaluation.
+	 * @return False while in the air; true for all other movement states.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Demo|Animation|Layers", meta = (BlueprintThreadSafe))
+	bool ShouldEnableControlRig() const;
 
 	/// Interpolated horizontal speed in centimeters per second.
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Movement")
@@ -131,10 +156,46 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Layers")
 	float RootYawOffset = 0.0f;
 
+	/// Aim yaw relative to the actor and root yaw offset, in [-180, 180] degrees.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	float AimYaw = 0.0f;
+
+	/// Aim pitch relative to the actor, normalized to [-180, 180] degrees.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	float AimPitch = 0.0f;
+
+	/// Dynamic upper-body additive weight, between zero and one.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Layers")
+	float UpperbodyDynamicAdditiveWeight = 0.0f;
+
+	/// Upper-body hip-fire override weight, between zero and one.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	float HipFireUpperBodyOverrideWeight = 0.0f;
+
+	/// Aim offset blend weight, between zero and one.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	float AimOffsetBlendWeight = 1.0f;
+
+	/// Left-hand pose override weight, clamped between zero and one.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	float LeftHandPoseOverrideWeight = 0.0f;
+
+	/// Seconds since the active weapon fired; -1 means no accepted shot.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	float TimeSinceFiredWeapon = -1.0f;
+
+	/// Whether the prepared character state reports crouching.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Movement", meta = (DisplayName = "Is Crouching"))
+	bool bIsCrouching = false;
+
+	/// Whether the prepared gameplay state reports aiming down sights.
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Weapon")
+	bool bGameplayTagIsADS = false;
+
 	/** @brief Whether actual horizontal velocity exceeds its tolerance.
 	 * @details Use directly for Idle to Move and invert for Move to Idle.
 	 */
-	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Movement")
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Demo|Animation|Movement", meta = (DisplayName = "Has Velocity"))
 	bool bHasVelocity = false;
 
 	/// Whether the movement component reports ground movement.
@@ -234,6 +295,48 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings", meta = (ClampMin = "1.0"))
 	float GroundTraceDistance = 100000.0f;
 
+	/// Dynamic additive fade-out rate; zero uses the target directly.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Layers",
+	          meta = (ClampMin = "0.0"))
+	float UpperbodyDynamicAdditiveBlendOutInterpRate = 6.0f;
+
+	/// Seconds to hold the hip-fire pose after an accepted shot; zero disables.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon",
+	          meta = (ClampMin = "0.0"))
+	float RaiseWeaponAfterFiringDuration = 0.5f;
+
+	/// Whether crouched characters may use the hip-fire upper-body override.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon")
+	bool bRaiseWeaponAfterFiringWhenCrouched = true;
+
+	/// Hip-fire lowering interpolation rate; zero uses the target directly.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon",
+	          meta = (ClampMin = "0.0"))
+	float HipFireBlendOutInterpRate = 1.0f;
+
+	/// Aim offset interpolation rate; zero uses the target directly.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon",
+	          meta = (ClampMin = "0.0"))
+	float AimOffsetBlendInterpRate = 10.0f;
+
+	/// Root yaw magnitude below which acceleration uses the relaxed aim pose.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon",
+	          meta = (ClampMin = "0.0"))
+	float AimOffsetRootYawThreshold = 10.0f;
+
+	/// Override curve sampled from the active weapon layer, then the main BP.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon")
+	FName HipFireOverridePoseCurveName;
+
+	/// Whether the left-hand pose override is enabled before curve suppression.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon",
+	          meta = (DisplayName = "Enable Left Hand Pose Override"))
+	bool bEnableLeftHandPoseOverride = false;
+
+	/// Suppression curve sampled from the active weapon layer, then the main BP.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings|Weapon")
+	FName DisableLeftHandPoseOverrideCurveName;
+
 	/// Optional ASC tag for ADS; absent tags use the supplied context value.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Animation|Settings")
 	FGameplayTag ADSTag;
@@ -243,7 +346,7 @@ public:
 	FGameplayTag MeleeTag;
 
 public:
-	UDemoAnimationInstance() = default;
+	UDemoAnimationInstance();
 	virtual void UpdateAnimationData(float DeltaSeconds) override;
 	virtual void PrepareAnimationData(const ADemoCharacter& Character) override;
 	virtual void NativeInitializeAnimation() override;
@@ -252,11 +355,14 @@ public:
 private:
 	void CaptureAnimationInputs(const ADemoCharacter& Character);
 	void CaptureGameplayState(const ADemoCharacter& Character);
+	void CaptureWeaponInputs(const ADemoCharacter& Character);
+	void UpdateBlendWeightData(float DeltaSeconds);
 	float CaptureGroundDistance(const ADemoCharacter& Character) const;
 	void ResetCalculatedData();
 
 	Nelaric::UnitAnimation::FLocomotionInput Input;
 	Nelaric::UnitAnimation::FLocomotionAnimationContext AnimationContext;
+	FGuid LastCalculatedWeaponId;
 	uint64 LastCalculatedLayerSerial = 0;
 	uint64 CrouchChangeSerial = 0;
 	uint64 ADSChangeSerial = 0;

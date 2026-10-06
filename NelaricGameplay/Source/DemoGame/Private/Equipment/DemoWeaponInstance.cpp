@@ -54,6 +54,18 @@ FDemoWeaponState UDemoWeaponInstance::GetWeaponState() const
 	return WeaponState;
 }
 
+float UDemoWeaponInstance::GetTimeSinceFiredWeapon() const
+{
+	check(IsInGameThread());
+	const UWorld* World = GetWorld();
+	if (!World || WeaponState.ShotsFired <= 0 || !FMath::IsFinite(WeaponState.LastFireServerTime))
+	{
+		return -1.0f;
+	}
+	const float Now = Nelaric::DemoEquipment::ServerTime(*World);
+	return FMath::IsFinite(Now) ? FMath::Max(0.0f, Now - WeaponState.LastFireServerTime) : -1.0f;
+}
+
 float UDemoWeaponInstance::GetReloadRemainingTime() const
 {
 	check(IsInGameThread());
@@ -161,6 +173,7 @@ EDemoWeaponResult UDemoWeaponInstance::TryFire()
 	{
 		++WeaponState.ShotsFired;
 	}
+	WeaponState.LastFireServerTime = Nelaric::DemoEquipment::ServerTime(*World);
 	NextAllowedFireTime = World->GetTimeSeconds() + WeaponDefinition->FireInterval;
 	UAISense_Hearing::ReportNoiseEvent(World, Start, 1.0f, OwnerPawn, WeaponDefinition->Range, TEXT("Gunshot"));
 
@@ -380,7 +393,7 @@ void UDemoWeaponInstance::ApplyWeaponState(const FDemoWeaponState& NewState)
 	RefreshReloadPresentation();
 	if (Previous.MagazineAmmo != NewState.MagazineAmmo || Previous.ReserveAmmo != NewState.ReserveAmmo ||
 	    Previous.bReloading != NewState.bReloading || Previous.ReloadEndServerTime != NewState.ReloadEndServerTime ||
-	    Previous.ShotsFired != NewState.ShotsFired)
+	    Previous.ShotsFired != NewState.ShotsFired || Previous.LastFireServerTime != NewState.LastFireServerTime)
 	{
 		OnWeaponStateChanged(Previous, WeaponState);
 	}

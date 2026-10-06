@@ -34,7 +34,7 @@ class UDemoCharacterPoolSubsystem final : public UFixedObjectPoolWorldSubsystem
 
 public:
 	/// Compile-time number of demo characters created during world prewarm.
-	static constexpr uint32 Capacity = 100;
+	static constexpr uint32 Capacity = 200;
 	/// Raw fixed storage; the subsystem exclusively controls actor destruction.
 	using FPool = Nelaric::ObjectPool::TFixedUObjectPool<ADemoCharacter, Capacity, Nelaric::Demo::FCharacterPoolPolicy,
 	                                                     Nelaric::ObjectPool::EReferenceMode::WorldRaw,

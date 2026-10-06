@@ -16,7 +16,8 @@ class UStateTreeComponent;
  *
  * @details Assets own their Schema. Context is resolved on the game thread
  * before each component execution. OwnerActor, Pawn, Controller, GameContext
- * and StateTreeComponent are all required. Use GameAI node base types;
+ * and StateTreeComponent are required. Pawn and Controller are optional
+ * when the asset disables Require Possession. Use GameAI node base types;
  * common conditions, considerations and property functions remain available.
  */
 UCLASS(MinimalAPI, BlueprintType, EditInlineNew, CollapseCategories, meta = (DisplayName = "Game AI", CommonSchema))
@@ -31,6 +32,7 @@ public:
 	                                                bool bLogErrors = false) const;
 	GAMEPLAYRUNTIME_API virtual void PostLoad() override;
 #if WITH_EDITOR
+	GAMEPLAYRUNTIME_API virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	GAMEPLAYRUNTIME_API virtual void
 	PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
 #endif
@@ -41,6 +43,11 @@ protected:
 	GAMEPLAYRUNTIME_API virtual bool IsExternalItemAllowed(const UStruct& InStruct) const override;
 
 private:
+	UPROPERTY(EditAnywhere, Category = Defaults)
+	bool bRequirePossession = true;
+
+	void UpdateContextRequirements();
+
 	UPROPERTY(EditAnywhere, Category = Defaults, NoClear)
 	TSubclassOf<UGameAIContextSubsystem> GameContextClass;
 };

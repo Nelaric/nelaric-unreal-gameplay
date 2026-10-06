@@ -4,10 +4,13 @@
 
 #include "AI/DemoSoldierCoverPoint.h"
 #include "AI/DemoSoldierTags.h"
+#include "AI/DemoSquadMemberComponent.h"
 #include "AIController.h"
 #include "AITypes.h"
 #include "BrainComponent.h"
 #include "Character/DemoCharacter.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StateTreeComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -32,11 +35,22 @@ namespace Nelaric::Soldier
 {
 static bool ValidSettings(const FDemoSoldierSettings& Settings)
 {
-	const float Values[] = {Settings.DecisionInterval,  Settings.AimToleranceDegrees, Settings.MemorySeconds,
-	                        Settings.SearchSeconds,     Settings.AlertSeconds,        Settings.TargetLockSeconds,
-	                        Settings.TargetSwitchRatio, Settings.UnderFireSeconds,    Settings.SuppressionDecay,
-	                        Settings.CoverSearchRadius, Settings.CoverRetrySeconds,   Settings.MoveTimeoutSeconds,
-	                        Settings.SprintSpeed};
+	const float Values[] = {Settings.DecisionInterval,
+	                        Settings.AimToleranceDegrees,
+	                        Settings.MemorySeconds,
+	                        Settings.SearchSeconds,
+	                        Settings.AlertSeconds,
+	                        Settings.TargetLockSeconds,
+	                        Settings.TargetSwitchRatio,
+	                        Settings.UnderFireSeconds,
+	                        Settings.SuppressionDecay,
+	                        Settings.CoverSearchRadius,
+	                        Settings.CoverRetrySeconds,
+	                        Settings.MoveTimeoutSeconds,
+	                        Settings.SprintSpeed,
+	                        Settings.FiringPositionSearchRadius,
+	                        Settings.RepositionRetrySeconds,
+	                        Settings.FiringLineCheckInterval};
 	for (float Value : Values)
 	{
 		if (!FMath::IsFinite(Value) || Value < 0.0f)
@@ -217,7 +231,10 @@ bool UDemoSoldierComponent::IssueOrder(const FDemoSoldierOrder& Order)
 	check(IsInGameThread());
 	if (!GetOwner()->HasAuthority() || Behavior == EDemoSoldierBehavior::Dead || Order.Location.ContainsNaN() ||
 	    !FMath::IsFinite(Order.AcceptanceRadius) || Order.AcceptanceRadius <= 0.0f ||
-	    !FMath::IsFinite(Order.HoldRadius) || Order.HoldRadius <= 0.0f ||
+	    !FMath::IsFinite(Order.HoldRadius) || Order.HoldRadius <= 0.0f || Order.MovementAreaCenter.ContainsNaN() ||
+	    Order.FacingDirection.ContainsNaN() || !FMath::IsFinite(Order.MovementAreaRadius) ||
+	    Order.MovementAreaRadius <= 0.0f ||
+	    static_cast<uint8>(Order.FirePolicy) > static_cast<uint8>(EDemoSoldierFirePolicy::FireAtWill) ||
 	    static_cast<uint8>(Order.Type) > static_cast<uint8>(EDemoSoldierOrderType::Defend) ||
 	    (Order.Type == EDemoSoldierOrderType::Follow && !Order.Actor.IsValid()) ||
 	    (Order.Actor.IsValid() && Order.Actor->GetWorld() != GetWorld()))
@@ -231,11 +248,8 @@ bool UDemoSoldierComponent::IssueOrder(const FDemoSoldierOrder& Order)
 	{
 		CurrentOrder.Id = FGuid::NewGuid();
 	}
-	if (CurrentOrder.Type == EDemoSoldierOrderType::Attack && CurrentOrder.Actor.IsValid())
-	{
-		// The issuer supplies this initial position; only sight refreshes it.
-		CurrentOrder.Location = CurrentOrder.Actor->GetActorLocation();
-	}
+	// An attack actor supplies identity, never an unseen live destination.
+	OrderFailure = EDemoSoldierOrderFailure::None;
 	OrderStatus = CurrentOrder.Type == EDemoSoldierOrderType::None ? EDemoSoldierOrderStatus::Canceled
 	                                                               : EDemoSoldierOrderStatus::Running;
 	Behavior = EDemoSoldierBehavior::Idle;
@@ -254,6 +268,65 @@ EDemoSoldierOrderStatus UDemoSoldierComponent::GetOrderStatus() const
 {
 	check(IsInGameThread());
 	return OrderStatus;
+}
+
+EDemoSoldierOrderFailure UDemoSoldierComponent::GetOrderFailure() const
+{
+	check(IsInGameThread());
+	return OrderFailure;
+}
+
+TArray<FDemoSoldierContact> UDemoSoldierComponent::GetObservedContacts() const
+{
+	check(IsInGameThread());
+	return Contacts;
+}
+
+bool UDemoSoldierComponent::CancelOrder(FGuid OrderId)
+{
+	check(IsInGameThread());
+	if (!GetOwner()->HasAuthority() || !OrderId.IsValid() || CurrentOrder.Id != OrderId)
+	{
+		return false;
+	}
+	FDemoSoldierOrder Cancel;
+	Cancel.Id = OrderId;
+	return IssueOrder(Cancel);
+}
+
+bool UDemoSoldierComponent::UpdateOrderGoal(FGuid OrderId, FVector Location)
+{
+	check(IsInGameThread());
+	if (!GetOwner()->HasAuthority() || CurrentOrder.Id != OrderId || Location.ContainsNaN() ||
+	    OrderStatus != EDemoSoldierOrderStatus::Running || CurrentOrder.Type != EDemoSoldierOrderType::Move ||
+	    !IsInsideOrderArea(Location))
+	{
+		return false;
+	}
+	CurrentOrder.Location = Location;
+	if (Behavior == EDemoSoldierBehavior::ExecuteOrder &&
+	    FVector::DistSquared2D(Location, MoveGoal) > FMath::Square(FMath::Max(150.0f, CurrentOrder.AcceptanceRadius)))
+	{
+		StartMove(Location, CurrentOrder.AcceptanceRadius);
+	}
+	Wake();
+	return true;
+}
+
+bool UDemoSoldierComponent::UpdateOrderFacing(FGuid OrderId, FVector Direction)
+{
+	check(IsInGameThread());
+	if (!GetOwner()->HasAuthority() || CurrentOrder.Id != OrderId || CurrentOrder.Type == EDemoSoldierOrderType::None ||
+	    Direction.ContainsNaN() || Direction.SizeSquared2D() < 0.001)
+	{
+		return false;
+	}
+	CurrentOrder.FacingDirection = Direction.GetSafeNormal2D();
+	if (!Memory.bTargetVisible && (Behavior == EDemoSoldierBehavior::Hold || Behavior == EDemoSoldierBehavior::Idle))
+	{
+		SetObservationFocus(GetOwner()->GetActorLocation() + CurrentOrder.FacingDirection * 1000.0f);
+	}
+	return true;
 }
 
 FDemoSoldierMemory UDemoSoldierComponent::GetMemory() const
@@ -353,6 +426,7 @@ void UDemoSoldierComponent::ReportSight(AActor* Actor, FVector Location, bool bV
 	{
 		Contact->Location = Location;
 		Contact->LastSeenTime = GetWorld()->GetTimeSeconds();
+		Contact->ObservedAt = Contact->LastSeenTime;
 	}
 	else if (bChanged)
 	{
@@ -599,6 +673,7 @@ void UDemoSoldierComponent::ResetSoldierState()
 	NotifyTreeActionResult();
 	TreeActionId.Invalidate();
 	OrderStatus = EDemoSoldierOrderStatus::None;
+	OrderFailure = EDemoSoldierOrderFailure::None;
 	Memory = {};
 	Contacts.Reset();
 	Grenades.Reset();
@@ -606,10 +681,15 @@ void UDemoSoldierComponent::ResetSoldierState()
 	ConsumedAlertTime = -1.0;
 	NextCoverTime = 0.0;
 	NextReloadTime = 0.0;
+	NextRepositionTime = 0.0;
 	bInitialTreeOrderApplied = false;
 	bSuppressed = false;
 	Behavior = EDemoSoldierBehavior::Idle;
 	Emit(Nelaric::Soldier::OrderChanged);
+	if (UDemoSquadMemberComponent* Member = GetOwner()->FindComponentByClass<UDemoSquadMemberComponent>())
+	{
+		Member->NotifyNewLife();
+	}
 	Wake();
 }
 
@@ -765,14 +845,64 @@ UDemoWeaponInstance* UDemoSoldierComponent::GetWeapon() const
 
 bool UDemoSoldierComponent::IsInsideOrderArea(FVector Location) const
 {
-	return OrderStatus != EDemoSoldierOrderStatus::Running ||
-	       (CurrentOrder.Type != EDemoSoldierOrderType::Hold && CurrentOrder.Type != EDemoSoldierOrderType::Defend) ||
+	if (CurrentOrder.Type == EDemoSoldierOrderType::None)
+	{
+		return true;
+	}
+	if (CurrentOrder.bLimitMovement && FVector::DistSquared2D(Location, CurrentOrder.MovementAreaCenter) >
+	                                       FMath::Square(CurrentOrder.MovementAreaRadius))
+	{
+		return false;
+	}
+	return (CurrentOrder.Type != EDemoSoldierOrderType::Hold && CurrentOrder.Type != EDemoSoldierOrderType::Defend) ||
 	       FVector::DistSquared2D(Location, CurrentOrder.Location) <= FMath::Square(CurrentOrder.HoldRadius);
 }
 
 bool UDemoSoldierComponent::CanPursue() const
 {
-	return OrderStatus != EDemoSoldierOrderStatus::Running || CurrentOrder.bAllowPursuit;
+	return CurrentOrder.Type == EDemoSoldierOrderType::None ||
+	       (CurrentOrder.bAllowPursuit && CurrentOrder.bAllowLocalReposition && CurrentOrder.bAllowStopToFight);
+}
+
+bool UDemoSoldierComponent::MustKeepMoving() const
+{
+	return OrderStatus == EDemoSoldierOrderStatus::Running && !CurrentOrder.bAllowStopToFight &&
+	       FVector::DistSquared2D(GetOwner()->GetActorLocation(), CurrentOrder.Location) >
+	           FMath::Square(CurrentOrder.AcceptanceRadius);
+}
+
+void UDemoSoldierComponent::ExecuteMovingFire(double Now)
+{
+	if (Now < NextShotTime)
+	{
+		return;
+	}
+	UDemoWeaponInstance* Weapon = GetWeapon();
+	const UDemoWeaponDefinition* Definition = Weapon ? Weapon->GetWeaponDefinition() : nullptr;
+	const bool bSelfDefense =
+	    Memory.bUnderFire ||
+	    (Memory.bTargetVisible &&
+	     FVector::DistSquared2D(GetOwner()->GetActorLocation(), Memory.TargetLocation) <= FMath::Square(1200.0f));
+	if (!Definition || !Memory.bTargetVisible || Weapon->GetWeaponState().MagazineAmmo <= 0 ||
+	    Weapon->GetWeaponState().bReloading || CurrentOrder.FirePolicy == EDemoSoldierFirePolicy::HoldFire ||
+	    (CurrentOrder.FirePolicy == EDemoSoldierFirePolicy::SelfDefense && !bSelfDefense) ||
+	    FVector::DistSquared(GetOwner()->GetActorLocation(), Memory.TargetLocation) > FMath::Square(Definition->Range))
+	{
+		NextShotTime = 0.0;
+		return;
+	}
+	// Keep aiming and rate-limited firing inside the locomotion executor.
+	NextShotTime = Now + FMath::Max(0.1f, Definition->FireInterval);
+	if (!CanShoot())
+	{
+		return;
+	}
+	const uint64 Revision = ActionRevision;
+	Weapon->TryFire();
+	if (Revision != ActionRevision || !ExecutionDriver.IsValid())
+	{
+		return;
+	}
 }
 
 void UDemoSoldierComponent::SetObservationFocus(FVector Location)
@@ -798,6 +928,7 @@ bool UDemoSoldierComponent::StartMove(FVector Destination, float Radius, bool bE
 	AAIController* Bot = Controller.Get();
 	if (!Bot || Destination.ContainsNaN() || (!bEmergency && !IsInsideOrderArea(Destination)))
 	{
+		OrderFailure = EDemoSoldierOrderFailure::Unreachable;
 		bMoveFinished = true;
 		bMoveSucceeded = false;
 		Emit(Nelaric::Soldier::MoveFailed);
@@ -812,6 +943,9 @@ bool UDemoSoldierComponent::StartMove(FVector Destination, float Radius, bool bE
 	}
 	FAIMoveRequest Request;
 	Request.SetGoalLocation(Destination);
+	Request.SetUsePathfinding(true);
+	Request.SetProjectGoalLocation(true);
+	Request.SetRequireNavigableEndLocation(true);
 	Request.SetAcceptanceRadius(Radius);
 	Request.SetAllowPartialPath(false);
 	Request.SetReachTestIncludesAgentRadius(false);
@@ -821,6 +955,10 @@ bool UDemoSoldierComponent::StartMove(FVector Destination, float Radius, bool bE
 	MoveDeadline = GetWorld()->GetTimeSeconds() + FMath::Clamp(Settings.MoveTimeoutSeconds, 1.0f, 120.0f);
 	bMoveFinished = Result.Code != EPathFollowingRequestResult::RequestSuccessful;
 	bMoveSucceeded = Result.Code == EPathFollowingRequestResult::AlreadyAtGoal;
+	if (Result.Code == EPathFollowingRequestResult::Failed)
+	{
+		OrderFailure = EDemoSoldierOrderFailure::Unreachable;
+	}
 	if (bMoveFinished)
 	{
 		Emit(bMoveSucceeded ? Nelaric::Soldier::MoveCompleted : Nelaric::Soldier::MoveFailed);
@@ -837,6 +975,10 @@ void UDemoSoldierComponent::HandleMoveFinished(FAIRequestID RequestId, const FPa
 	MoveId = FAIRequestID::InvalidRequest;
 	bMoveFinished = true;
 	bMoveSucceeded = Result.IsSuccess();
+	if (!bMoveSucceeded)
+	{
+		OrderFailure = EDemoSoldierOrderFailure::Unreachable;
+	}
 	Emit(bMoveSucceeded ? Nelaric::Soldier::MoveCompleted : Nelaric::Soldier::MoveFailed);
 	Wake();
 }
@@ -845,6 +987,7 @@ bool UDemoSoldierComponent::FinishMovement(double Now)
 {
 	if (!bMoveFinished && Now >= MoveDeadline)
 	{
+		OrderFailure = EDemoSoldierOrderFailure::MoveTimeout;
 		MoveId = FAIRequestID::InvalidRequest;
 		Controller->StopMovement();
 		bMoveFinished = true;
@@ -896,6 +1039,7 @@ void UDemoSoldierComponent::UpdateObservations(double Now)
 			}
 			Contact.Location = Nelaric::Soldier::ObservedAimLocation(*Actor);
 			Contact.LastSeenTime = Now;
+			Contact.ObservedAt = Now;
 		}
 	}
 	if (Memory.bInCover &&
@@ -905,6 +1049,7 @@ void UDemoSoldierComponent::UpdateObservations(double Now)
 		Memory.bInCover = false;
 	}
 	SelectTarget(Now);
+	Memory.bFiringLineClear = HasClearFiringLine();
 }
 
 float UDemoSoldierComponent::ScoreContact(const FDemoSoldierContact& Contact, double Now) const
@@ -967,6 +1112,7 @@ void UDemoSoldierComponent::ForgetTarget()
 	Contacts.RemoveAll([Previous](const auto& Contact) { return Contact.Actor == Previous; });
 	Memory.Target.Reset();
 	Memory.bTargetVisible = false;
+	Memory.bFiringLineClear = false;
 	Emit(Nelaric::Soldier::TargetChanged);
 }
 
@@ -1024,6 +1170,10 @@ bool UDemoSoldierComponent::FindEscape(FVector& Location) const
 
 bool UDemoSoldierComponent::TryCover(double Now)
 {
+	if (MustKeepMoving() || (CurrentOrder.Type != EDemoSoldierOrderType::None && !CurrentOrder.bAllowLocalReposition))
+	{
+		return false;
+	}
 	const ADemoCharacter* Character = Cast<ADemoCharacter>(GetOwner());
 	const bool bLowHealth = Character && Character->GetHealth() < Character->GetMaxHealth() * 0.3f;
 	if (Memory.bInCover || Now < NextCoverTime || !(Memory.bUnderFire || bLowHealth || bSuppressed))
@@ -1083,8 +1233,148 @@ bool UDemoSoldierComponent::TryCover(double Now)
 	return true;
 }
 
+bool UDemoSoldierComponent::HasClearFiringLine() const
+{
+	const APawn* Pawn = Controller.IsValid() ? Controller->GetPawn() : nullptr;
+	const AActor* Target = Memory.bTargetVisible ? Memory.Target.Get() : nullptr;
+	const UDemoWeaponInstance* Weapon = GetWeapon();
+	const UDemoWeaponDefinition* Definition = Weapon ? Weapon->GetWeaponDefinition() : nullptr;
+	if (!Pawn || !Target || !Definition)
+	{
+		return false;
+	}
+	const FVector Eye = Pawn->GetPawnViewLocation();
+	const FVector Aim = Memory.TargetLocation;
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(SoldierFireGeometry), false, Pawn);
+	for (AActor* Visual : Weapon->GetVisualActors())
+	{
+		Query.AddIgnoredActor(Visual);
+	}
+	auto Clear = [&](FVector Start, FVector End)
+	{
+		FHitResult Hit;
+		return !GetWorld()->LineTraceSingleByChannel(Hit, Start, End, Definition->TraceChannel, Query) ||
+		       Hit.GetActor() == Target;
+	};
+	if (!Clear(Eye, Aim))
+	{
+		return false;
+	}
+	for (AActor* Visual : Weapon->GetVisualActors())
+	{
+		if (!IsValid(Visual))
+		{
+			continue;
+		}
+		TInlineComponentArray<USkeletalMeshComponent*> Meshes(Visual);
+		for (const USkeletalMeshComponent* Mesh : Meshes)
+		{
+			if (Mesh->DoesSocketExist(Definition->MuzzleSocketName))
+			{
+				const FVector Muzzle = Mesh->GetSocketLocation(Definition->MuzzleSocketName);
+				return Clear(Eye, Muzzle) && Clear(Muzzle, Aim);
+			}
+		}
+	}
+	return true;
+}
+
+bool UDemoSoldierComponent::FindObservationPosition(FVector ObservedPoint, FVector& Location) const
+{
+	ADemoCharacter* Character = Cast<ADemoCharacter>(GetOwner());
+	const UDemoWeaponInstance* Weapon = GetWeapon();
+	const UDemoWeaponDefinition* Definition = Weapon ? Weapon->GetWeaponDefinition() : nullptr;
+	UNavigationSystemV1* Navigation = UNavigationSystemV1::GetCurrent(GetWorld());
+	if (!Character || !Definition || !Navigation || ObservedPoint.ContainsNaN())
+	{
+		return false;
+	}
+	const FVector Origin = Character->GetActorLocation();
+	const FVector Aim = ObservedPoint;
+	const FVector ViewOffset = Character->GetPawnViewLocation() - Origin +
+	                           FVector(0.0f, 0.0f, Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	float Radius = FMath::Clamp(Settings.FiringPositionSearchRadius, 100.0f, 1500.0f);
+	if (CurrentOrder.Type == EDemoSoldierOrderType::Hold || CurrentOrder.Type == EDemoSoldierOrderType::Defend)
+	{
+		Radius = FMath::Min(Radius, CurrentOrder.HoldRadius);
+	}
+	if (CurrentOrder.bLimitMovement)
+	{
+		Radius = FMath::Min(Radius, CurrentOrder.MovementAreaRadius);
+	}
+	FVector MuzzleOffset = FVector::ZeroVector;
+	for (AActor* Visual : Weapon->GetVisualActors())
+	{
+		if (!IsValid(Visual))
+		{
+			continue;
+		}
+		TInlineComponentArray<USkeletalMeshComponent*> Meshes(Visual);
+		for (const USkeletalMeshComponent* Mesh : Meshes)
+		{
+			if (Mesh->DoesSocketExist(Definition->MuzzleSocketName))
+			{
+				MuzzleOffset = Mesh->GetSocketLocation(Definition->MuzzleSocketName) - Character->GetPawnViewLocation();
+				break;
+			}
+		}
+	}
+	const FVector Forward = (Aim - Origin).GetSafeNormal2D();
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(SoldierFiringPosition), false, Character);
+	for (AActor* Visual : Weapon->GetVisualActors())
+	{
+		Query.AddIgnoredActor(Visual);
+	}
+	// Fixed candidate count bounds this atomic navigation query.
+	for (int32 Ring = 1; Ring <= 4; ++Ring)
+	{
+		for (int32 Index = 0; Index < 12; ++Index)
+		{
+			const FVector Offset = Forward.RotateAngleAxis(Index * 30.0f, FVector::UpVector) * (Radius * Ring * 0.25f);
+			FNavLocation Projected;
+			if (!Navigation->ProjectPointToNavigation(Origin + Offset, Projected, FVector(80.0f, 80.0f, 200.0f)) ||
+			    !IsInsideOrderArea(Projected.Location) || IsDangerous(Projected.Location) ||
+			    FVector::DistSquared2D(Origin, Projected.Location) < FMath::Square(50.0f))
+			{
+				continue;
+			}
+			const FVector Eye = Projected.Location + ViewOffset;
+			const FVector Muzzle = Eye + MuzzleOffset;
+			FHitResult Hit;
+			auto Clear = [&](FVector Start, FVector End, bool bAllowEndpoint)
+			{
+				return !GetWorld()->LineTraceSingleByChannel(Hit, Start, End, Definition->TraceChannel, Query) ||
+				       (Memory.Target.IsValid() && Hit.GetActor() == Memory.Target.Get()) ||
+				       (bAllowEndpoint && FVector::DistSquared(Hit.ImpactPoint, End) < FMath::Square(75.0f));
+			};
+			if (FVector::DistSquared(Eye, Aim) > FMath::Square(Definition->Range) || !Clear(Eye, Aim, true) ||
+			    !Clear(Eye, Muzzle, false) || !Clear(Muzzle, Aim, true))
+			{
+				continue;
+			}
+			const UNavigationPath* Path =
+			    UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), Origin, Projected.Location, Character);
+			if (Path && Path->IsValid() && !Path->IsPartial() &&
+			    !Path->PathPoints.ContainsByPredicate([this](FVector Point) { return !IsInsideOrderArea(Point); }))
+			{
+				Location = Projected.Location;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 bool UDemoSoldierComponent::CanShoot()
 {
+	if (CurrentOrder.Type != EDemoSoldierOrderType::None &&
+	    (CurrentOrder.FirePolicy == EDemoSoldierFirePolicy::HoldFire ||
+	     (CurrentOrder.FirePolicy == EDemoSoldierFirePolicy::SelfDefense && !Memory.bUnderFire &&
+	      (!Memory.bTargetVisible ||
+	       FVector::DistSquared2D(GetOwner()->GetActorLocation(), Memory.TargetLocation) > FMath::Square(1200.0f)))))
+	{
+		return false;
+	}
 	UDemoWeaponInstance* Weapon = GetWeapon();
 	const UDemoWeaponDefinition* Definition = Weapon ? Weapon->GetWeaponDefinition() : nullptr;
 	APawn* Pawn = Controller.IsValid() ? Controller->GetPawn() : nullptr;
@@ -1108,9 +1398,15 @@ bool UDemoSoldierComponent::CanShoot()
 	}
 	FHitResult Hit;
 	FCollisionQueryParams Query(SCENE_QUERY_STAT(SoldierFireSafety), false, Pawn);
-	// A fresh shot-time trace prevents stale perception from firing through cover.
-	return !GetWorld()->LineTraceSingleByChannel(Hit, Start, Aim, Definition->TraceChannel, Query) ||
-	       Hit.GetActor() == Target;
+	for (AActor* Visual : Weapon->GetVisualActors())
+	{
+		Query.AddIgnoredActor(Visual);
+	}
+	// Validate the actual shot ray as well as the intended target and muzzle.
+	const FVector ShotEnd = Start + Pawn->GetBaseAimRotation().Vector() * FVector::Distance(Start, Aim);
+	return HasClearFiringLine() &&
+	       (!GetWorld()->LineTraceSingleByChannel(Hit, Start, ShotEnd, Definition->TraceChannel, Query) ||
+	        Hit.GetActor() == Target);
 }
 
 bool UDemoSoldierComponent::WantsReload() const
@@ -1362,6 +1658,7 @@ void UDemoSoldierComponent::ExecuteOrder(double Now)
 	FVector Goal = CurrentOrder.Location;
 	if (CurrentOrder.Type == EDemoSoldierOrderType::Attack && CurrentOrder.Actor.IsStale())
 	{
+		OrderFailure = EDemoSoldierOrderFailure::TargetUnavailable;
 		CompleteOrder(EDemoSoldierOrderStatus::Failed);
 		SetBehavior(EDemoSoldierBehavior::Idle, Now);
 		return;
@@ -1370,6 +1667,7 @@ void UDemoSoldierComponent::ExecuteOrder(double Now)
 	{
 		if (!CurrentOrder.Actor.IsValid() || CurrentOrder.Actor->IsActorBeingDestroyed())
 		{
+			OrderFailure = EDemoSoldierOrderFailure::TargetUnavailable;
 			CompleteOrder(EDemoSoldierOrderStatus::Failed);
 			SetBehavior(EDemoSoldierBehavior::Idle, Now);
 			return;
@@ -1388,6 +1686,11 @@ void UDemoSoldierComponent::ExecuteOrder(double Now)
 	    FVector::DistSquared2D(GetOwner()->GetActorLocation(), Goal) <= FMath::Square(Radius))
 	{
 		SetBehavior(bGuard ? EDemoSoldierBehavior::Hold : EDemoSoldierBehavior::Idle, Now);
+		if (bGuard && !Memory.bTargetVisible && !CurrentOrder.FacingDirection.IsNearlyZero())
+		{
+			SetObservationFocus(GetOwner()->GetActorLocation() +
+			                    CurrentOrder.FacingDirection.GetSafeNormal2D() * 1000.0f);
+		}
 		if (CurrentOrder.Type == EDemoSoldierOrderType::Move ||
 		    (CurrentOrder.Type == EDemoSoldierOrderType::Attack && !CurrentOrder.Actor.IsValid()))
 		{
@@ -1418,6 +1721,10 @@ void UDemoSoldierComponent::ExecuteOrder(double Now)
 		{
 			CompleteOrder(EDemoSoldierOrderStatus::Completed);
 		}
+	}
+	if (MustKeepMoving() && Behavior == EDemoSoldierBehavior::ExecuteOrder)
+	{
+		ExecuteMovingFire(Now);
 	}
 }
 
@@ -1507,6 +1814,11 @@ void UDemoSoldierComponent::Update()
 		return;
 	}
 	if (!IsInsideOrderArea(Character->GetActorLocation()))
+	{
+		ExecuteOrder(Now);
+		return;
+	}
+	if (MustKeepMoving())
 	{
 		ExecuteOrder(Now);
 		return;

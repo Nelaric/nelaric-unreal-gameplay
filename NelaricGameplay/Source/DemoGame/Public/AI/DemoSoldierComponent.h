@@ -74,6 +74,34 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Demo|Soldier")
 	DEMOGAME_API EDemoSoldierOrderStatus GetOrderStatus() const;
 
+	/// Returns the retained order's structured failure; game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Soldier")
+	DEMOGAME_API EDemoSoldierOrderFailure GetOrderFailure() const;
+
+	/// Returns observed contacts with actual observation times; game thread.
+	DEMOGAME_API TArray<FDemoSoldierContact> GetObservedContacts() const;
+
+	/** @brief Cancels intent only when its identity still matches.
+	 * @param OrderId Retained intent identity expected by the caller.
+	 * @return False for a stale identity; authority game thread only.
+	 */
+	DEMOGAME_API bool CancelOrder(FGuid OrderId);
+
+	/** @brief Updates a retained moving goal without replacing its action.
+	 * @param OrderId Retained intent identity expected by the caller.
+	 * @param Location Finite goal inside the existing movement boundary.
+	 * @return False for stale, terminal or incompatible intent; game thread.
+	 */
+	DEMOGAME_API bool UpdateOrderGoal(FGuid OrderId, FVector Location);
+
+	/** @brief Updates observation heading without replacing the owned action.
+	 * @param OrderId Expected retained intent identity.
+	 * @param Direction Finite nonzero horizontal observation direction.
+	 * @return False for stale or invalid intent; authority game thread only.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Soldier")
+	DEMOGAME_API bool UpdateOrderFacing(FGuid OrderId, FVector Direction);
+
 	/// Returns a copy of observed combat information on the game thread.
 	UFUNCTION(BlueprintPure, Category = "Demo|Soldier")
 	DEMOGAME_API FDemoSoldierMemory GetMemory() const;
@@ -218,9 +246,13 @@ private:
 	bool FinishMovement(double Now);
 	bool IsInsideOrderArea(FVector Location) const;
 	bool CanPursue() const;
+	bool MustKeepMoving() const;
+	void ExecuteMovingFire(double Now);
 	bool IsDangerous(FVector Location) const;
 	bool FindEscape(FVector& Location) const;
 	bool TryCover(double Now);
+	bool HasClearFiringLine() const;
+	bool FindObservationPosition(FVector ObservedPoint, FVector& Location) const;
 	bool CanShoot();
 	bool WantsReload() const;
 	bool StartReload(double Now);
@@ -263,6 +295,7 @@ private:
 	FVector MoveGoal = FVector::ZeroVector;
 	FVector LastSelfLocation = FVector::ZeroVector;
 	EDemoSoldierOrderStatus OrderStatus = EDemoSoldierOrderStatus::None;
+	EDemoSoldierOrderFailure OrderFailure = EDemoSoldierOrderFailure::None;
 	EDemoSoldierBehavior Behavior = EDemoSoldierBehavior::Idle;
 	double ActionDeadline = 0.0;
 	double MoveDeadline = 0.0;
@@ -271,6 +304,7 @@ private:
 	double TargetSelectedTime = 0.0;
 	double NextCoverTime = 0.0;
 	double NextReloadTime = 0.0;
+	double NextRepositionTime = 0.0;
 	double ConsumedAlertTime = -1.0;
 	double InvestigatedAlertTime = -1.0;
 	double SearchDeadline = 0.0;

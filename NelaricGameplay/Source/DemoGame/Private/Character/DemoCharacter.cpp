@@ -234,6 +234,12 @@ bool ADemoCharacter::IsAlive() const
 	return !DeathState.bDead && GetHealth() > 0.0f;
 }
 
+bool ADemoCharacter::HasCommittedDeath() const
+{
+	check(IsInGameThread());
+	return DeathState.bDead;
+}
+
 FVector ADemoCharacter::GetDeathImpulseDirection() const
 {
 	check(IsInGameThread());

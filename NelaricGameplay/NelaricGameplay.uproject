@@ -12,6 +12,14 @@
 	],
 	"Plugins": [
 		{
+			"Name": "LandscapePatch",
+			"Enabled": true
+		},
+		{
+			"Name": "Water",
+			"Enabled": true
+		},
+		{
 			"Name": "GameplayStateTree",
 			"Enabled": true
 		},

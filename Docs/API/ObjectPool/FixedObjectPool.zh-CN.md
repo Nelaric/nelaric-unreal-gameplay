@@ -52,7 +52,31 @@ UDemoCharacterPoolSubsystem 在世界启动时统计已经加载的初始生成�
 
 Demo 角色死亡后，由权威端的一次性计时器在四秒时自动回池。Subsystem 记录每次成功借出的代次句柄，ReleaseDeadCharacter 根据当前租约释放槽位，并拒绝存活、仍由玩家控制、来自其他世界或未被借出的角色。被玩家控制的 Demo 角色先通过控制协调器切换到保留的概览角色。提前回池、复活和世界结束时取消死亡计时器。TS 死亡表现在一秒后固定布娃娃，停放时恢复，不做透明度渐隐；再次借出死亡槽位时先显式重置战斗状态，存活角色回池后仍保留原有状态。初始生成点保存的句柄在自动回池后失效，不会引用后续租约的角色。
 
-`Spawning/DemoRuntimeCharacterSpawnPoint.h` 中的 ADemoRuntimeCharacterSpawnPoint 是第二个可放置的 ATargetPoint 子类，当前只提供运行时生成扩展用的空壳，不借出角色，也不占用池容量。
+`Spawning/DemoRuntimeCharacterSpawnPoint.h` 中的 ADemoRuntimeCharacterSpawnPoint 提供盒形区域内按需触发的角色借出。编辑器显示名为 Demo Runtime Character Spawn Area，SpawnArea 组件显示区域边界；修改组件的 Box Extent、相对变换或 Actor 缩放，即可调整范围和旋转。默认半尺寸为 500、500、250 厘米，对应 10 × 10 × 5 米的区域。盒体不参与碰撞，也不影响 NavMesh。角色保持直立、缩放为 1，朝向使用区域的世界 Yaw；缩放区域只改变区域大小，不缩放角色。TeamId 默认值为 0，与初始生成点一致。
+
+BeginPlay 启动最多 32 个不同可用位置的初始化。第一次检查放在下一次 World Tick，最多等待十秒，让对象池、Pawn / GAS 启动以及导航构建完成。初始化只执行一轮，最多检查 1,024 个候选位置：根据角色胶囊尺寸和导航 Agent 设置选择 NavMesh 并投影，检测实际地面及可站立坡度，把胶囊中心抬到地面支撑平面上方，验证完整胶囊位于旋转后的盒体内部且没有阻挡重叠。距离小于一厘米的位置视为重复。达到 32 个点后停止采样；采样次数耗尽时不足 32 个，也保留已找到的全部可用点。缓存非空即可使用，只有一个点也允许生成；完全找不到可用点才初始化失败，不占用角色池槽位。GroundClearance 默认 2 厘米，允许 0～50 厘米。
+
+借出新租约时，只按随机顺序从缓存中抽取一个位置，并检查当前位置是否被角色或障碍阻挡；被占用就从剩余缓存点中再抽取，检查次数以实际缓存数量为上限，范围为 1～32，不重复抽取同一点。这会在当前未受阻的缓存点之间均匀随机选择。生成请求不重新采样坐标、不重新投影导航，也不再次搜索地面。`GetSpawnLocations()` 返回实际已缓存的世界空间胶囊中心副本；初始化未完成、失败、客户端或 EndPlay 后返回空数组。位置和朝向初始化后固定，应在 BeginPlay 前配置区域。
+
+BeginPlay 不自动借出角色。玩法在启动完成后，从权威端游戏线程同步调用 `SpawnCharacter(OutCharacter)`；蓝图对应 Spawn Character 节点，各结果展开为执行引脚。C++ 和 TS 调用同样检查权威、World 生命周期、池存储就绪，以及初始生成点使用的 Pawn / GAS 启动就绪条件。客户端通过角色复制获得角色。
+
+每个运行时生成区域最多记录一个当前 generation 句柄。Spawned 返回新借出的角色；AlreadySpawned 返回该区域已有角色，不占用额外槽位、不再次抽取位置、不移动角色，也不重写其团队。角色死亡后，在现有死亡归还流程或玩法真正归还之前，仍属于该区域的当前租约。归还后，`GetSpawnedCharacter()` 返回空，再次调用会从同一组固定缓存位置中随机抽取，并注入当前 TeamId。与初始生成点相同，`GetSpawnedHandle()` 提供供玩法归还使用的原生句柄；过期句柄不会解析或归还同槽位后来的角色。初始生成点与运行时生成区域共享固定的 512 个角色容量。
+
+失败时 OutCharacter 为空。除 NotAuthority、NotReady、PoolFull、Busy、ActivationFailed 和 PoolUnavailable 外，位置选择还可返回 InvalidConfiguration、NavigationUnavailable 或 NoValidLocation。InvalidConfiguration 表示区域、胶囊几何或离地距离无效；NavigationUnavailable 表示缺少匹配角色 Agent 的导航数据，或启动导航构建等待超时；NoValidLocation 表示初始化没有找到任何可用点，或全部缓存点当前都受阻。不会回退到 Actor 原点或强行放入受阻位置。缓存初始化完成前返回 NotReady；初始化失败结果会被保留，不再次采样。缓存初始化成功后，全部点临时受阻时可稍后再请求。ActivationFailed 会把失败槽位恢复为空闲。生成请求不排队，也不自动重试。区域 EndPlay 取消启动计时器，清空缓存和本地句柄，不归还 World 所有的角色；World 关闭时统一关闭租约。
+
+蓝图使用方式：在关卡中放置 Demo Runtime Character Spawn Area，选择 SpawnArea，调整 Box Extent，让盒体覆盖可导航地面，并给整个站立胶囊留出足够空间。在 Demo / Spawning 中设置 Team Id 和 Ground Clearance，由权威端玩法逻辑保存该 Actor 引用。初始化完成后，可通过 Get Spawn Locations 查看固定缓存。任务、增援或交互事件调用 Spawn Character；Spawned 和 Already Spawned 分支使用 Out Character，其他分支先处理失败再决定是否安排下一次请求。客户端交互应先通过游戏已有的 RPC 流程到达权威端，再调用这个本地操作。
+
+```cpp
+#include "Spawning/DemoRuntimeCharacterSpawnPoint.h"
+
+ADemoCharacter* Character = nullptr;
+const EDemoRuntimeCharacterSpawnResult Result = Point->SpawnCharacter(Character);
+if (Result == EDemoRuntimeCharacterSpawnResult::Spawned ||
+    Result == EDemoRuntimeCharacterSpawnResult::AlreadySpawned)
+{
+    // Character 为借用指针，其生命周期归 World 对象池所有。
+}
+```
 
 以下示例在 DemoGame 的 World BeginPlay 后使用：
 

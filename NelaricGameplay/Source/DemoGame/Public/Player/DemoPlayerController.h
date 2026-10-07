@@ -7,6 +7,7 @@
 #pragma once
 
 #include "NelaricGasPlayerController.h"
+#include "AI/DemoCommandTypes.h"
 #include "Engine/EngineTypes.h"
 #include "Equipment/DemoEquipmentTypes.h"
 
@@ -79,6 +80,30 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Demo|Equipment")
 	DEMOGAME_API bool RequestRifleActive(bool bActive);
 
+	/** @brief Sends company intent through the owning controller's UE RPC.
+	 * @param Mission Typed intent validated again on authority.
+	 * @return True when sent; OnCompanyCommandResult reports acceptance.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
+	bool RequestCompanyMission(const FDemoCompanyMission& Mission);
+	/// Requests a local platoon scope lock; authority validates team and roster.
+	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
+	bool RequestPlatoonManualScope(const FString& PlatoonId, bool bLocked);
+	/// Requests a typed player task through the company constraints and scope.
+	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
+	bool RequestManualPlatoonMission(const FString& PlatoonId, const FDemoPlatoonMission& Mission);
+	/// Requests the allowed command snapshot through the owning controller RPC.
+	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
+	bool RequestCompanySnapshot();
+	/// Authored server-side permission; independent of the possessed body.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Company")
+	bool bCanCommandCompany = true;
+	/// Authored command team; clients cannot supply an alternative team.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Company")
+	uint8 CompanyCommandTeamId = 0;
+	/// bAllowed platoon IDs; empty authorizes this team's complete company scope.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|Company")
+	TArray<FString> CompanyPlatoonScope;
 	/// Returns the owning player's current presentation mode.
 	UFUNCTION(BlueprintPure, Category = "Demo|Control")
 	EDemoControlMode GetDemoControlMode() const
@@ -129,6 +154,12 @@ public:
 	DEMOGAME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
+	/** @brief Delivers a company command decision and an allowed snapshot.
+	 * @param bAccepted Whether authority accepted the requested operation.
+	 * @param Snapshot Friendly command facts; empty on authorization failure.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Demo|Company")
+	void OnCompanyCommandResult(bool bAccepted, const FString& Snapshot);
 	/** @brief Presents the authority result on the owning client.
 	 * @details Runs on the game thread. Success may
 	 * repeat an existing state;
@@ -192,6 +223,16 @@ protected:
 	void OnOverviewCameraUnavailable();
 
 private:
+	UFUNCTION(Server, Reliable)
+	void ServerCompanyMission(const FDemoCompanyMission& Mission);
+	UFUNCTION(Server, Reliable)
+	void ServerCompanyScope(const FString& PlatoonId, bool bLocked);
+	UFUNCTION(Server, Reliable)
+	void ServerManualPlatoonMission(const FString& PlatoonId, const FDemoPlatoonMission& Mission);
+	UFUNCTION(Server, Reliable)
+	void ServerCompanySnapshot();
+	UFUNCTION(Client, Reliable)
+	void ClientCompanyResult(bool bAccepted, const FString& Snapshot);
 	UFUNCTION(Server, Reliable)
 	void ServerSetRifleActive(bool bActive);
 	UFUNCTION(Client, Reliable)

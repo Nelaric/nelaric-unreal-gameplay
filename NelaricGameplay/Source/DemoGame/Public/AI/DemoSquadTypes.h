@@ -12,10 +12,16 @@ class ADemoCharacter;
 UENUM(BlueprintType)
 enum class EDemoSquadCommandMode : uint8
 {
-	Autonomous,     ///< AI chooses tactics.
-	PlayerAssisted, ///< Player assigns goals.
-	PlayerManual,   ///< Player chooses tactics.
-	NoCommander,    ///< Limited retained intent.
+	/// AI chooses tactics.
+	Autonomous,
+	/// Player assigns goals.
+	PlayerAssisted,
+	/// Player chooses tactics.
+	PlayerManual,
+	/// Logical authority paused.
+	Suspended,
+	/// Legacy serialized value.
+	NoCommander UMETA(Hidden),
 };
 
 /// Capability preference used for assignment and succession.
@@ -182,6 +188,9 @@ USTRUCT(BlueprintType)
 struct FDemoSquadMission
 {
 	GENERATED_BODY()
+	/// Exact objective evaluation scope; empty for legacy standalone missions.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
+	FString ObjectiveScope;
 	/// Stable objective identity; assigned when absent on submission.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Squad")
 	FGuid MissionId;
@@ -535,6 +544,55 @@ struct FDemoSquadSnapshot
 	/// One for a validated route; zero after failure.
 	UPROPERTY(BlueprintReadOnly, Category = "Squad")
 	float RouteConfidence = 0.0f;
+};
+
+/// Dated upstream report; reading it never refreshes the observation time.
+USTRUCT(BlueprintType)
+struct FDemoSquadSituationReport
+{
+	GENERATED_BODY()
+	/// Stable identity of the reporting squad.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	FGuid SquadId;
+	/// Common member team; 255 means no registered team is available.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	uint8 TeamId = 255;
+	/// Monotonic sample sequence within this context lifetime.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	int32 ReportSequence = 0;
+	/// World seconds of the capability sample; negative means unavailable.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	double ObservedAt = -1.0;
+	/// Whether a valid commander and execution driver currently exist.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	bool bCommandAvailable = false;
+	/// Current tactical policy, separate from leader body possession.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	EDemoSquadCommandMode CommandMode = EDemoSquadCommandMode::Suspended;
+	/// Current mission source lease generation.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	int32 MembershipEpoch = 0;
+	/// Current objective outcome, including its exact identity and revision.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	FDemoSquadMissionResult MissionResult;
+	/// Independent task update sequence, including equal-sample terminal changes.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	int32 TaskSequence = 0;
+	/// Logical publication generation, independent of soldier casualties.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	int64 CommandEpoch = 1;
+	/// Exact current permission gate used for readiness.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	int32 GateVersion = 0;
+	/// Revocable readiness for the exact current mission.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	bool bReady = false;
+	/// Friendly aggregate rally position in world centimeters.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	FVector Location = FVector::ZeroVector;
+	/// Already aggregated AI capability; players are not guaranteed resources.
+	UPROPERTY(BlueprintReadOnly, Category = "Squad")
+	FDemoSquadSnapshot Capability;
 };
 
 /// Data source explicitly selected by an authored planning task.

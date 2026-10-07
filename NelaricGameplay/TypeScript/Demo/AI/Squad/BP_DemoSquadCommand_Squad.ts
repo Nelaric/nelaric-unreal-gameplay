@@ -46,7 +46,8 @@ class BP_DemoSquadCommand_Squad extends commandBlueprint {
 
     ReceiveEndPlay(_reason: UE.EEndPlayReason): void {
         (bindings.get(this) || []).forEach(actor => {
-            if (UE.KismetSystemLibrary.IsValid(actor)) actor.StopSquad();
+            try { if (UE.KismetSystemLibrary.IsValid(actor)) actor.StopSquad(); }
+            catch { /* A native bootstrap already released its world bindings. */ }
         });
         bindings.delete(this);
     }

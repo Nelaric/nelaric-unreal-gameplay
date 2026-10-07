@@ -25,7 +25,7 @@ function report(controller: PlayerBlueprint, accepted: boolean, operation: strin
 
 function submit(controller: PlayerBlueprint, type: UE.EDemoSquadMissionType): void {
     const squad = selectedSquad(controller);
-    if (!squad || !squad.HasAuthority()) {
+    if (!squad || !squad.HasAuthority() || UE.KismetSystemLibrary.IsValid(squad.GetSquadContext().GetMissionSource())) {
         report(controller, false, "Squad mission (select or control a squad member)");
         return;
     }
@@ -38,7 +38,7 @@ function submit(controller: PlayerBlueprint, type: UE.EDemoSquadMissionType): vo
 
 function changeMode(controller: PlayerBlueprint, mode: UE.EDemoSquadCommandMode): void {
     const squad = selectedSquad(controller);
-    if (!squad || !squad.HasAuthority()) {
+    if (!squad || !squad.HasAuthority() || UE.KismetSystemLibrary.IsValid(squad.GetSquadContext().GetMissionSource())) {
         report(controller, false, "Command mode");
         return;
     }

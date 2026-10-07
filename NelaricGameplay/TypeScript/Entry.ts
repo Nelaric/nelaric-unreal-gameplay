@@ -10,3 +10,7 @@ import "./Demo/AI/Squad/BP_DemoPlayerController_Squad";
 import "./Demo/AI/Squad/BP_SquadBootstrapRuntime";
 import "./Demo/AI/Squad/BP_DemoSquadCommand_Squad";
 import "./Demo/AI/Soldier/TS_SoldierResolveHeading";
+import "./Demo/AI/Platoon/TS_PlatoonCommand";
+import "./Demo/AI/Platoon/TS_PlatoonPhase";
+
+import "./Demo/AI/Company/TS_CompanyCommand";

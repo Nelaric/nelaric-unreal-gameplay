@@ -43,6 +43,12 @@ public:
 	/// Returns the persistent member identity; game thread only.
 	UFUNCTION(BlueprintPure, Category = "Demo|Squad")
 	DEMOGAME_API FGuid GetUnitId() const;
+	/** @brief Reconciles a saved identity with this owned body; game thread.
+	 * @param Identity Saved valid identity; a conflicting member is rejected.
+	 * @return False without authority, membership or an unoccupied identity.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Squad")
+	bool RestoreUnitIdentity(FGuid Identity);
 	/// Returns the current committed capability report; game thread only.
 	DEMOGAME_API FDemoSquadMemberStatus CaptureStatus() const;
 	/// Preferred capability used for assignments and commander succession.

@@ -24,6 +24,10 @@ interface BootstrapState {
 }
 
 const states = new WeakMap<TS_SquadBootstrap, BootstrapState>();
+function valid(value: UE.Object | undefined | null): boolean {
+    try { return !!value && UE.KismetSystemLibrary.IsValid(value); }
+    catch { return false; }
+}
 
 function fail(actor: TS_SquadBootstrap, state: BootstrapState, reason: string): void {
     state.ending = true;
@@ -50,19 +54,23 @@ function stopWaiting(actor: TS_SquadBootstrap, state: BootstrapState): void {
         state.timer = undefined;
     }
     state.bindings.forEach(binding => {
-        if (UE.KismetSystemLibrary.IsValid(binding.initialization)) {
-            if (!binding.callbackReleased) {
-                binding.initialization.UnregisterPawnInitializationCallback(binding.callback);
-                releaseManualReleaseDelegate(binding.callbackFunction);
-                binding.callbackReleased = true;
+        if (!binding.callbackReleased) {
+            // PuerTS cannot marshal a UObject wrapper after world teardown.
+            try {
+                if (UE.KismetSystemLibrary.IsValid(binding.initialization)) {
+                    binding.initialization.UnregisterPawnInitializationCallback(binding.callback);
+                }
+            } catch {
+                // The component already released native callbacks during EndPlay.
             }
+            releaseManualReleaseDelegate(binding.callbackFunction);
+            binding.callbackReleased = true;
         }
     });
 }
 
 function configuredRole(actor: TS_SquadBootstrap, index: number): UE.PawnInitializationConfig {
-    return index === 0 ? actor.LeaderConfig : index === 1 ? actor.DeputyConfig :
-        index < 2 + actor.SupportMemberCount ? actor.SupportConfig : actor.RiflemanConfig;
+    return index < actor.SupportMemberCount ? actor.SupportConfig : actor.RiflemanConfig;
 }
 
 function tryStart(actor: TS_SquadBootstrap, state: BootstrapState): void {
@@ -180,7 +188,7 @@ class TS_SquadBootstrap extends UE.Actor {
         }
         this.SetupSucceeded = false;
         const points = Array.from(this.SpawnPoints);
-        const configs = [this.LeaderConfig, this.DeputyConfig, this.SupportConfig, this.RiflemanConfig];
+        const configs = [this.RiflemanConfig, ...(this.SupportMemberCount > 0 ? [this.SupportConfig] : [])];
         const errors: string[] = [];
         const squadValid = UE.KismetSystemLibrary.IsValid(this.Squad);
         if (!squadValid) errors.push("Squad reference missing");
@@ -238,10 +246,8 @@ class TS_SquadBootstrap extends UE.Actor {
                 return;
             }
             const index = Array.from(state.bindings.values()).indexOf(binding);
-            member.Role = index === 0 ? UE.EDemoSquadRole.Leader : index === 1 ? UE.EDemoSquadRole.Deputy :
-                index < 2 + this.SupportMemberCount ? UE.EDemoSquadRole.Support : UE.EDemoSquadRole.Rifleman;
-            member.SuccessionPriority = index === 0 ? 0 : index === 1 ? 10 : 100 + index;
-            member.bRequired = index < 2;
+            member.Role = index < this.SupportMemberCount ? UE.EDemoSquadRole.Support : UE.EDemoSquadRole.Rifleman;
+            member.bRequired = false;
             if (!member.JoinSquad(this.Squad, new UE.Guid())) {
                 fail(this, state, "Member registration failed for " + binding.character.GetName() + ".");
                 return;
@@ -263,15 +269,15 @@ class TS_SquadBootstrap extends UE.Actor {
         }
         state.ending = true;
         stopWaiting(this, state);
-        if (state.commanderStarted && UE.KismetSystemLibrary.IsValid(this.Squad)) {
+        if (state.commanderStarted && valid(this.Squad)) {
             this.Squad.StopCommander();
         }
         state.bindings.forEach(binding => {
-            if (UE.KismetSystemLibrary.IsValid(binding.character)) {
+            if (valid(binding.character)) {
                 const member = binding.character.GetComponentByClass(
                     UE.DemoSquadMemberComponent.StaticClass()
                 ) as UE.DemoSquadMemberComponent;
-                if (UE.KismetSystemLibrary.IsValid(member) && member.GetSquad() === this.Squad) {
+                if (valid(member) && member.GetSquad() === this.Squad) {
                     member.LeaveSquad();
                 }
             }

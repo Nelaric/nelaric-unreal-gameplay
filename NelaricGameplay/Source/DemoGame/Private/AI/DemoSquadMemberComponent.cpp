@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 #include "AI/DemoSquadMemberComponent.h"
+#include "AI/DemoObjectiveWorldSubsystem.h"
 #include "AI/DemoSoldierComponent.h"
 #include "AI/DemoSquadCommandActor.h"
 #include "AI/DemoSquadContextComponent.h"
@@ -28,6 +29,10 @@ void UDemoSquadMemberComponent::BeginPlay()
 	Super::BeginPlay();
 	if (APawn* Pawn = Cast<APawn>(GetOwner()); Pawn && Pawn->HasAuthority())
 	{
+		if (!UnitId.IsValid())
+			UnitId = FGuid::NewGuid();
+		if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+			Rules->RegisterSoldier(UnitId, Cast<ADemoCharacter>(Pawn));
 		Pawn->ReceiveControllerChangedDelegate.AddUniqueDynamic(this, &ThisClass::HandleControllerChanged);
 	}
 }
@@ -49,12 +54,28 @@ bool UDemoSquadMemberComponent::JoinSquad(ADemoSquadCommandActor* Squad, FGuid I
 	{
 		return false;
 	}
-	UnitId = InUnitId.IsValid() ? InUnitId : FGuid::NewGuid();
+	if (Role == EDemoSquadRole::Leader || Role == EDemoSquadRole::Deputy)
+	{
+		Role = EDemoSquadRole::Rifleman;
+		bRequired = false;
+	}
+	const FGuid PreviousIdentity = UnitId;
+	const FGuid Identity = InUnitId.IsValid() ? InUnitId : (UnitId.IsValid() ? UnitId : FGuid::NewGuid());
+	if (const auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		if (!Rules->CanBindSoldier(Identity, Character))
+			return false;
+	UnitId = Identity;
 	CommandActor = Squad;
 	if (!Squad->GetSquadContext()->RegisterMember(this))
 	{
 		CommandActor.Reset();
 		return false;
+	}
+	if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+	{
+		if (PreviousIdentity != UnitId)
+			Rules->UnregisterSoldier(PreviousIdentity, Character);
+		Rules->RegisterSoldier(UnitId, Character);
 	}
 	BindSoldier();
 	ReportNow();
@@ -80,6 +101,11 @@ void UDemoSquadMemberComponent::LeaveSquad()
 	{
 		Squad->GetSquadContext()->UnregisterMember(UnitId, BindingGeneration);
 	}
+	if (auto* Character = Cast<ADemoCharacter>(GetOwner());
+	    Character &&
+	    (!Character->IsPoolActive() || Character->HasCommittedDeath() || Character->IsActorBeingDestroyed()))
+		if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+			Rules->UnregisterSoldier(UnitId, Character);
 	CommandActor.Reset();
 	ClearSoldier();
 	if (GetWorld())
@@ -97,6 +123,41 @@ ADemoSquadCommandActor* UDemoSquadMemberComponent::GetSquad() const
 FGuid UDemoSquadMemberComponent::GetUnitId() const
 {
 	return UnitId;
+}
+
+bool UDemoSquadMemberComponent::RestoreUnitIdentity(FGuid Identity)
+{
+	check(IsInGameThread());
+	auto* Squad = CommandActor.Get();
+	auto* Character = Cast<ADemoCharacter>(GetOwner());
+	if (!Squad || !Character || !Character->HasAuthority() || !Identity.IsValid())
+		return false;
+	if (Identity == UnitId)
+		return true;
+	if (const auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		if (!Rules->CanBindSoldier(Identity, Character))
+			return false;
+	for (const auto& Member : Squad->GetSquadContext()->GetMembers())
+		if (Member.UnitId == Identity)
+			return false;
+	const FGuid Previous = UnitId;
+	Squad->GetSquadContext()->UnregisterMember(UnitId, BindingGeneration);
+	if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		Rules->UnregisterSoldier(UnitId, Character);
+	if (auto* Receiver = Character->FindComponentByClass<UDemoSquadOrderReceiverComponent>())
+		Receiver->ResetReceiver();
+	UnitId = Identity;
+	++BindingGeneration;
+	if (!Squad->GetSquadContext()->RegisterMember(this))
+	{
+		UnitId = Previous;
+		Squad->GetSquadContext()->RegisterMember(this);
+		return false;
+	}
+	if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		Rules->RegisterSoldier(UnitId, Character);
+	ReportNow();
+	return true;
 }
 
 int32 UDemoSquadMemberComponent::GetBindingGeneration() const
@@ -248,6 +309,11 @@ void UDemoSquadMemberComponent::ClearSoldier()
 
 void UDemoSquadMemberComponent::ReportNow()
 {
+	if (auto* Character = Cast<ADemoCharacter>(GetOwner()); Character && Character->HasAuthority() &&
+	                                                        Character->HasCommittedDeath() && GetWorld() &&
+	                                                        !GetWorld()->bIsTearingDown)
+		if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+			Rules->RecordSoldierDeath(UnitId);
 	if (bReporting || !GetOwner()->HasAuthority() || !CommandActor.IsValid() || !GetWorld() ||
 	    GetWorld()->bIsTearingDown)
 	{
@@ -350,11 +416,15 @@ void UDemoSquadMemberComponent::OnInitReady()
 void UDemoSquadMemberComponent::NotifyNewLife()
 {
 	ADemoSquadCommandActor* Previous = CommandActor.Get();
+	if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		Rules->UnregisterSoldier(UnitId, Cast<ADemoCharacter>(GetOwner()));
 	if (Previous)
-	{
 		LeaveSquad();
-		JoinSquad(Previous, FGuid::NewGuid());
-	}
+	UnitId = FGuid::NewGuid();
+	if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		Rules->RegisterSoldier(UnitId, Cast<ADemoCharacter>(GetOwner()));
+	if (Previous)
+		JoinSquad(Previous, UnitId);
 }
 
 void UDemoSquadMemberComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -364,5 +434,7 @@ void UDemoSquadMemberComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 		Pawn->ReceiveControllerChangedDelegate.RemoveDynamic(this, &ThisClass::HandleControllerChanged);
 	}
 	LeaveSquad();
+	if (auto* Rules = GetWorld()->GetSubsystem<UDemoObjectiveWorldSubsystem>())
+		Rules->UnregisterSoldier(UnitId, Cast<ADemoCharacter>(GetOwner()));
 	Super::EndPlay(EndPlayReason);
 }

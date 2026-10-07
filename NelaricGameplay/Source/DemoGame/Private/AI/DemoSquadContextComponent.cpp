@@ -2,12 +2,14 @@
 
 #include "AI/DemoSquadContextComponent.h"
 #include "AI/DemoSquadDefinition.h"
+#include "AI/DemoSquadCommandActor.h"
 #include "AI/DemoSquadMemberComponent.h"
 #include "AI/DemoSquadOrderReceiverComponent.h"
 #include "AI/DemoSquadPlanningSubsystem.h"
 #include "Character/DemoCharacter.h"
 #include "Components/StateTreeComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "NativeGameplayTags.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 
@@ -17,12 +19,8 @@ UE_DEFINE_GAMEPLAY_TAG_STATIC(DecisionChanged, "AI.Squad.DecisionChanged");
 
 static bool ValidConfiguration(const UDemoSquadDefinition& Definition, const UDemoSquadTactics& Tactics)
 {
-	const float Values[] = {Definition.LeadershipRecoverySeconds,
-	                        Definition.RetainedOrderSeconds,
-	                        Tactics.FeedbackTimeoutSeconds,
-	                        Tactics.SlotSpacing,
-	                        Tactics.ContactDecay,
-	                        Tactics.ContactUncertaintyGrowth};
+	const float Values[] = {Definition.RetainedOrderSeconds, Tactics.FeedbackTimeoutSeconds, Tactics.SlotSpacing,
+	                        Tactics.ContactDecay, Tactics.ContactUncertaintyGrowth};
 	for (float Value : Values)
 	{
 		if (!FMath::IsFinite(Value) || Value < 0.0f)
@@ -32,8 +30,7 @@ static bool ValidConfiguration(const UDemoSquadDefinition& Definition, const UDe
 	}
 	return Definition.MemberLimit > 0 && Definition.MemberLimit <= 64 && Definition.SupportGroupSize > 0 &&
 	       Definition.SupportGroupSize <= 32 && Definition.MinimumReadySupport > 0 &&
-	       Definition.MinimumReadySupport <= Definition.SupportGroupSize &&
-	       Definition.LeadershipRecoverySeconds > 0.0f && Definition.RetainedOrderSeconds > 0.0f &&
+	       Definition.MinimumReadySupport <= Definition.SupportGroupSize && Definition.RetainedOrderSeconds > 0.0f &&
 	       Tactics.FeedbackTimeoutSeconds > 0.0f && Tactics.SlotSpacing >= 100.0f && Tactics.ContactDecay > 0.0f;
 }
 
@@ -53,10 +50,6 @@ static UDemoSquadOrderReceiverComponent* Receiver(const FDemoSquadMemberStatus* 
 	return Character ? Character->FindComponentByClass<UDemoSquadOrderReceiverComponent>() : nullptr;
 }
 
-static int32 LeadershipRank(const FDemoSquadMemberStatus& Member)
-{
-	return Member.SuccessionPriority;
-}
 } // namespace Nelaric::Squad
 
 UDemoSquadContextComponent::UDemoSquadContextComponent(const FObjectInitializer& ObjectInitializer)
@@ -68,7 +61,8 @@ UDemoSquadContextComponent::UDemoSquadContextComponent(const FObjectInitializer&
 void UDemoSquadContextComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	SquadId = FGuid::NewGuid();
+	if (!SquadId.IsValid())
+		SquadId = FGuid::NewGuid();
 }
 
 const UDemoSquadDefinition& UDemoSquadContextComponent::GetDefinition() const
@@ -139,10 +133,6 @@ void UDemoSquadContextComponent::UnregisterMember(FGuid UnitId, int32 BindingGen
 	}
 	Members.RemoveAll([UnitId](const auto& Entry) { return Entry.UnitId == UnitId; });
 	MemberComponents.Remove(UnitId);
-	if (LeaderUnitId == UnitId)
-	{
-		LoseLeadership();
-	}
 	Wake();
 }
 
@@ -178,11 +168,6 @@ void UDemoSquadContextComponent::ReportMember(const FDemoSquadMemberStatus& Stat
 	    (Existing->MagazineAmmo + Existing->ReserveAmmo == 0) != (Status.MagazineAmmo + Status.ReserveAmmo == 0) ||
 	    Existing->bReloading != Status.bReloading || (Existing->Suppression >= 0.65f) != (Status.Suppression >= 0.65f);
 	*Existing = Status;
-	if (LeaderUnitId == Status.UnitId &&
-	    (!Status.bAlive || !Status.bCanCommand || (Status.bPlayerControlled && !GetDefinition().bAllowPlayerCommander)))
-	{
-		LoseLeadership();
-	}
 	if (bMeaningful)
 	{
 		Wake();
@@ -234,6 +219,123 @@ void UDemoSquadContextComponent::ReportContact(const FDemoSquadContact& Contact)
 bool UDemoSquadContextComponent::SetMission(const FDemoSquadMission& InMission)
 {
 	check(IsInGameThread());
+	ReconcileMissionSource();
+	return !bHasMissionSource && ApplyMission(InMission);
+}
+
+int32 UDemoSquadContextComponent::ClaimMissionSource(AActor* Source)
+{
+	check(IsInGameThread());
+	ReconcileMissionSource();
+	if (bEnding || !GetOwner()->HasAuthority() || GetWorld()->GetNetMode() == NM_Client || !IsValid(Source) ||
+	    Source->IsActorBeingDestroyed() || Source->GetWorld() != GetWorld() || !Source->HasAuthority() ||
+	    CommandMode == EDemoSquadCommandMode::PlayerManual || MissionSourceEpoch == MAX_int32 ||
+	    (bHasMissionSource && MissionSource.Get() != Source))
+	{
+		return 0;
+	}
+	if (!bHasMissionSource)
+	{
+		MissionSource = Source;
+		bHasMissionSource = true;
+		++MissionSourceEpoch;
+	}
+	return MissionSourceEpoch;
+}
+
+bool UDemoSquadContextComponent::ReleaseMissionSource(AActor* Source, int32 Epoch)
+{
+	check(IsInGameThread());
+	if (!GetOwner()->HasAuthority() || !bHasMissionSource || MissionSource.Get() != Source ||
+	    Epoch != MissionSourceEpoch)
+	{
+		return false;
+	}
+	CancelSourceMission();
+	MissionSource.Reset();
+	bHasMissionSource = false;
+	return true;
+}
+
+bool UDemoSquadContextComponent::SetMissionFromSource(AActor* Source, int32 Epoch, const FDemoSquadMission& InMission)
+{
+	check(IsInGameThread());
+	ReconcileMissionSource();
+	if (!bHasMissionSource || MissionSource.Get() != Source || Epoch != MissionSourceEpoch ||
+	    CommandMode == EDemoSquadCommandMode::PlayerManual || !ApplyMission(InMission))
+	{
+		return false;
+	}
+	bMissionFromSource = true;
+	return true;
+}
+
+bool UDemoSquadContextComponent::CancelMissionFromSource(AActor* Source, int32 Epoch, FGuid MissionId, int32 Revision)
+{
+	check(IsInGameThread());
+	if (bEnding || !GetOwner()->HasAuthority() || !bHasMissionSource || MissionSource.Get() != Source ||
+	    Epoch != MissionSourceEpoch || !bMissionFromSource || MissionId != Mission.MissionId ||
+	    Revision != Mission.Revision)
+	{
+		return false;
+	}
+	CancelSourceMission();
+	return true;
+}
+
+AActor* UDemoSquadContextComponent::GetMissionSource() const
+{
+	return MissionSource.Get();
+}
+
+FDemoSquadSituationReport UDemoSquadContextComponent::GetSituationReport() const
+{
+	FDemoSquadSituationReport Report;
+	Report.SquadId = SquadId;
+	Report.TeamId = Members.IsEmpty() ? 255 : Members[0].TeamId;
+	Report.ReportSequence = ReportSequence;
+	Report.ObservedAt = SnapshotObservedAt;
+	Report.bCommandAvailable = !bEnding && ExecutionDriver.IsValid() && IsLeadershipReady();
+	Report.CommandMode = CommandMode;
+	Report.MembershipEpoch = MissionSourceEpoch;
+	Report.MissionResult = MissionResult;
+	Report.Capability = Snapshot;
+	Report.TaskSequence = TaskSequence;
+	Report.CommandEpoch = CommandEpoch;
+	Report.GateVersion = ExecutionGateVersion;
+	Report.bReady = bExecutionPermitted && !Plan.Assignments.IsEmpty() && PhaseSatisfied();
+	Report.Location = ChooseRallyPosition();
+	return Report;
+}
+
+void UDemoSquadContextComponent::CancelSourceMission()
+{
+	if (bMissionFromSource)
+	{
+		bMissionFromSource = false;
+		bMissionCompleted = true;
+		CancelPlan();
+		if (MissionResult.State == EDemoSquadMissionState::Running)
+		{
+			SetMissionOutcome(EDemoSquadMissionState::Cancelled);
+		}
+		Wake();
+	}
+}
+
+void UDemoSquadContextComponent::ReconcileMissionSource()
+{
+	if (bHasMissionSource && (!MissionSource.IsValid() || MissionSource->IsActorBeingDestroyed()))
+	{
+		CancelSourceMission();
+		MissionSource.Reset();
+		bHasMissionSource = false;
+	}
+}
+
+bool UDemoSquadContextComponent::ApplyMission(const FDemoSquadMission& InMission)
+{
+	check(IsInGameThread());
 	if (bEnding || !GetOwner()->HasAuthority() || InMission.Revision < 1 ||
 	    !Nelaric::Squad::ValidMissionArea(InMission.Goal) || !Nelaric::Squad::ValidMissionArea(InMission.Fallback) ||
 	    !Nelaric::Squad::ValidMissionArea(InMission.Boundary) || InMission.Facing.ContainsNaN() ||
@@ -252,6 +354,9 @@ bool UDemoSquadContextComponent::SetMission(const FDemoSquadMission& InMission)
 		Mission.MissionId = FGuid::NewGuid();
 	}
 	bMissionCompleted = false;
+	ConsecutivePlanFailures = 0;
+	bExecutionPermitted = true;
+	ExecutionGateVersion = 0;
 	SetMissionOutcome(Mission.Type == EDemoSquadMissionType::None ? EDemoSquadMissionState::Cancelled
 	                                                              : EDemoSquadMissionState::Running);
 	Wake();
@@ -266,7 +371,7 @@ void UDemoSquadContextComponent::SetCommandMode(EDemoSquadCommandMode Mode)
 	{
 		return;
 	}
-	if (Mode == EDemoSquadCommandMode::NoCommander)
+	if ((Mode == EDemoSquadCommandMode::NoCommander || Mode == EDemoSquadCommandMode::Suspended))
 	{
 		LoseLeadership();
 	}
@@ -275,7 +380,7 @@ void UDemoSquadContextComponent::SetCommandMode(EDemoSquadCommandMode Mode)
 		CancelPlan();
 		++CommandEpoch;
 	}
-	CommandMode = Mode;
+	CommandMode = Mode == EDemoSquadCommandMode::NoCommander ? EDemoSquadCommandMode::Suspended : Mode;
 	Wake();
 }
 
@@ -310,11 +415,16 @@ void UDemoSquadContextComponent::SetMissionOutcome(EDemoSquadMissionState State,
 	MissionResult.State = State;
 	MissionResult.Failure = Failure;
 	MissionResult.ReportedAt = GetWorld()->GetTimeSeconds();
+	++TaskSequence;
 }
 
 bool UDemoSquadContextComponent::ConfirmMissionCompleted(FGuid MissionId, int32 Revision)
 {
 	check(IsInGameThread());
+	if (GetOwner()->HasAuthority() && !bEnding && MissionId == Mission.MissionId && Revision == Mission.Revision &&
+	    MissionResult.State == EDemoSquadMissionState::Succeeded &&
+	    (Mission.Type == EDemoSquadMissionType::Defend || Mission.Type == EDemoSquadMissionType::Control))
+		return true;
 	if (!GetOwner()->HasAuthority() || bEnding || MissionId != Mission.MissionId || Revision != Mission.Revision ||
 	    MissionResult.State != EDemoSquadMissionState::Running)
 	{
@@ -322,7 +432,10 @@ bool UDemoSquadContextComponent::ConfirmMissionCompleted(FGuid MissionId, int32 
 	}
 	bMissionCompleted = true;
 	SetMissionOutcome(EDemoSquadMissionState::Succeeded);
-	CancelPlan();
+	if (Mission.Type != EDemoSquadMissionType::Defend && Mission.Type != EDemoSquadMissionType::Control)
+	{
+		CancelPlan();
+	}
 	Wake();
 	return true;
 }
@@ -345,7 +458,7 @@ FGuid UDemoSquadContextComponent::GetSquadId() const
 }
 FGuid UDemoSquadContextComponent::GetLeaderUnitId() const
 {
-	return LeaderUnitId;
+	return {};
 }
 EDemoSquadCommandMode UDemoSquadContextComponent::GetCommandMode() const
 {
@@ -410,78 +523,58 @@ void UDemoSquadContextComponent::StopExecution(UObject* Driver)
 
 bool UDemoSquadContextComponent::IsLeadershipReady() const
 {
-	const auto* Leader = FindMember(LeaderUnitId);
-	return CommandMode != EDemoSquadCommandMode::NoCommander && Leader && Leader->Character.IsValid() &&
-	       !Leader->Character->HasCommittedDeath() && Leader->bAlive && Leader->bCanCommand &&
-	       GetWorld()->GetTimeSeconds() - Leader->ReportedAt <= GetTactics().FeedbackTimeoutSeconds &&
-	       (!Leader->bPlayerControlled || GetDefinition().bAllowPlayerCommander);
+	return !bEnding && GetOwner()->HasAuthority() && ExecutionDriver.IsValid() &&
+	       CommandMode != EDemoSquadCommandMode::Suspended && CommandMode != EDemoSquadCommandMode::NoCommander;
 }
 
 void UDemoSquadContextComponent::LoseLeadership()
 {
-	if (!LeaderUnitId.IsValid())
-	{
-		return;
-	}
-	LeaderUnitId.Invalidate();
 	++CommandEpoch;
-	++RequestGeneration;
-	LeadershipLostAt = GetWorld()->GetTimeSeconds();
-	if (UDemoSquadPlanningSubsystem* Service = GetWorld()->GetSubsystem<UDemoSquadPlanningSubsystem>())
-	{
-		Service->CancelRoute(RouteRequestId);
-	}
-	RouteRequestId.Invalidate();
-	for (const auto& Member : Members)
-	{
-		if (auto* Receiver = Nelaric::Squad::Receiver(&Member))
-		{
-			Receiver->LimitRetainedOrder(LeadershipLostAt + FMath::Max(0.1f, GetDefinition().RetainedOrderSeconds));
-		}
-	}
+	DegradeOrders();
 	Wake();
 }
 
 bool UDemoSquadContextComponent::ResolveLeadership()
 {
-	if (IsLeadershipReady())
-	{
+	return IsLeadershipReady();
+}
+
+bool UDemoSquadContextComponent::SetExecutionPermitFromSource(AActor* Source, int32 Epoch, FGuid MissionId,
+                                                              int32 Revision, int32 GateVersion, bool bAllowed)
+{
+	check(IsInGameThread());
+	if (!GetOwner()->HasAuthority() || bEnding || Source != MissionSource.Get() || Epoch != MissionSourceEpoch ||
+	    MissionId != Mission.MissionId || Revision != Mission.Revision || GateVersion < ExecutionGateVersion ||
+	    GateVersion < 1)
+		return false;
+	if (GateVersion == ExecutionGateVersion)
+		return bAllowed == bExecutionPermitted;
+	ExecutionGateVersion = GateVersion;
+	bExecutionPermitted = bAllowed;
+	if (!bAllowed)
+		DegradeOrders();
+	Wake();
+	return true;
+}
+
+bool UDemoSquadContextComponent::IsExecutionPermitted() const
+{
+	return bExecutionPermitted;
+}
+
+bool UDemoSquadContextComponent::RestoreIdentity(FGuid Identity, bool bApply)
+{
+	check(IsInGameThread());
+	if (!GetOwner()->HasAuthority() || bEnding || !Identity.IsValid())
+		return false;
+	for (TActorIterator<ADemoSquadCommandActor> It(GetWorld()); It; ++It)
+		if (*It != GetOwner() && It->GetSquadContext()->GetSquadId() == Identity)
+			return false;
+	if (!bApply || SquadId == Identity)
 		return true;
-	}
-	if (CommandMode == EDemoSquadCommandMode::NoCommander)
-	{
-		return false;
-	}
-	const double Now = GetWorld()->GetTimeSeconds();
-	if (LeadershipLostAt >= 0.0 && Now - LeadershipLostAt < FMath::Max(0.1f, GetDefinition().LeadershipRecoverySeconds))
-	{
-		return false;
-	}
-	const FDemoSquadMemberStatus* Successor = nullptr;
-	for (const auto& Member : Members)
-	{
-		if (!Member.bAlive || !Member.bCanCommand || !Member.bMobile ||
-		    (Member.bPlayerControlled && !GetDefinition().bAllowPlayerCommander) ||
-		    Now - Member.ReportedAt > GetTactics().FeedbackTimeoutSeconds)
-		{
-			continue;
-		}
-		if (!Successor || Nelaric::Squad::LeadershipRank(Member) < Nelaric::Squad::LeadershipRank(*Successor) ||
-		    (Nelaric::Squad::LeadershipRank(Member) == Nelaric::Squad::LeadershipRank(*Successor) &&
-		     Member.UnitId.ToString() < Successor->UnitId.ToString()))
-		{
-			Successor = &Member;
-		}
-	}
-	if (!Successor)
-	{
-		return false;
-	}
-	const FGuid NextLeader = Successor->UnitId;
-	CancelPlan();
-	LeaderUnitId = NextLeader;
-	++CommandEpoch;
-	LeadershipLostAt = -1.0;
+	if (ExecutionDriver.IsValid())
+		DegradeOrders();
+	SquadId = Identity;
 	Wake();
 	return true;
 }
@@ -489,8 +582,17 @@ bool UDemoSquadContextComponent::ResolveLeadership()
 void UDemoSquadContextComponent::RebuildSnapshot()
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Squad_Snapshot);
+	ReconcileMissionSource();
 	Snapshot = {};
 	const double Now = GetWorld()->GetTimeSeconds();
+	const FVector IntegrityAnchor = Plan.Assignments.IsEmpty() ? ChooseRallyPosition() : Plan.FormationAnchor;
+	SnapshotObservedAt = Members.IsEmpty() ? -1.0 : Now;
+	for (const auto& Member : Members)
+		SnapshotObservedAt = FMath::Min(SnapshotObservedAt, Member.ReportedAt);
+	if (ReportSequence < MAX_int32)
+	{
+		++ReportSequence;
+	}
 	int32 Suppressed = 0;
 	int32 Armed = 0;
 	int32 NearAnchor = 0;
@@ -505,7 +607,7 @@ void UDemoSquadContextComponent::RebuildSnapshot()
 		++Snapshot.MobileMemberCount;
 		Suppressed += Member.Suppression >= 0.65f ? 1 : 0;
 		Armed += Member.MagazineAmmo + Member.ReserveAmmo > 0 ? 1 : 0;
-		NearAnchor += FVector::DistSquared2D(Member.Location, Plan.FormationAnchor) < FMath::Square(1500.0f) ? 1 : 0;
+		NearAnchor += FVector::DistSquared2D(Member.Location, IntegrityAnchor) < FMath::Square(1500.0f) ? 1 : 0;
 		const auto* Assignment =
 		    Plan.Assignments.FindByPredicate([&Member](const auto& Entry) { return Entry.UnitId == Member.UnitId; });
 		if (Assignment && Assignment->Order.Type == EDemoSquadOrderType::SupportSector &&
@@ -603,6 +705,8 @@ FDemoSquadArea UDemoSquadContextComponent::ResolveGoal(EDemoSquadGoalSource Sour
 
 void UDemoSquadContextComponent::CancelPlan(bool bKeepSnapshot)
 {
+	if (Plan.Identity.PlanId.IsValid() && !Plan.Assignments.IsEmpty() && PlanCancellationCount < MAX_int32)
+		++PlanCancellationCount;
 	++RequestGeneration;
 	UDemoSquadPlanningSubsystem* Service = GetWorld()->GetSubsystem<UDemoSquadPlanningSubsystem>();
 	const FGuid OldRequest = RouteRequestId;
@@ -634,11 +738,13 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Squad_PlanBuild);
 	check(IsInGameThread());
-	if (!IsLeadershipReady() || !ExecutionDriver.IsValid())
+	if (!IsLeadershipReady() || !bExecutionPermitted || !ExecutionDriver.IsValid())
 	{
 		return false;
 	}
-	if (IsCurrentIdentity(Plan.Identity) && Plan.Tactic == Tactic && Plan.Phase != EDemoSquadPhase::Completed &&
+	if (IsCurrentIdentity(Plan.Identity) && Plan.Tactic == Tactic &&
+	    (Plan.Phase != EDemoSquadPhase::Completed || Mission.Type == EDemoSquadMissionType::Defend ||
+	     Mission.Type == EDemoSquadMissionType::Control) &&
 	    Plan.Phase != EDemoSquadPhase::Failed)
 	{
 		return true;
@@ -667,10 +773,8 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 		    return Left.UnitId.ToString() < Right.UnitId.ToString();
 	    });
 	int32 Support = 0;
-	const auto* LeaderStatus = FindMember(LeaderUnitId);
-	const bool bAutomaticLeader = LeaderStatus && !LeaderStatus->bPlayerControlled;
-	const int32 SupportLimit = FMath::Min(FMath::Clamp(SupportGroupSize, 1, 32),
-	                                      FMath::Max(0, Snapshot.EffectiveMemberCount - (bAutomaticLeader ? 2 : 1)));
+	const int32 SupportLimit =
+	    FMath::Min(FMath::Clamp(SupportGroupSize, 1, 32), FMath::Max(0, Snapshot.EffectiveMemberCount - 1));
 	for (const auto& Member : Sorted)
 	{
 		if (!Member.bAlive || !Member.Character.IsValid())
@@ -690,11 +794,7 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 		Assignment.Order.Engagement = Mission.Engagement;
 		Assignment.Order.Facing = Mission.Facing.GetSafeNormal2D();
 		Assignment.Order.IssuedAt = GetWorld()->GetTimeSeconds();
-		if (bSplitGroups && Member.UnitId == LeaderUnitId)
-		{
-			Assignment.Order.Group = 2;
-		}
-		if (bSplitGroups && Assignment.bGuaranteed && Member.UnitId != LeaderUnitId && Member.WeaponRange > 0.0f &&
+		if (bSplitGroups && Assignment.bGuaranteed && Member.WeaponRange > 0.0f &&
 		    Member.MagazineAmmo + Member.ReserveAmmo > 0 && Support < SupportLimit)
 		{
 			Assignment.Order.Group = 1;
@@ -728,6 +828,8 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 	Nelaric::Squad::FRouteFinished Callback;
 	Callback.BindWeakLambda(this, [this, Identity](EDemoSquadFailure Failure, const TArray<FVector>& Points)
 	                        { HandleRoute(Identity, Failure, Points); });
+	if (RouteRequestCount < MAX_int32)
+		++RouteRequestCount;
 	RouteRequestId = Service->QueueRoute(Agent->Character.Get(), Plan.FormationAnchor, Goal.Center, MoveTemp(Callback));
 	if (!RouteRequestId.IsValid())
 	{
@@ -1014,6 +1116,11 @@ void UDemoSquadContextComponent::FailPlan(EDemoSquadFailure Failure)
 	CancelPlan(true);
 	Plan.Failure = Failure;
 	Plan.Reason = TEXT("Execution failed; awaiting authored recovery transition");
+	if (++ConsecutivePlanFailures >= 3 && MissionResult.State == EDemoSquadMissionState::Running)
+	{
+		bMissionCompleted = true;
+		SetMissionOutcome(EDemoSquadMissionState::Failed, Failure);
+	}
 	SetPhase(EDemoSquadPhase::Failed);
 }
 
@@ -1025,6 +1132,11 @@ void UDemoSquadContextComponent::MaintainPhase()
 	{
 		return;
 	}
+	if (((Mission.Type == EDemoSquadMissionType::Defend && Plan.Phase == EDemoSquadPhase::Maintain) ||
+	     (Mission.Type == EDemoSquadMissionType::Control &&
+	      MissionResult.State == EDemoSquadMissionState::Succeeded)) &&
+	    PhaseSatisfied())
+		Plan.PhaseDeadline = 0.0;
 	if (!RequiredMembersAvailable())
 	{
 		const bool bPlayerChanged = Plan.Assignments.ContainsByPredicate(
@@ -1159,10 +1271,6 @@ void UDemoSquadContextComponent::Update()
 	UpdateTimer.Invalidate();
 	TGuardValue<bool> Guard(bUpdating, true);
 	RebuildSnapshot();
-	if (LeaderUnitId.IsValid() && !IsLeadershipReady())
-	{
-		LoseLeadership();
-	}
 	// Snapshot refresh only. Tasks maintain their active phase; all tactics,
 	// deadlines, outcomes and next-stage choices are authored in the tree.
 	if (!GetWorld()->GetTimerManager().IsTimerActive(ChangedTimer))
@@ -1189,8 +1297,6 @@ void UDemoSquadContextComponent::CommitChanged()
 void UDemoSquadContextComponent::CleanupSquad()
 {
 	CancelPlan();
-	LeaderUnitId.Invalidate();
-	++CommandEpoch;
 }
 
 void UDemoSquadContextComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)

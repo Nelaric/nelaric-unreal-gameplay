@@ -31,7 +31,7 @@ inline constexpr int32 UpdateIntervalFrames[NumLevels] = {1, 3, 5, 10, 30, 0};
 /** @brief Inclusive distance upper bounds in centimeters, ordered by level.
  * @details Distances beyond the last bound remain in level 6.
  */
-inline constexpr float DistanceCm[NumLevels] = {1000.0f, 3000.0f, 5000.0f, 10000.0f, 20000.0f, 30000.0f};
+inline constexpr float DistanceCm[NumLevels] = {1000.0f, 3000.0f, 5000.0f, 50000.0f, 200000.0f, 3000000.0f};
 
 /// Interval between distance updates, in milliseconds.
 inline constexpr int32 DistanceUpdateIntervalMs = 1000;

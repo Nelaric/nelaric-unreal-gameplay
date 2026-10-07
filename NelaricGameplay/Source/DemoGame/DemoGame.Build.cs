@@ -25,7 +25,15 @@ public class DemoGame : ModuleRules
 			}
 		);
 		PrivateDependencyModuleNames.AddRange(
-			new string[] { "NavigationSystem", "AnimationBudgetAllocator", "GameplayTasks", "JsEnv" }
+			new string[]
+			{
+				"NavigationSystem",
+				"AnimationBudgetAllocator",
+				"GameplayTasks",
+				"JsEnv",
+				"Json",
+				"JsonUtilities",
+			}
 		);
 	}
 }

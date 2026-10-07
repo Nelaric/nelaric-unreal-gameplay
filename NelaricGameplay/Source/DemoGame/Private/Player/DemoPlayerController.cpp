@@ -1,6 +1,8 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 #include "Player/DemoPlayerController.h"
+#include "AI/DemoCompanyCommandActor.h"
+#include "AI/DemoCompanyRegistrySubsystem.h"
 
 #include "DemoControlGameMode.h"
 #include "Character/DemoCharacter.h"
@@ -654,4 +656,78 @@ void ADemoPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	SelectedBot.Reset();
 	PresentedPawn.Reset();
 	Super::EndPlay(EndPlayReason);
+}
+
+namespace Nelaric::CompanyPlayer
+{
+static ADemoCompanyCommandActor* AuthorizedCompany(ADemoPlayerController* Controller, const FString& PlatoonId = {},
+                                                   bool bReadOnly = false)
+{
+	auto* Registry = UDemoCommandLibrary::GetRegistry(Controller);
+	auto* Company = Registry ? Cast<ADemoCompanyCommandActor>(Registry->GetCompany()) : nullptr;
+	if (!Controller->HasAuthority() || !Controller->bCanCommandCompany || !Company || !Company->Definition ||
+	    Company->Definition->TeamId != Controller->CompanyCommandTeamId ||
+	    (!PlatoonId.IsEmpty() && !Company->Definition->ExpectedPlatoonIds.Contains(PlatoonId)) ||
+	    (!bReadOnly && !Controller->CompanyPlatoonScope.IsEmpty() &&
+	     (PlatoonId.IsEmpty() || !Controller->CompanyPlatoonScope.Contains(PlatoonId))))
+		return nullptr;
+	return Company;
+}
+} // namespace Nelaric::CompanyPlayer
+
+bool ADemoPlayerController::RequestCompanyMission(const FDemoCompanyMission& Mission)
+{
+	if (!IsLocalController() || IsActorBeingDestroyed() || Mission.Objectives.Num() > 64)
+		return false;
+	ServerCompanyMission(Mission);
+	return true;
+}
+bool ADemoPlayerController::RequestPlatoonManualScope(const FString& PlatoonId, bool bLocked)
+{
+	if (!IsLocalController() || IsActorBeingDestroyed() || PlatoonId.Len() > 128)
+		return false;
+	ServerCompanyScope(PlatoonId, bLocked);
+	return true;
+}
+bool ADemoPlayerController::RequestManualPlatoonMission(const FString& PlatoonId, const FDemoPlatoonMission& Mission)
+{
+	if (!IsLocalController() || IsActorBeingDestroyed() || PlatoonId.Len() > 128)
+		return false;
+	ServerManualPlatoonMission(PlatoonId, Mission);
+	return true;
+}
+bool ADemoPlayerController::RequestCompanySnapshot()
+{
+	if (!IsLocalController() || IsActorBeingDestroyed())
+		return false;
+	ServerCompanySnapshot();
+	return true;
+}
+void ADemoPlayerController::ServerCompanyMission_Implementation(const FDemoCompanyMission& Mission)
+{
+	auto* Company = Nelaric::CompanyPlayer::AuthorizedCompany(this);
+	const bool bAccepted = Company && Mission.Objectives.Num() <= 64 && Company->SubmitCompanyMission(Mission);
+	ClientCompanyResult(bAccepted, Company ? Company->GetCompanyContext()->GetState() : FString());
+}
+void ADemoPlayerController::ServerCompanyScope_Implementation(const FString& PlatoonId, bool bLocked)
+{
+	auto* Company = Nelaric::CompanyPlayer::AuthorizedCompany(this, PlatoonId);
+	const bool bAccepted = Company && PlatoonId.Len() <= 128 && Company->SetPlatoonManualScope(PlatoonId, bLocked);
+	ClientCompanyResult(bAccepted, Company ? Company->GetCompanyContext()->GetState() : FString());
+}
+void ADemoPlayerController::ServerManualPlatoonMission_Implementation(const FString& PlatoonId,
+                                                                      const FDemoPlatoonMission& Mission)
+{
+	auto* Company = Nelaric::CompanyPlayer::AuthorizedCompany(this, PlatoonId);
+	const bool bAccepted = Company && PlatoonId.Len() <= 128 && Company->SubmitManualPlatoonMission(PlatoonId, Mission);
+	ClientCompanyResult(bAccepted, Company ? Company->GetCompanyContext()->GetState() : FString());
+}
+void ADemoPlayerController::ServerCompanySnapshot_Implementation()
+{
+	auto* Company = Nelaric::CompanyPlayer::AuthorizedCompany(this, {}, true);
+	ClientCompanyResult(Company != nullptr, Company ? Company->GetCompanyContext()->GetState() : FString());
+}
+void ADemoPlayerController::ClientCompanyResult_Implementation(bool bAccepted, const FString& Snapshot)
+{
+	OnCompanyCommandResult(bAccepted, Snapshot);
 }

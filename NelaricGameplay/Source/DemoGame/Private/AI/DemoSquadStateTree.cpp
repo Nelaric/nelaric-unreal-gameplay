@@ -40,6 +40,12 @@ static EStateTreeRunStatus OperationResult(const FDemoSquadTreeTaskData& Data)
 	{
 		return Plan.Phase != EDemoSquadPhase::Planning ? EStateTreeRunStatus::Succeeded : EStateTreeRunStatus::Running;
 	}
+	const auto Mission = Squad->GetMission();
+	if (Data.Operation == EDemoSquadTreeOperation::Execute &&
+	    ((Mission.Type == EDemoSquadMissionType::Defend && Plan.Phase == EDemoSquadPhase::Maintain) ||
+	     (Mission.Type == EDemoSquadMissionType::Control &&
+	      Squad->GetMissionResult().State == EDemoSquadMissionState::Succeeded)))
+		return EStateTreeRunStatus::Running;
 	return Squad->IsPhaseReady() ? EStateTreeRunStatus::Succeeded : EStateTreeRunStatus::Running;
 }
 } // namespace Nelaric::Squad
@@ -179,15 +185,16 @@ bool FDemoSquadTreeCondition::TestCondition(FStateTreeExecutionContext& Context)
 		Result = Squad->IsLeadershipReady();
 		break;
 	case EDemoSquadTreeTest::LeaderPlayerControlled:
-		Result = Squad->GetMembers().ContainsByPredicate(
-		    [Squad](const auto& Member)
-		    { return Member.UnitId == Squad->GetLeaderUnitId() && Member.bPlayerControlled; });
+		Result = false; // Compatibility with old assets; command has no body.
 		break;
 	case EDemoSquadTreeTest::HasMembers:
 		Result = Squad->GetMembers().ContainsByPredicate([](const auto& Member) { return Member.bAlive; });
 		break;
 	case EDemoSquadTreeTest::HasMission:
-		Result = Squad->GetMissionResult().State == EDemoSquadMissionState::Running;
+		Result = Squad->IsExecutionPermitted() &&
+		         (Squad->GetMissionResult().State == EDemoSquadMissionState::Running ||
+		          (Squad->GetMissionResult().State == EDemoSquadMissionState::Succeeded &&
+		           (Mission.Type == EDemoSquadMissionType::Defend || Mission.Type == EDemoSquadMissionType::Control)));
 		break;
 	case EDemoSquadTreeTest::MissionType:
 		Result = Mission.Type == Data.MissionType;

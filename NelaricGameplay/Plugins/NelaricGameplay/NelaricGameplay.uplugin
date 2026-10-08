@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 4,
-	"VersionName": "0.0.6",
+	"Version": 5,
+	"VersionName": "0.0.7",
 	"FriendlyName": "Nelaric Gameplay",
 	"Description": "Genre-independent gameplay foundations for standalone, listen-server, and dedicated-server play.",
 	"Category": "Gameplay",

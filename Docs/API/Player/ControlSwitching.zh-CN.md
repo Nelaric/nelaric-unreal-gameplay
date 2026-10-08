@@ -12,7 +12,7 @@
 
 权威端的组件必须已注册并进入 Ready。存在本机 Controller 时，其有效 PlayerState 必须与 Pawn 的 PlayerState 一致。未控制的 Pawn 和远端 AI 副本不要求存在本机 Controller。非框架 Pawn 需要将 Controller、PlayerState 变化接入既有初始化协调器，使上下文替换后参与者失效并重新初始化。
 
-`ADemoCharacter` 选择 `ANelaricBotController` 为 AI 控制器类。通过 Pawn 初始化配置或蓝图显式添加控制组件，原生角色构造函数不再创建它。上帝视角摄像机 Pawn 同样需要显式配置控制策略，并关闭 Bot 交还。框架通用 Pawn、Character 基类不强制安装控制策略。
+框架通用 Pawn、Character 基类不强制安装控制策略。Demo 的控制组件配置见 Content 中的[控制与 GAS 接入](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/Integration/ControlAndGAS.zh-CN.md)。
 
 | 设置 | 含义 |
 | --- | --- |

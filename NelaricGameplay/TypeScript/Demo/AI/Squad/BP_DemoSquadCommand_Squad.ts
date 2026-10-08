@@ -41,6 +41,7 @@ class BP_DemoSquadCommand_Squad extends commandBlueprint {
     ReceiveBeginPlay(): void {
         console.log("[SquadSetup] Command BeginPlay: " + this.GetName() + " authority=" + this.HasAuthority());
         if (!this.HasAuthority()) return;
+        if (UE.KismetMathLibrary.EqualEqual_ObjectObject(this.GetOwner(), UE.GameplayStatics.GetGameMode(this))) return;
         startBindings(this);
     }
 

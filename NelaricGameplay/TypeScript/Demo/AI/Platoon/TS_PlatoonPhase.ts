@@ -1,7 +1,6 @@
 ﻿// Copyright (c) 2026 Nelaric Contributors
 
 import * as UE from "ue";
-import { platoons } from "./PlatoonCoordinator";
 
 /** One atomic lifecycle operation per authored StateTree state. */
 class TS_PlatoonPhase extends UE.GameAIStateTreeTaskBlueprintBase {
@@ -12,10 +11,10 @@ class TS_PlatoonPhase extends UE.GameAIStateTreeTaskBlueprintBase {
     ReceiveLatentTick(_delta: number): void { this.advance(); }
 
     private advance(): void {
-        const coordinator = platoons.get(this.OwnerActor);
-        if (!coordinator) { this.FinishTask(false); return; }
-        const result = coordinator.step(this.Operation);
-        if (result !== undefined) this.FinishTask(result);
+        const membership = this.OwnerActor?.GetComponentByClass(UE.DemoCompanyMembershipComponent.StaticClass()) as UE.DemoCompanyMembershipComponent;
+        if (!membership || !UE.KismetSystemLibrary.IsValid(membership)) { this.FinishTask(false); return; }
+        const result = membership.StepPlatoon(this.Operation);
+        if (result !== UE.EStateTreeRunStatus.Running) this.FinishTask(result === UE.EStateTreeRunStatus.Succeeded);
     }
 }
 

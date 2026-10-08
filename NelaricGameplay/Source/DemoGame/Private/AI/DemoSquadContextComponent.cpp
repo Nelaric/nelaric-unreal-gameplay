@@ -705,6 +705,8 @@ FDemoSquadArea UDemoSquadContextComponent::ResolveGoal(EDemoSquadGoalSource Sour
 
 void UDemoSquadContextComponent::CancelPlan(bool bKeepSnapshot)
 {
+	PolicyGoals.Reset();
+	NextPolicyRefreshAt = 0.0;
 	if (Plan.Identity.PlanId.IsValid() && !Plan.Assignments.IsEmpty() && PlanCancellationCount < MAX_int32)
 		++PlanCancellationCount;
 	++RequestGeneration;
@@ -759,7 +761,7 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 	Plan.StartedAt = GetWorld()->GetTimeSeconds();
 	Plan.FormationAnchor = ChooseRallyPosition();
 	Plan.Reason = TEXT("Authored StateTree plan request");
-	bSplitGroups = bSplitSupport;
+	bSplitGroups = bSplitSupport && !UsesMemberOrderPolicy();
 	TArray<FDemoSquadMemberStatus> Sorted = Members;
 	Sorted.Sort(
 	    [](const auto& Left, const auto& Right)
@@ -807,7 +809,7 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 		FailPlan(EDemoSquadFailure::NoAmmo);
 		return false;
 	}
-	FDemoSquadArea Goal = ResolveGoal(GoalSource);
+	FDemoSquadArea Goal = UsesMemberOrderPolicy() ? Mission.Goal : ResolveGoal(GoalSource);
 	Plan.Goal = Goal;
 	const FDemoSquadMemberStatus* Agent = Members.FindByPredicate(
 	    [](const auto& Member)
@@ -882,8 +884,10 @@ bool UDemoSquadContextComponent::BeginPhase(const FDemoSquadPhaseSettings& Setti
 		return false;
 	}
 	PhaseSettings = Settings;
+	if (UsesMemberOrderPolicy())
+		PhaseSettings.TimeoutSeconds = 0.0f;
 	SetPhase(Settings.Phase);
-	Plan.PhaseDeadline = Settings.TimeoutSeconds > 0.0f ? Plan.PhaseStartedAt + Settings.TimeoutSeconds : 0.0;
+	Plan.PhaseDeadline = PhaseSettings.TimeoutSeconds > 0.0f ? Plan.PhaseStartedAt + PhaseSettings.TimeoutSeconds : 0.0;
 	if (!AssignPositions())
 	{
 		FailPlan(EDemoSquadFailure::PositionUnavailable);
@@ -909,7 +913,10 @@ bool UDemoSquadContextComponent::AssignPosition(FDemoSquadAssignment& Assignment
 	if (bFinalArea && !(bSplitGroups && Assignment.Order.Group != 0))
 	{
 		const float Angle = 2.0f * PI * Slot / FMath::Max(1, Plan.Assignments.Num());
-		Offset = FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.0) * FMath::Max(0.0f, Plan.Goal.Radius - 150.0f);
+		// Small platoon sectors must still provide distinct slots, rather than
+		// collapsing every soldier onto a single reserved position.
+		const float RingRadius = FMath::Max(0.0f, Plan.Goal.Radius - 40.0f);
+		Offset = FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.0) * RingRadius;
 	}
 	FVector Position;
 	const FGuid Lease = Service->ReservePosition(Assignment.UnitId, Plan.Identity.PlanId,
@@ -942,11 +949,82 @@ bool UDemoSquadContextComponent::AssignPosition(FDemoSquadAssignment& Assignment
 	return true;
 }
 
+bool UDemoSquadContextComponent::UsesMemberOrderPolicy() const
+{
+	return MemberOrderHandler.IsBound() &&
+	       (Mission.Type == EDemoSquadMissionType::Control || Mission.Type == EDemoSquadMissionType::Defend);
+}
+
+bool UDemoSquadContextComponent::UpdatePolicyOrder(FDemoSquadAssignment& Assignment)
+{
+	const auto* Member = FindMember(Assignment.UnitId);
+	auto* Service = GetWorld()->GetSubsystem<UDemoSquadPlanningSubsystem>();
+	if (!Member || !Member->bAlive || !Member->bMobile || Member->bPlayerControlled || !Member->Character.IsValid())
+		return true;
+	if (!Service || !bExecutionPermitted || !UsesMemberOrderPolicy())
+		return false;
+	const auto InputOrder = Assignment.Order;
+	auto Proposed = MemberOrderHandler.Execute(Member->Character.Get(), InputOrder);
+	if (Proposed.Goal.Center.ContainsNaN() || Proposed.MovementArea.Center.ContainsNaN() ||
+	    !FMath::IsFinite(Proposed.MovementArea.Radius) || Proposed.MovementArea.Radius <= 0.0f ||
+	    !Nelaric::Squad::Inside(Proposed.MovementArea, Proposed.Goal.Center))
+		return false;
+	const FVector* PreviousGoal = PolicyGoals.Find(Assignment.UnitId);
+	const bool bFailed =
+	    Member->Feedback.OrderId == Assignment.Order.OrderId && Member->Feedback.State == EDemoSquadOrderState::Failed;
+	if (PreviousGoal && PreviousGoal->Equals(Proposed.Goal.Center, 1.0f) && Assignment.PositionId.IsValid() &&
+	    !bFailed && Assignment.Order.bAllowStopToFight == Proposed.bAllowStopToFight)
+	{
+		Service->RenewPosition(Assignment.PositionId, Plan.Identity.PlanId);
+		return true;
+	}
+	FVector Position = FVector::ZeroVector;
+	FGuid Lease;
+	for (int32 Attempt = 0; Attempt < 9 && !Lease.IsValid(); ++Attempt)
+	{
+		const float Angle = Attempt * PI * 0.25f;
+		const FVector Offset =
+		    Attempt == 0 ? FVector::ZeroVector : FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0) * 140.0f;
+		Lease =
+		    Service->ReservePosition(Assignment.UnitId, Plan.Identity.PlanId, Proposed.Goal.Center + Offset, Position);
+		if (Lease.IsValid() && !Nelaric::Squad::Inside(Proposed.MovementArea, Position))
+		{
+			Service->ReleasePosition(Lease, Plan.Identity.PlanId);
+			Lease.Invalidate();
+		}
+	}
+	if (!Lease.IsValid())
+		return Assignment.PositionId.IsValid();
+	Service->ReleasePosition(Assignment.PositionId, Plan.Identity.PlanId);
+	Assignment.PositionId = Lease;
+	PolicyGoals.Add(Assignment.UnitId, Proposed.Goal.Center);
+	auto& Order = Assignment.Order;
+	Order.OrderId = FGuid::NewGuid();
+	++Order.Revision;
+	Order.Type = EDemoSquadOrderType::MaintainFormation;
+	Order.Group = 0;
+	Order.Goal = FDemoSquadArea(Position, 80.0f);
+	Order.AcceptanceRadius = 60.0f;
+	Order.MovementArea = Proposed.MovementArea;
+	Order.bAllowStopToFight = Proposed.bAllowStopToFight;
+	Order.bAllowLocalReposition = false;
+	Order.bHasFocus = false;
+	Order.Deadline = 0.0;
+	Order.ExpiresAt = 0.0;
+	Order.IssuedAt = GetWorld()->GetTimeSeconds();
+	return true;
+}
+
 bool UDemoSquadContextComponent::AssignPositions()
 {
 	const FVector Destination = PhaseSettings.bFollowRoute ? Plan.Route[Plan.RouteIndex] : Plan.Goal.Center;
 	for (auto& Assignment : Plan.Assignments)
 	{
+		if (UsesMemberOrderPolicy())
+		{
+			UpdatePolicyOrder(Assignment);
+			continue;
+		}
 		auto& Order = Assignment.Order;
 		if (bSplitGroups && Order.Group != 0 && PhaseSettings.bPreserveSupport)
 		{
@@ -1008,6 +1086,9 @@ void UDemoSquadContextComponent::PublishOrders(bool bOnlyChanged)
 	bool bAccepted = true;
 	for (const auto& Assignment : Plan.Assignments)
 	{
+		// A temporarily crowded destination is retried without failing the squad.
+		if (UsesMemberOrderPolicy() && !Assignment.PositionId.IsValid())
+			continue;
 		const auto* Member = FindMember(Assignment.UnitId);
 		if (!Member || Member->BindingGeneration != Assignment.BindingGeneration || !Member->bAlive)
 		{
@@ -1130,6 +1211,47 @@ void UDemoSquadContextComponent::MaintainPhase()
 	    Plan.Phase == EDemoSquadPhase::None || Plan.Phase == EDemoSquadPhase::Failed ||
 	    Plan.Phase == EDemoSquadPhase::Completed)
 	{
+		return;
+	}
+	if (UsesMemberOrderPolicy())
+	{
+		const double Now = GetWorld()->GetTimeSeconds();
+		if (Now >= NextPolicyRefreshAt)
+		{
+			NextPolicyRefreshAt = Now + 0.5;
+			for (const auto& Member : Members)
+			{
+				if (!Member.bAlive || !Member.bMobile || Member.bPlayerControlled ||
+				    Plan.Assignments.ContainsByPredicate(
+				        [&Member](const auto& A)
+				        { return A.UnitId == Member.UnitId && A.BindingGeneration == Member.BindingGeneration; }))
+					continue;
+				FDemoSquadAssignment Added;
+				Added.UnitId = Member.UnitId;
+				Added.BindingGeneration = Member.BindingGeneration;
+				Added.bGuaranteed = true;
+				Added.Order.UnitId = Member.UnitId;
+				Added.Order.SquadId = SquadId;
+				Added.Order.Identity = Plan.Identity;
+				Added.Order.OrderId = FGuid::NewGuid();
+				Added.Order.Engagement = Mission.Engagement;
+				Plan.Assignments.Add(Added);
+			}
+			Plan.Assignments.RemoveAll(
+			    [this](const auto& A)
+			    {
+				    const auto* Member = FindMember(A.UnitId);
+				    if (Member && Member->bAlive && Member->BindingGeneration == A.BindingGeneration)
+					    return false;
+				    if (auto* Service = GetWorld()->GetSubsystem<UDemoSquadPlanningSubsystem>())
+					    Service->ReleasePosition(A.PositionId, Plan.Identity.PlanId);
+				    PolicyGoals.Remove(A.UnitId);
+				    return true;
+			    });
+			for (auto& Assignment : Plan.Assignments)
+				UpdatePolicyOrder(Assignment);
+			PublishOrders(true);
+		}
 		return;
 	}
 	if (((Mission.Type == EDemoSquadMissionType::Defend && Plan.Phase == EDemoSquadPhase::Maintain) ||
@@ -1302,6 +1424,8 @@ void UDemoSquadContextComponent::CleanupSquad()
 void UDemoSquadContextComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	bEnding = true;
+	MemberOrderHandler.Unbind();
+	PolicyGoals.Reset();
 	StopExecution(nullptr);
 	GetWorld()->GetTimerManager().ClearTimer(ChangedTimer);
 	Changed.Clear();

@@ -27,44 +27,85 @@ bool UDemoCompanyRegistrySubsystem::DoesSupportWorldType(EWorldType::Type WorldT
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
 }
 
-int32 UDemoCompanyRegistrySubsystem::RegisterCompany(AActor* Actor, const FString& CompanyId)
+int32 UDemoCompanyRegistrySubsystem::RegisterCompany(AActor* Actor, const FString& CompanyId, uint8 TeamId)
 {
 	check(IsInGameThread());
-	if (bStopping || !IsValid(Actor) || !Actor->IsA<ADemoCompanyCommandActor>() || Actor->IsActorBeingDestroyed() ||
-	    Actor->GetWorld() != GetWorld() || !Actor->HasAuthority() || GetWorld()->GetNetMode() == NM_Client ||
-	    CompanyId.IsEmpty() || CompanyId.Len() > 128 || Generation == MAX_int32)
+	const auto* Command = Cast<ADemoCompanyCommandActor>(Actor);
+	if (bStopping || !IsValid(Command) || Actor->IsActorBeingDestroyed() || Actor->GetWorld() != GetWorld() ||
+	    !Actor->HasAuthority() || GetWorld()->GetNetMode() == NM_Client || TeamId == 255 || CompanyId.IsEmpty() ||
+	    CompanyId.Len() > 128 || Generation == MAX_int32 ||
+	    (Command->Definition && (Command->Definition->TeamId != TeamId || Command->Definition->CompanyId != CompanyId)))
 		return 0;
-	if (GetCompany())
+	if (GetCompany(TeamId))
 	{
-		if (Company.Get() == Actor && Identity == CompanyId)
-			return Generation;
-		UE_LOG(LogTemp, Error, TEXT("Duplicate company command rejected in world %s."), *GetWorld()->GetName());
+		if (Companies.FindRef(TeamId).Get() == Actor && Identities.FindRef(TeamId) == CompanyId)
+			return Epochs.FindRef(TeamId);
+		UE_LOG(LogTemp, Error, TEXT("Duplicate company command rejected for team %u."), TeamId);
 		return 0;
 	}
-	Company = Actor;
-	Identity = CompanyId;
-	return ++Generation;
+	for (const auto& Entry : Companies)
+		if (Entry.Value.Get() == Actor)
+			return 0;
+	Companies.Add(TeamId, Actor);
+	Identities.Add(TeamId, CompanyId);
+	Epochs.Add(TeamId, ++Generation);
+	return Generation;
 }
 
 bool UDemoCompanyRegistrySubsystem::UnregisterCompany(AActor* Actor, int32 Epoch)
 {
 	check(IsInGameThread());
-	if (Company.Get() != Actor || Epoch != Generation)
-		return false;
-	Company.Reset();
-	Identity.Reset();
-	return true;
+	for (auto Entry = Companies.CreateIterator(); Entry; ++Entry)
+		if (Entry.Value().Get() == Actor && Epochs.FindRef(Entry.Key()) == Epoch)
+		{
+			Identities.Remove(Entry.Key());
+			Epochs.Remove(Entry.Key());
+			Entry.RemoveCurrent();
+			return true;
+		}
+	return false;
 }
 
-AActor* UDemoCompanyRegistrySubsystem::GetCompany() const
+AActor* UDemoCompanyRegistrySubsystem::GetCompany(uint8 TeamId) const
 {
-	return !bStopping && Company.IsValid() && !Company->IsActorBeingDestroyed() ? Company.Get() : nullptr;
+	check(IsInGameThread());
+	AActor* Actor = Companies.FindRef(TeamId).Get();
+	const auto* Command = Cast<ADemoCompanyCommandActor>(Actor);
+	return !bStopping && IsValid(Command) && !Actor->IsActorBeingDestroyed() &&
+	               (!Command->Definition || (Command->Definition->TeamId == TeamId &&
+	                                         Command->Definition->CompanyId == Identities.FindRef(TeamId)))
+	           ? Actor
+	           : nullptr;
+}
+
+TArray<AActor*> UDemoCompanyRegistrySubsystem::GetCompanies() const
+{
+	TArray<AActor*> Result;
+	for (const auto& Entry : Companies)
+		if (AActor* Actor = GetCompany(Entry.Key))
+			Result.Add(Actor);
+	return Result;
+}
+
+bool UDemoCompanyRegistrySubsystem::IsRegisteredCompany(AActor* Actor) const
+{
+	if (!IsValid(Actor) || !Actor->HasAuthority() || Actor->GetWorld() != GetWorld() ||
+	    GetWorld()->GetNetMode() == NM_Client)
+		return false;
+	for (const auto& Entry : Companies)
+		if (GetCompany(Entry.Key) == Actor)
+			return true;
+	return false;
 }
 
 bool UDemoCompanyRegistrySubsystem::HasPublicationAuthority(AActor* Actor, int32 Epoch) const
 {
-	return GetCompany() == Actor && Actor && Actor->HasAuthority() && GetWorld()->GetNetMode() != NM_Client &&
-	       Epoch == Generation && Epoch > 0;
+	if (Epoch <= 0 || !IsRegisteredCompany(Actor))
+		return false;
+	for (const auto& Entry : Companies)
+		if (Entry.Value.Get() == Actor && Epochs.FindRef(Entry.Key) == Epoch)
+			return true;
+	return false;
 }
 
 FString UDemoCompanyRegistrySubsystem::GetRunId() const
@@ -75,8 +116,9 @@ FString UDemoCompanyRegistrySubsystem::GetRunId() const
 void UDemoCompanyRegistrySubsystem::Deinitialize()
 {
 	bStopping = true;
-	Company.Reset();
-	Identity.Reset();
+	Companies.Reset();
+	Identities.Reset();
+	Epochs.Reset();
 	Super::Deinitialize();
 }
 
@@ -108,7 +150,7 @@ UDemoCommandLibrary::CreateCompany(UObject* WorldContext, TSubclassOf<ADemoCompa
 	auto* Registry = World->GetSubsystem<UDemoCompanyRegistrySubsystem>();
 	if (!Registry)
 		return nullptr;
-	if (auto* Existing = Cast<ADemoCompanyCommandActor>(Registry->GetCompany()))
+	if (auto* Existing = Cast<ADemoCompanyCommandActor>(Registry->GetCompany(Definition->TeamId)))
 		return Existing->Definition && Existing->Definition->CompanyId == Definition->CompanyId &&
 		               Existing->Definition->TeamId == Definition->TeamId
 		           ? Existing

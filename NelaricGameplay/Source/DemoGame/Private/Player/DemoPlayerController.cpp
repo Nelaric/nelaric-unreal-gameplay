@@ -664,7 +664,8 @@ static ADemoCompanyCommandActor* AuthorizedCompany(ADemoPlayerController* Contro
                                                    bool bReadOnly = false)
 {
 	auto* Registry = UDemoCommandLibrary::GetRegistry(Controller);
-	auto* Company = Registry ? Cast<ADemoCompanyCommandActor>(Registry->GetCompany()) : nullptr;
+	auto* Company =
+	    Registry ? Cast<ADemoCompanyCommandActor>(Registry->GetCompany(Controller->CompanyCommandTeamId)) : nullptr;
 	if (!Controller->HasAuthority() || !Controller->bCanCommandCompany || !Company || !Company->Definition ||
 	    Company->Definition->TeamId != Controller->CompanyCommandTeamId ||
 	    (!PlatoonId.IsEmpty() && !Company->Definition->ExpectedPlatoonIds.Contains(PlatoonId)) ||

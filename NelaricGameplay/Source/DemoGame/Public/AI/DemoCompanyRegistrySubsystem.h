@@ -13,25 +13,32 @@ class UDemoObjectiveWorldSubsystem;
 class ADemoCompanyCommandActor;
 class ADemoSquadCommandActor;
 
-/// Authority-world singleton registry; contains no allocation decisions.
+/// Authority-world team registry; contains no allocation decisions.
 UCLASS(MinimalAPI)
 class UDemoCompanyRegistrySubsystem : public UWorldSubsystem
 {
 	GENERATED_BODY()
 public:
-	/** @brief Claims the sole command publication lease; game thread only.
+	/** @brief Claims one team command publication lease; game thread only.
 	 * @param Actor Live same-world authority actor.
 	 * @param CompanyId Stable nonempty logical identity.
+	 * @param TeamId Non-neutral faction; defaults to the legacy team zero.
 	 * @return Positive lease generation, or zero for a duplicate or client.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
-	int32 RegisterCompany(AActor* Actor, const FString& CompanyId);
+	int32 RegisterCompany(AActor* Actor, const FString& CompanyId, uint8 TeamId = 0);
 	/// Releases only the exact publication lease; authority game thread.
 	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
 	bool UnregisterCompany(AActor* Actor, int32 Epoch);
 	/// Returns the borrowed valid command actor, or null; game thread only.
 	UFUNCTION(BlueprintPure, Category = "Demo|Company")
-	AActor* GetCompany() const;
+	AActor* GetCompany(uint8 TeamId = 0) const;
+	/// Returns all live team publishers; borrowed actors, game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Company")
+	TArray<AActor*> GetCompanies() const;
+	/// Checks current team registration; borrowed actor, game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Company")
+	bool IsRegisteredCompany(AActor* Actor) const;
 	/// Returns whether this exact actor owns the publication lease.
 	UFUNCTION(BlueprintPure, Category = "Demo|Company")
 	bool HasPublicationAuthority(AActor* Actor, int32 Epoch) const;
@@ -48,8 +55,9 @@ protected:
 	virtual bool DoesSupportWorldType(EWorldType::Type WorldType) const override;
 
 private:
-	TWeakObjectPtr<AActor> Company;
-	FString Identity;
+	TMap<uint8, TWeakObjectPtr<AActor>> Companies;
+	TMap<uint8, FString> Identities;
+	TMap<uint8, int32> Epochs;
 	FString RunId;
 	int32 Generation = 0;
 	bool bStopping = false;
@@ -64,7 +72,7 @@ public:
 	/// Borrows the executing world's registry; game thread only.
 	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContext"), Category = "Demo|Company")
 	static UDemoCompanyRegistrySubsystem* GetRegistry(UObject* WorldContext);
-	/** @brief Creates the sole publisher from a uniform battlefield entry.
+	/** @brief Creates a team publisher from a uniform battlefield entry.
 	 * @param WorldContext Authority runtime
 	 * world context; game thread only.
 	 * @param CommandClass Authored virtual company class and StateTree.

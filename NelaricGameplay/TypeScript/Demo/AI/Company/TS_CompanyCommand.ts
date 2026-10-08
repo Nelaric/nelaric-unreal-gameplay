@@ -7,12 +7,18 @@ import TS_PlatoonCommand from "../Platoon/TS_PlatoonCommand";
 import { CompanyCoordinator } from "./CompanyCoordinator";
 import { clone, FCompanyMission, FPlatoonMission, nativeValue, Phase, PlatoonPort, TacticalArea } from "./CommandContracts";
 import { getObjectiveAuthority, ObjectiveAuthority } from "./ObjectiveAuthority";
+import { BattlefrontCompanyAdapter, BattlefrontSession } from "./BattlefrontObjectives";
 
 interface Runtime {
-    core: CompanyCoordinator; rules: ObjectiveAuthority; lease: number; timer?: UE.TimerHandle;
+    front: BattlefrontCompanyAdapter; core: CompanyCoordinator; rules: ObjectiveAuthority; lease: number; timer?: UE.TimerHandle;
     nextRules: number; nextStep: number; inputRevision: number; bindings: Map<string, UE.Actor>;
 }
 const companies = new WeakMap<UE.Actor, Runtime>();
+const battlefronts = new WeakMap<UE.DemoObjectiveWorldSubsystem, BattlefrontSession>();
+function battlefront(actor: UE.Actor): BattlefrontSession | undefined {
+    const world = UE.DemoCommandLibrary.GetObjectives(actor);
+    return valid(world) ? battlefronts.get(world) : undefined;
+}
 function valid(value: UE.Object | undefined | null): boolean { return !!value && UE.KismetSystemLibrary.IsValid(value); }
 
 /** Sole company lifecycle owner. All decisions remain in the shared coordinator. */
@@ -22,7 +28,7 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
         if (companies.has(this)) { if (!this.GetCommandTree().IsRunning()) this.GetCommandTree().StartLogic(); return this.GetCommandTree().IsRunning(); }
         const registry = UE.DemoCommandLibrary.GetRegistry(this);
         if (!valid(registry)) return false;
-        const lease = registry.RegisterCompany(this, this.Definition.CompanyId);
+        const lease = registry.RegisterCompany(this, this.Definition.CompanyId, this.Definition.TeamId);
         if (lease <= 0) return false;
         const nativeRules = UE.DemoCommandLibrary.GetObjectives(this);
         if (!valid(nativeRules)) { registry.UnregisterCompany(this, lease); return false; }
@@ -39,9 +45,10 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
                     riskWeight: p.RiskWeight, opportunityWeight: p.OpportunityWeight, reassignmentGain: p.ReassignmentGain },
                 () => UE.KismetGuidLibrary.Conv_GuidToString(UE.KismetGuidLibrary.NewGuid()),
                 () => UE.GameplayStatics.GetTimeSeconds(this), () => valid(registry) && registry.HasPublicationAuthority(this, lease));
-            const runtime: Runtime = { core, lease, rules: getObjectiveAuthority(nativeRules, this.Definition.TeamId, p.MaxReportAge),
+            const runtime: Runtime = { front: new BattlefrontCompanyAdapter(core), core, lease, rules: getObjectiveAuthority(nativeRules, this.Definition.TeamId, p.MaxReportAge),
                 nextRules: 0, nextStep: 0, inputRevision: -1, bindings: new Map() };
             companies.set(this, runtime);
+            this.BattlefrontUpdateHandler.Bind((publisher, snapshot) => publisher ? this.acceptBattlefrontState(publisher, snapshot) : false);
             this.flush(runtime);
             this.PollCompanyInputs();
             if (valid(this.InitialMission)) this.SubmitCompanyMission(this.InitialMission.Mission);
@@ -50,7 +57,7 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
             if (!this.GetCommandTree().IsRunning()) { this.StopCommander(); return false; }
             return true;
         } catch (error) {
-            console.error("[Company] " + String(error)); registry.UnregisterCompany(this, lease); companies.delete(this); return false;
+            console.error("[Company] " + String(error)); this.BattlefrontUpdateHandler.Unbind(); registry.UnregisterCompany(this, lease); companies.delete(this); return false;
         }
     }
     PollCompanyInputs(): void {
@@ -96,6 +103,11 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
         if (!core.context.registrationComplete) core.completeRegistration();
         for (const port of core.ports.values()) core.enqueue(port.read());
         const now = UE.GameplayStatics.GetTimeSeconds(this);
+        const state = battlefront(this)?.read();
+        if (state) {
+            if (core.context.registrationComplete) r.front.update(state, now);
+            r.nextStep = 0; this.flush(r); return;
+        }
         if (now >= r.nextRules && core.context.mission && core.context.registrationComplete && valid(nativeRules)) {
             r.nextRules = now + 0.5;
             const published = r.rules.poll(now, core.context.plan, r.bindings);
@@ -115,9 +127,29 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
         this.flush(r);
         return result === undefined ? UE.EStateTreeRunStatus.Running : result ? UE.EStateTreeRunStatus.Succeeded : UE.EStateTreeRunStatus.Failed;
     }
+    private acceptBattlefrontState(publisher: UE.Actor, snapshot: string): boolean {
+        if (!this.HasAuthority() || !UE.KismetSystemLibrary.IsServer(this) || !valid(publisher) ||
+            !UE.KismetMathLibrary.EqualEqual_ObjectObject(publisher, UE.GameplayStatics.GetGameMode(this))) return false;
+        const r = companies.get(this), world = UE.DemoCommandLibrary.GetObjectives(this);
+        const registry = UE.DemoCommandLibrary.GetRegistry(this);
+        if (!r || !valid(world) || !valid(registry) || !registry.HasPublicationAuthority(this, r.lease)) return false;
+        let session = battlefronts.get(world);
+        if (!session) session = new BattlefrontSession();
+        const definitions = JSON.parse(world.GetAreaDefinitions()).areas as TacticalArea[];
+        if (!session.publish(snapshot, UE.GameplayStatics.GetTimeSeconds(this), new Set(definitions.map(a => a.id)))) return false;
+        battlefronts.set(world, session);
+        for (const actor of Array.from(registry.GetCompanies())) {
+            const peer = companies.get(actor);
+            if (peer && peer.core.context.registrationComplete) {
+                peer.front.update(session.read()!, UE.GameplayStatics.GetTimeSeconds(this));
+                (actor as TS_CompanyCommand).flush(peer);
+            }
+        }
+        return true;
+    }
     SubmitCompanyMission(mission: UE.DemoCompanyMission): boolean {
         const r = companies.get(this);
-        if (!r) return false;
+        if (!r || battlefront(this)?.read()) return false;
         try {
             const value = nativeValue<FCompanyMission>(UE.DemoCommandLibrary.EncodeCompanyMission(mission));
             if (!value.id) value.id = UE.KismetGuidLibrary.Conv_GuidToString(UE.KismetGuidLibrary.NewGuid());
@@ -138,6 +170,12 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
         try {
             this.PollCompanyInputs();
             const value = nativeValue<FPlatoonMission>(UE.DemoCommandLibrary.EncodePlatoonMission(mission));
+            if (battlefront(this)?.read()) {
+                const area = r.core.context.mission?.objectives.find(o => o.mission.areaId === value.areaId)?.mission.goal;
+                if (!area || !value.goal?.center || !Number.isFinite(value.goal.radius) || value.goal.radius < 1 ||
+                    ![value.goal.center.x, value.goal.center.y, value.goal.center.z].every(Number.isFinite) ||
+                    Math.hypot(value.goal.center.x - area.center.x, value.goal.center.y - area.center.y) + value.goal.radius > area.radius) return false;
+            }
             const accepted = r.core.submitManual(id, value); r.nextStep = 0; this.flush(r); return accepted;
         } catch { return false; }
     }
@@ -151,18 +189,18 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
         }
         const accepted = r.core.setMode(mode as typeof r.core.context.mode); r.nextStep = 0; this.flush(r); return accepted;
     }
-    CancelCompanyMission(): void { const r = companies.get(this); if (r) { r.core.cancelMission(); r.nextStep = 0; this.flush(r); } }
+    CancelCompanyMission(): void { const r = companies.get(this); if (r && !battlefront(this)?.read()) { r.core.cancelMission(); r.nextStep = 0; this.flush(r); } }
     GetDebugStatus(): string { return companies.get(this)?.core.describe() ?? "Company is not running."; }
     SaveCommandState(slot: string): boolean {
         const r = companies.get(this);
-        if (!r) return false;
+        if (!r || battlefront(this)?.read()) return false;
         const platoonStates = Object.fromEntries([...r.bindings].map(([id, actor]) => [id, platoons.get(actor)?.save()]));
         return UE.DemoCommandLibrary.SaveCommands(slot, JSON.stringify({ schema: 1, company: JSON.parse(r.core.save()),
             rules: r.rules.save(), platoons: platoonStates }));
     }
     RestoreCommandState(slot: string): boolean {
         const r = companies.get(this);
-        if (!r) return false;
+        if (!r || battlefront(this)?.read()) return false;
         try {
             const saved = JSON.parse(UE.DemoCommandLibrary.LoadCommands(slot));
             if (saved.schema !== 1 || !r.core.context.registrationComplete) return false;
@@ -197,6 +235,7 @@ class TS_CompanyCommand extends UE.DemoCompanyCommandActor {
         }
         const registry = UE.DemoCommandLibrary.GetRegistry(this);
         if (valid(registry)) registry.UnregisterCompany(this, r.lease);
+        this.BattlefrontUpdateHandler.Unbind();
         companies.delete(this);
     }
 }

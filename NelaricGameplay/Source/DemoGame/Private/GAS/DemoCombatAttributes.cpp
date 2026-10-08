@@ -40,12 +40,23 @@ void UDemoCombatAttributes::PreAttributeChange(const FGameplayAttribute& Attribu
 	}
 	if (Attribute == GetHealthAttribute())
 	{
+		const auto* Character = ASC ? Cast<ADemoCharacter>(ASC->GetAvatarActor()) : nullptr;
+		if (Character && Character->IsBattlefrontFrozen())
+			NewValue = FMath::Max(NewValue, Health.GetCurrentValue());
 		NewValue = FMath::Clamp(NewValue, 0.0f, MaxHealth.GetCurrentValue());
 	}
 	else if (Attribute == GetMaxHealthAttribute())
 	{
 		NewValue = FMath::Max(0.0f, NewValue);
 	}
+}
+bool UDemoCombatAttributes::PreGameplayEffectExecute(FGameplayEffectModCallbackData& Data)
+{
+	const auto* Character = Cast<ADemoCharacter>(GetOwningAbilitySystemComponent()->GetAvatarActor());
+	if (Character && Character->IsBattlefrontFrozen() && Data.EvaluatedData.Attribute == GetHealthAttribute() &&
+	    Data.EvaluatedData.Magnitude < 0)
+		return false;
+	return Super::PreGameplayEffectExecute(Data);
 }
 void UDemoCombatAttributes::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {

@@ -7,6 +7,7 @@
 #include "Components/StateTreeComponent.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
+#include "GameFramework/GameModeBase.h"
 #include "Serialization/JsonSerializer.h"
 #include "StateTreeExecutionContext.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
@@ -39,7 +40,7 @@ bool UDemoCompanyContextComponent::PublishState(const FString& Snapshot)
 		return false;
 	const auto* Registry = GetWorld()->GetSubsystem<UDemoCompanyRegistrySubsystem>();
 	const auto Value = Nelaric::Command::Parse(Snapshot);
-	if (!GetOwner()->HasAuthority() || !Registry || Registry->GetCompany() != GetOwner() || !Value)
+	if (!GetOwner()->HasAuthority() || !Registry || !Registry->IsRegisteredCompany(GetOwner()) || !Value)
 		return false;
 	double Epoch = 0;
 	FString Phase;
@@ -83,6 +84,14 @@ void ADemoCompanyCommandActor::StopCommander_Implementation()
 bool ADemoCompanyCommandActor::SubmitCompanyMission_Implementation(const FDemoCompanyMission& Mission)
 {
 	return false;
+}
+bool ADemoCompanyCommandActor::UpdateBattlefrontState(AActor* Publisher, const FString& Snapshot)
+{
+	check(IsInGameThread());
+	if (!HasAuthority() || !GetWorld() || !IsValid(Publisher) || Publisher != GetWorld()->GetAuthGameMode() ||
+	    Snapshot.Len() > 65536 || !BattlefrontUpdateHandler.IsBound())
+		return false;
+	return BattlefrontUpdateHandler.Execute(Publisher, Snapshot);
 }
 bool ADemoCompanyCommandActor::SetPlatoonManualScope_Implementation(const FString& PlatoonId, bool bLocked)
 {
@@ -148,6 +157,12 @@ EStateTreeRunStatus FDemoCompanyWorkflowTask::Tick(FStateTreeExecutionContext& C
 	return Result;
 }
 
+EStateTreeRunStatus UDemoCompanyMembershipComponent::StepPlatoon(const FString& Operation)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !StepHandler.IsBound())
+		return EStateTreeRunStatus::Failed;
+	return StepHandler.Execute(Operation);
+}
 UDemoCompanyMembershipComponent::UDemoCompanyMembershipComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -158,13 +173,14 @@ bool UDemoCompanyMembershipComponent::ValidSource(AActor* Source) const
 		return false;
 	const auto* Registry = GetWorld()->GetSubsystem<UDemoCompanyRegistrySubsystem>();
 	return !GetWorld()->bIsTearingDown && GetOwner()->HasAuthority() && IsValid(Source) && Source->HasAuthority() &&
-	       Source->GetWorld() == GetWorld() && Registry && Registry->GetCompany() == Source && Company.Get() == Source;
+	       Source->GetWorld() == GetWorld() && Registry && Registry->IsRegisteredCompany(Source) &&
+	       Company.Get() == Source;
 }
 int32 UDemoCompanyMembershipComponent::ClaimCompany(AActor* Source, const FString& PlatoonId)
 {
 	check(IsInGameThread());
 	const auto* Registry = GetWorld()->GetSubsystem<UDemoCompanyRegistrySubsystem>();
-	if (!Registry || Registry->GetCompany() != Source || !IsValid(Source) || !Source->HasAuthority() ||
+	if (!Registry || !Registry->IsRegisteredCompany(Source) || !IsValid(Source) || !Source->HasAuthority() ||
 	    !GetOwner()->HasAuthority() || Source->GetWorld() != GetWorld() || PlatoonId.IsEmpty() ||
 	    (Company.IsValid() && Company.Get() != Source) || MembershipRevision == MAX_int32)
 		return 0;
@@ -362,6 +378,7 @@ void UDemoCompanyMembershipComponent::ReleaseSquadWatches()
 }
 void UDemoCompanyMembershipComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
+	StepHandler.Unbind();
 	ReleaseSquadWatches();
 	Company.Reset();
 	Super::EndPlay(Reason);

@@ -14,7 +14,9 @@ An Unreal Engine gameplay framework for persistent worlds and bounded activities
 
 ## Project layout
 
-The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/README.md) contains the `DemoGame` Runtime module and Game, Editor, and Server targets. Reusable runtime code lives in the `GameplayRuntime` module of the `NelaricGameplay` plugin.
+The [NelaricGameplay/](NelaricGameplay/) directory contains the framework's Unreal project. Open its [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject) with Unreal Engine 5.6 or later. The project's [Source/](NelaricGameplay/Source/) contains the `DemoGame` Runtime module and Game, Editor, and Server targets. Reusable runtime code lives in the `GameplayRuntime` module of the `NelaricGameplay` plugin.
+
+All Demo documentation is maintained in the content repository under [Content/Docs](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/README.md), including gameplay design, characters and equipment, spawning, AI, control integration, and asset setup.
 
 The framework has four modules in the `NelaricGameplay` plugin: Runtime (`GameplayRuntime`), Diagnostics (`Diagnostics`, performance analysis), Benchmark (`Benchmark`, developer tools), and Editor (`Editor`, editor-only tools). See [plugin and module structure](Docs/CodingStandards/Modules.md#plugin-and-module-structure) for directories, responsibilities, and dependencies. The optional tools currently provide module scaffolding.
 
@@ -32,7 +34,7 @@ The project currently uses the following third-party assets:
 | --- | --- | --- |
 | `LyraStarterGame` | `NelaricGameplay/Content/ThirdParty/LyraStarterGame/` | [Lyra Starter Game — Epic Games on Fab](https://www.fab.com/listings/93faede1-4434-47c0-85f1-bf27c0820ad0) |
 
-To extract Lyra art into `/Game/ThirdParty/LyraStarterGame/LyraStarterGame`, see the [Lyra art migration guide](Docs/LyraArtMigration.md).
+To extract Lyra art into `/Game/ThirdParty/LyraStarterGame/LyraStarterGame`, see the [Lyra art migration guide](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/Assets/LyraArtMigration.md).
 
 ## PuerTS setup
 

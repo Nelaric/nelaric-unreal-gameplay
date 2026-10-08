@@ -2,6 +2,7 @@
 
 #include "DemoGameInstance.h"
 #include "DemoGameMode.h"
+#include "Gameplay/DemoGrandWarfront.h"
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
 #include "Scripting/DemoScriptSubsystem.h"
@@ -9,7 +10,7 @@
 void UDemoGameInstance::Init()
 {
 	Super::Init();
-	if (!IsDedicatedServerInstance() && !bScriptRuntimeActive && GEngine)
+	if (!bScriptRuntimeActive && GEngine)
 	{
 		if (UDemoScriptSubsystem* Scripts = GEngine->GetEngineSubsystem<UDemoScriptSubsystem>())
 		{
@@ -36,6 +37,8 @@ TSubclassOf<AGameModeBase> UDemoGameInstance::OverrideGameModeClass(TSubclassOf<
                                                                     const FString& MapName, const FString& Options,
                                                                     const FString& Portal) const
 {
+	if (!UGameplayStatics::HasOption(Options, TEXT("game")) && MapName.EndsWith(TEXT("Demo1_Test")))
+		return ADemoGrandWarfrontGameMode::StaticClass();
 	if (!UGameplayStatics::HasOption(Options, TEXT("game")) && GameModeClass &&
 	    GameModeClass->GetPathName() == TEXT("/Game/Demo/Game/BP_DemoGameMode.BP_DemoGameMode_C"))
 	{

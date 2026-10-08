@@ -3,6 +3,7 @@
 #include "Spawning/DemoInitialCharacterSpawnPoint.h"
 
 #include "Engine/World.h"
+#include "Gameplay/DemoGrandWarfront.h"
 #include "Pawn/PawnInitializationComponent.h"
 #include "PawnGasBindingComponent.h"
 
@@ -31,6 +32,9 @@ void ADemoInitialCharacterSpawnPoint::BeginPlay()
 	{
 		return;
 	}
+	// The battlefront roster exclusively owns deployment in this mode.
+	if (Cast<ADemoGrandWarfrontGameMode>(World->GetAuthGameMode()))
+		return;
 	// The first timer pass starts readiness waiting; it does not order GAS.
 	SpawnTimer = World->GetTimerManager().SetTimerForNextTick(this, &ThisClass::SpawnInitialCharacter);
 }

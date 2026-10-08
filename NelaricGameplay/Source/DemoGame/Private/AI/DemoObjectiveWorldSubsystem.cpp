@@ -164,9 +164,11 @@ bool UDemoObjectiveWorldSubsystem::DoesSupportWorldType(EWorldType::Type Type) c
 void UDemoObjectiveWorldSubsystem::NotifyFactsChanged()
 {
 	const auto* Registry = GetWorld()->GetSubsystem<UDemoCompanyRegistrySubsystem>();
-	if (auto* Actor = Cast<ADemoCompanyCommandActor>(Registry ? Registry->GetCompany() : nullptr))
-		if (Actor->GetCompanyContext()->InputRevision < MAX_int32)
-			++Actor->GetCompanyContext()->InputRevision;
+	if (Registry)
+		for (AActor* Publisher : Registry->GetCompanies())
+			if (auto* Actor = Cast<ADemoCompanyCommandActor>(Publisher))
+				if (Actor->GetCompanyContext()->InputRevision < MAX_int32)
+					++Actor->GetCompanyContext()->InputRevision;
 }
 
 bool UDemoObjectiveWorldSubsystem::RegisterArea(ADemoCommandArea* Area)

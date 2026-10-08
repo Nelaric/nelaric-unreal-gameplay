@@ -15,6 +15,12 @@
 class UStateTreeComponent;
 class ADemoSquadCommandActor;
 
+/// Single policy receiver for authoritative battlefront input.
+DECLARE_DYNAMIC_DELEGATE_RetVal_TwoParams(bool, FDemoBattlefrontUpdate, AActor*, Publisher, const FString&, Snapshot);
+
+/// Routes a platoon task into the runtime owning its coordinator.
+DECLARE_DYNAMIC_DELEGATE_RetVal_OneParam(EStateTreeRunStatus, FDemoPlatoonStep, const FString&, Operation);
+
 /// Actor-owned, persistent command snapshot; tasks never own this data.
 UCLASS(MinimalAPI, BlueprintType)
 class UDemoCompanyContextComponent : public UActorComponent
@@ -72,6 +78,13 @@ public:
 	/// Submits typed company intent through the sole coordinator; game thread.
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Demo|Company")
 	bool SubmitCompanyMission(const FDemoCompanyMission& Mission);
+	/** @brief Publishes shared battlefront goals from the authority GameMode.
+	 * @param Publisher Current world's GameMode; never a client request.
+	 * @param Snapshot Bounded JSON matching the battlefront snapshot contract.
+	 * @return False for invalid, stale, or conflicting input; game thread only.
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Company")
+	bool UpdateBattlefrontState(AActor* Publisher, const FString& Snapshot);
 	/// Sets a recipient's player scope without invalidating unrelated tasks.
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Demo|Company")
 	bool SetPlatoonManualScope(const FString& PlatoonId, bool bLocked);
@@ -107,6 +120,8 @@ public:
 	virtual bool StartCommander_Implementation();
 	virtual void StopCommander_Implementation();
 	virtual bool SubmitCompanyMission_Implementation(const FDemoCompanyMission& Mission);
+	UPROPERTY(Transient)
+	FDemoBattlefrontUpdate BattlefrontUpdateHandler;
 	virtual bool SetPlatoonManualScope_Implementation(const FString& PlatoonId, bool bLocked);
 	virtual bool SubmitManualPlatoonMission_Implementation(const FString& PlatoonId,
 	                                                       const FDemoPlatoonMission& Mission);
@@ -200,6 +215,9 @@ class UDemoCompanyMembershipComponent : public UActorComponent
 {
 	GENERATED_BODY()
 public:
+	/// Executes one task operation in its owning script runtime; authority only.
+	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
+	EStateTreeRunStatus StepPlatoon(const FString& Operation);
 	/// Claims the exact registered company source; authority game thread only.
 	UFUNCTION(BlueprintCallable, Category = "Demo|Company")
 	int32 ClaimCompany(AActor* Source, const FString& PlatoonId);
@@ -240,6 +258,8 @@ public:
 	int32 InputRevision = 0;
 
 public:
+	UPROPERTY(Transient)
+	FDemoPlatoonStep StepHandler;
 	UDemoCompanyMembershipComponent();
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 

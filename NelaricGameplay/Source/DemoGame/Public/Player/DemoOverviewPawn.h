@@ -49,6 +49,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Demo|Camera")
 	DEMOGAME_API void PanOverview(const FVector2D& LocalOffset);
 
+	/// Moves the owner camera; authority sends at region changes on game thread.
+	UFUNCTION(Client, Reliable)
+	void ClientDeployOverview(FVector Location);
+
 public:
 	DEMOGAME_API ADemoOverviewPawn(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 	DEMOGAME_API virtual void BeginPlay() override;

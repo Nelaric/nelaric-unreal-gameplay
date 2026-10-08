@@ -36,7 +36,7 @@ bool UDemoFireAbility::CanActivateAbility(FGameplayAbilitySpecHandle Handle, con
 	const UDemoWeaponInstance* Item = Nelaric::DemoEquipment::ActiveWeapon(ActorInfo);
 	const ADemoCharacter* Character = ActorInfo ? Cast<ADemoCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 	return Item && Item->GetWeaponState().MagazineAmmo > 0 && !Item->GetWeaponState().bReloading &&
-	       (!Character || (Character->IsAlive() && Character->IsPoolActive())) &&
+	       (!Character || (Character->IsAlive() && Character->IsPoolActive() && !Character->IsBattlefrontFrozen())) &&
 	       Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags);
 }
 
@@ -138,7 +138,7 @@ bool UDemoReloadAbility::CanActivateAbility(FGameplayAbilitySpecHandle Handle,
 	const ADemoCharacter* Character = ActorInfo ? Cast<ADemoCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
 	return Definition && !Item->GetWeaponState().bReloading && Item->GetWeaponState().ReserveAmmo > 0 &&
 	       Item->GetWeaponState().MagazineAmmo < Definition->MagazineCapacity &&
-	       (!Character || (Character->IsAlive() && Character->IsPoolActive())) &&
+	       (!Character || (Character->IsAlive() && Character->IsPoolActive() && !Character->IsBattlefrontFrozen())) &&
 	       Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags);
 }
 

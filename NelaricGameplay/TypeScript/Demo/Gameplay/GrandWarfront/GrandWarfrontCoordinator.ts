@@ -48,20 +48,39 @@ export class GrandWarfrontCoordinator {
         const d = this.definition = parseDefinition(this.mode.ReadDefinition());
         this.mode.ConfigureTeams(d.attackerTeamId, d.defenderTeamId);
         this.rules = new GrandWarfrontRules(d, UE.KismetGuidLibrary.Conv_GuidToString(UE.KismetGuidLibrary.NewGuid()).replace(/[^A-Za-z0-9]/g, ""), now);
-        for (const r of d.regions) {
-            const areas = [...r.points, r.attackerSpawn, r.defenderSpawn];
-            for (const a of areas) {
-                const team = a === r.attackerSpawn ? d.attackerTeamId : a === r.defenderSpawn ? d.defenderTeamId : -1;
-                if (!this.mode.CreateArea(a.id, new UE.Vector(a.center.x, a.center.y, a.center.z), a.radius, a.halfHeight, team))
-                    throw new Error("Invalid navigation or overlapping area: " + a.id);
-            }
-            for (const a of areas) for (const b of areas) if (a !== b && !this.mode.ConnectAreas(a.id, b.id)) throw new Error("Invalid passage");
+        const initial = d.initialAttackerSpawn;
+        if (!this.mode.CreateArea(initial.id, new UE.Vector(initial.center.x, initial.center.y, initial.center.z),
+            initial.radius, initial.halfHeight, d.attackerTeamId)) throw new Error("Invalid initial spawn navigation");
+        for (const r of d.regions) for (const a of r.points) {
+            if (!this.mode.CreateArea(a.id, new UE.Vector(a.center.x, a.center.y, a.center.z), a.radius, a.halfHeight, -1) ||
+                !this.mode.CreatePointSpawn(a.id)) throw new Error("Invalid point navigation or spawn: " + a.id);
         }
+        for (const r of d.regions) {
+            const a = r.defenderFallbackSpawn;
+            if (!this.mode.CreateArea(a.id, new UE.Vector(a.center.x, a.center.y, a.center.z),
+                a.radius, a.halfHeight, d.defenderTeamId)) throw new Error("Invalid defender fallback navigation: " + a.id);
+        }
+        const passages = new Set<string>();
+        for (let i = 0; i < d.regions.length; ++i) {
+            const areas = [...d.regions[i].points, d.regions[i].defenderFallbackSpawn, ...(i === 0 ? [initial] : d.regions[i - 1].points)];
+            for (const a of areas) for (const b of areas) if (a !== b) {
+                const key = a.id + ">" + b.id;
+                if (passages.has(key)) continue;
+                if (!this.mode.ConnectAreas(a.id, b.id)) throw new Error("Invalid passage");
+                passages.add(key);
+            }
+        }
+        this.mode.SetActiveSpawnAreas(this.rules.state.attackerSpawnAreaId, this.rules.state.defenderSpawnAreaId);
         for (const team of [d.attackerTeamId, d.defenderTeamId]) {
             const companyPlatoons: TS_PlatoonCommand[] = [];
-            for (let pi = 0; pi < d.platoonsPerTeam; ++pi) {
+            const teamCount = team === d.attackerTeamId ? d.attackerCount : d.defenderCount;
+            const platoonCount = Math.ceil(teamCount / (d.squadsPerPlatoon * d.membersPerSquad));
+            for (let pi = 0; pi < platoonCount; ++pi) {
                 const platoonSquads: UE.DemoSquadCommandActor[] = [];
                 for (let si = 0; si < d.squadsPerPlatoon; ++si) {
+                    const firstSeat = (pi * d.squadsPerPlatoon + si) * d.membersPerSquad;
+                    const squadCount = Math.min(d.membersPerSquad, teamCount - firstSeat);
+                    if (squadCount <= 0) break;
                     const squad = this.spawn<UE.DemoSquadCommandActor>(path + "Squad/BP_DemoSquadCommand.BP_DemoSquadCommand_C", a => {
                         a.bStartOnBeginPlay = false; a.InitialMembers.Empty();
                         const definition = new UE.DemoSquadDefinition(a);
@@ -72,7 +91,7 @@ export class GrandWarfrontCoordinator {
                     squad.GetSquadContext().MemberOrderHandler.Bind((body, order) =>
                         body ? this.movement.resolve(body, order, this.rules!) : order);
                     this.squads.push(squad); platoonSquads.push(squad);
-                    for (let mi = 0; mi < d.membersPerSquad; ++mi) this.seats.push({ id: `T${team}_P${pi}_S${si}_M${mi}`,
+                    for (let mi = 0; mi < squadCount; ++mi) this.seats.push({ id: `T${team}_P${pi}_S${si}_M${mi}`,
                         team, squad, everSpawned: false, alive: false, remaining: 0, nextAttempt: 0, deployedRevision: 0, waited: 0, deathOrder: 0 });
                 }
                 const platoon = this.spawn<TS_PlatoonCommand>(path + "Platoon/BP_DemoPlatoonCommand.BP_DemoPlatoonCommand_C", a => {
@@ -92,7 +111,16 @@ export class GrandWarfrontCoordinator {
             this.companies.push(company);
         }
         this.started = true;
-        console.log("[Warfront] Created three regions and " + this.seats.length + " roster seats.");
+        console.log("[Warfront] Created four regions and " + this.seats.length + " roster seats.");
+    }
+    private chooseSpawn(team: number, attempt: (areaId: string) => boolean): string | undefined {
+        const candidates = this.rules!.getSpawnCandidates(team);
+        // Uniform random order, with bounded fallback when a candidate is temporarily crowded.
+        for (let i = candidates.length - 1; i > 0; --i) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+        }
+        return candidates.find(attempt);
     }
     private updateSeats(now: number, delta: number): boolean {
         const rules = this.rules!, d = this.definition!, s = rules.state;
@@ -102,7 +130,6 @@ export class GrandWarfrontCoordinator {
             const alive = valid(body) && body.IsAlive();
             if (seat.alive && !alive) { seat.remaining = d.respawnSeconds; seat.waited = 0; seat.deployedRevision = 0; seat.deathOrder = ++this.deathSequence; }
             seat.alive = alive;
-            const spawn = seat.team === d.attackerTeamId ? rules.region.attackerSpawn.id : rules.region.defenderSpawn.id;
             if (!alive) {
                 if (s.phase === "RegionActive") seat.remaining = Math.max(0, seat.remaining - delta);
                 // Existing respawn delays remain frozen while advancing to another region.
@@ -113,7 +140,7 @@ export class GrandWarfrontCoordinator {
                 seat.waited += delta;
                 if (now < seat.nextAttempt || budget <= 0) continue;
                 --budget; seat.nextAttempt = now + 1;
-                if (!this.mode.ReleaseDeadSeat(seat.id) || !this.mode.SpawnSeat(seat.id, spawn, seat.team, seat.squad)) {
+                if (!this.mode.ReleaseDeadSeat(seat.id) || !this.chooseSpawn(seat.team, spawn => this.mode.SpawnSeat(seat.id, spawn, seat.team, seat.squad))) {
                     if (seat.waited > d.deploymentTimeout) {
                         rules.abort("SpawnSeatTimeout:" + seat.id, now); return false;
                     }
@@ -126,7 +153,7 @@ export class GrandWarfrontCoordinator {
                 ready = false;
                 if (budget > 0 && now >= seat.nextAttempt) {
                     --budget; seat.nextAttempt = now + 0.5;
-                    if (this.mode.DeploySeat(seat.id, spawn)) seat.deployedRevision = s.regionRevision;
+                    if (this.chooseSpawn(seat.team, spawn => this.mode.DeploySeat(seat.id, spawn))) seat.deployedRevision = s.regionRevision;
                 }
             }
         }
@@ -143,8 +170,9 @@ export class GrandWarfrontCoordinator {
                 wave.nextAttempt = now + 1;
                 const batch = eligible.slice(0, d.membersPerSquad);
                 const ids = UE.NewArray(UE.BuiltinString); for (const seat of batch) ids.Add(seat.id);
-                const spawn = team === d.attackerTeamId ? rules.region.attackerSpawn.id : rules.region.defenderSpawn.id;
-                if (!batch.every(seat => this.mode.ReleaseDeadSeat(seat.id)) || !this.mode.SpawnReinforcements(ids, spawn, team)) {
+                const spawn = batch.every(seat => this.mode.ReleaseDeadSeat(seat.id))
+                    ? this.chooseSpawn(team, area => this.mode.SpawnReinforcements(ids, area, team)) : undefined;
+                if (!spawn) {
                     if (wave.waited > d.deploymentTimeout) { rules.abort("ReinforcementTimeout:T" + team, now); return false; }
                     continue;
                 }
@@ -152,7 +180,7 @@ export class GrandWarfrontCoordinator {
                     seat.alive = true; seat.remaining = 0; seat.waited = 0; seat.deployedRevision = s.regionRevision;
                 }
                 this.reinforcementWait.delete(team);
-                console.log(`[Warfront] Reinforcements team=${team} seats=${batch.map(seat => seat.id).join(",")}`);
+                console.log(`[Warfront] Reinforcements team=${team} spawn=${spawn} seats=${batch.map(seat => seat.id).join(",")}`);
             }
         }
         return ready;
@@ -164,8 +192,9 @@ export class GrandWarfrontCoordinator {
             // Let initial pool, components and navigation enter the play world first.
             if (!this.started) {
                 if (now - this.createdAt < 2) return;
-                if (UE.NavigationSystemV1.IsNavigationBeingBuiltOrLocked(this.mode)) {
-                    if (now - this.createdAt > 32) throw new Error("NavigationStartupTimeout");
+                const state = UE.GameplayStatics.GetGameState(this.mode) as UE.DemoGrandWarfrontState;
+                if (!state.IsBattlefieldLoaded() || UE.NavigationSystemV1.IsNavigationBeingBuiltOrLocked(this.mode)) {
+                    if (now - this.createdAt > 32) throw new Error("BattlefieldStartupTimeout");
                     return;
                 }
                 this.initialize(now);
@@ -188,7 +217,7 @@ export class GrandWarfrontCoordinator {
             if (previous !== rules.state.phase || revision !== rules.state.regionRevision) {
                 this.mode.FreezeSeats(rules.state.phase !== "RegionActive");
                 if (previous === "Preparing" || revision !== rules.state.regionRevision)
-                    this.mode.SetActiveSpawnAreas(rules.region.attackerSpawn.id, rules.region.defenderSpawn.id);
+                    this.mode.SetActiveSpawnAreas(rules.state.attackerSpawnAreaId, rules.state.defenderSpawnAreaId);
                 console.log(`[Warfront] ${rules.state.phase} ${rules.state.regionId} ${rules.state.reason}`);
             }
             if (now - this.publishedAt >= 0.5 || previous !== rules.state.phase || rules.terminal) {

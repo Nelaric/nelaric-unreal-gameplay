@@ -426,15 +426,25 @@ export class CompanyCoordinator {
             let mobile = kept.reduce((n, a) => n + c.reports.get(a.platoonId)!.mobile, 0);
             if (kept.length >= o.minimumPlatoons && mobile >= o.minimumMobile) continue;
             const committedCandidates = new Set(c.candidates.flatMap(g => g.assignments.map(a => a.platoonId)));
+            const canReassign = (id: string, departing: ReadonlySet<string>): boolean => {
+                if (!used.has(id)) return true;
+                const previous = mission.objectives.find(v => v.id === plan.assignments[id]?.objectiveId);
+                if (!previous || mission.objectives.some(v => v.dependencies.some(d =>
+                    d.id === previous.id && d.mode === "MaintainDuringExecution"))) return false;
+                const remaining = Object.values(plan.assignments).filter(a => a.objectiveId === previous.id &&
+                    a.platoonId !== id && !departing.has(a.platoonId) && !committedCandidates.has(a.platoonId) && this.current(a, previous));
+                const surplus = remaining.length >= previous.minimumPlatoons &&
+                    remaining.reduce((sum, a) => sum + c.reports.get(a.platoonId)!.mobile, 0) >= previous.minimumMobile;
+                const ordinaryReady = this.now() - this.lastOrdinaryPlan >= this.policy.reassignmentSeconds;
+                // A mandatory duty protects its required force, not every platoon formerly assigned to it.
+                if (surplus && (repair || c.affected.has(previous.id) || c.affected.has(o.id) || ordinaryReady)) return true;
+                return !previous.mandatory && this.utility(o) > this.utility(previous) + this.policy.reassignmentGain &&
+                    (repair || ordinaryReady);
+            };
+            const departing = new Set<string>();
             const ranked: { id: string; cost: number; route: string[] | undefined }[] = [...this.ports.keys()].filter(id => {
                 if (c.locks.has(id) || committedCandidates.has(id) || !this.capable(id, o)) return false;
-                if (!used.has(id)) return true;
-                const old = plan.assignments[id];
-                const previous: FCompanyObjective | undefined = mission.objectives.find(v => v.id === old?.objectiveId);
-                return !!previous && !previous.mandatory && !mission.objectives.some(v => v.dependencies.some(d =>
-                    d.id === previous.id && d.mode === "MaintainDuringExecution")) &&
-                    this.utility(o) > this.utility(previous) + this.policy.reassignmentGain &&
-                    (repair || this.now() - this.lastOrdinaryPlan >= this.policy.reassignmentSeconds);
+                return canReassign(id, departing);
             }).map(id => {
                 const r = c.reports.get(id)!;
                 const travel = Math.hypot(r.location.x - o.mission.goal.center.x, r.location.y - o.mission.goal.center.y) / 1000;
@@ -452,7 +462,9 @@ export class CompanyCoordinator {
             const selected: { id: string; cost: number; route: string[] | undefined }[] = [];
             for (const p of ranked) {
                 if (kept.length + selected.length >= o.minimumPlatoons && mobile >= o.minimumMobile) break;
-                selected.push(p); mobile += c.reports.get(p.id)!.mobile;
+                // Recheck after each selection so one group cannot consume the donor's last required platoon.
+                if (!canReassign(p.id, departing)) continue;
+                selected.push(p); departing.add(p.id); mobile += c.reports.get(p.id)!.mobile;
             }
             if (kept.length + selected.length < o.minimumPlatoons || mobile < o.minimumMobile) {
                 c.message = "No complete feasible force group for " + o.id; continue;
@@ -517,8 +529,9 @@ export class CompanyCoordinator {
                     group.accepted.push(a.id);
                 }
             }
+            // Activated recipients no longer retain their staged candidate. Continue the remaining publication budget.
             if (!c.candidates.includes(group) || group.accepted.length !== group.assignments.length ||
-                !group.assignments.every(a => this.ports.get(a.platoonId)!.preparationReady(a))) continue;
+                !group.assignments.every(a => group.activated.includes(a.id) || this.ports.get(a.platoonId)!.preparationReady(a))) continue;
             for (const a of group.assignments) {
                 if (budget <= 0 || group.activated.includes(a.id)) continue;
                 if (!this.authorized() || c.mode === "Suspended") { this.failGroup(group, "AuthorityLost"); break; }
@@ -538,7 +551,9 @@ export class CompanyCoordinator {
                 a.state = "Executing"; group.activated.push(a.id); ++c.changedAssignments; ++plan.revision;
             }
             if (!c.candidates.includes(group) || group.activated.length !== group.assignments.length) continue;
-            group.retire = group.retire.filter(old => !group.assignments.some(a => a.platoonId === old.platoonId));
+            // Another objective may already have taken over a retired recipient in this same rebalance.
+            group.retire = group.retire.filter(old => plan.assignments[old.platoonId] === old &&
+                !group.assignments.some(a => a.platoonId === old.platoonId));
             if (!group.retire.length || group.assignments.every(a => a.ready && this.capable(a.platoonId, o))) {
                 for (const old of group.retire) if (!c.locks.has(old.platoonId) && plan.assignments[old.platoonId] === old) this.cancelAssignment(old);
                 c.candidates.splice(c.candidates.indexOf(group), 1);

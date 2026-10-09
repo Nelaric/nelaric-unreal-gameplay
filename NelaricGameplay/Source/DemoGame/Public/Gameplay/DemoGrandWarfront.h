@@ -25,7 +25,12 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Demo|Battlefront")
 	FString Snapshot;
 
+	/// Reports whether the battle map streaming source has loaded its cells.
+	UFUNCTION(BlueprintPure, Category = "Demo|Battlefront")
+	bool IsBattlefieldLoaded() const;
+
 public:
+	ADemoGrandWarfrontState();
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };
 
@@ -51,6 +56,9 @@ public:
 	/// Creates one unique sensor and optional spawn cache; authority thread.
 	UFUNCTION(BlueprintCallable, Category = "Demo|Battlefront")
 	bool CreateArea(const FString& Id, FVector Center, float Radius, float HalfHeight, int32 SpawnTeam);
+	/// Builds a shared spawn cache inside a registered capture point.
+	UFUNCTION(BlueprintCallable, Category = "Demo|Battlefront")
+	bool CreatePointSpawn(const FString& Id);
 	/// Connects authored same-region navigation passages; authority thread.
 	UFUNCTION(BlueprintCallable, Category = "Demo|Battlefront")
 	bool ConnectAreas(const FString& From, const FString& To);
@@ -118,6 +126,8 @@ private:
 	TMap<FString, TObjectPtr<ADemoRuntimeCharacterSpawnPoint>> SpawnAreas;
 	UPROPERTY(Transient)
 	TMap<FString, TObjectPtr<ADemoCommandArea>> Areas;
+	TSet<FString> CaptureAreaIds;
+	TOptional<FVector> SpawnNavigationAnchor;
 	FTimerHandle Pulse;
 	bool bFrozen = true;
 	uint8 AttackerTeam = 0;

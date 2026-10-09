@@ -3,6 +3,7 @@
 import * as UE from "ue";
 import { blueprint } from "puerts";
 import { issueMission, selectedSquad } from "./SquadMissions";
+import { releaseOverviewCamera, updateOverviewCamera } from "../../Player/OverviewCamera";
 
 type PlayerBlueprint = UE.Game.Demo.Demo1_GrandWarfront.Player.BP_DemoPlayerController.BP_DemoPlayerController_C;
 const controllerClass = UE.Class.Load(
@@ -46,8 +47,16 @@ function changeMode(controller: PlayerBlueprint, mode: UE.EDemoSquadCommandMode)
     report(controller, true, "Command mode");
 }
 
-/** The existing controller retains camera, input and possession behavior. */
+/** Native input and possession remain active; UE tick updates the overview camera. */
 class BP_DemoPlayerController_Squad extends controllerBlueprint {
+    ReceiveTick(deltaSeconds: number): void {
+        updateOverviewCamera(this, deltaSeconds);
+    }
+
+    ReceiveEndPlay(_endPlayReason: UE.EEndPlayReason): void {
+        releaseOverviewCamera(this, false);
+    }
+
     SquadMove(): void { submit(this, UE.EDemoSquadMissionType.Move); }
     SquadDefend(): void { submit(this, UE.EDemoSquadMissionType.Defend); }
     SquadControl(): void { submit(this, UE.EDemoSquadMissionType.Control); }

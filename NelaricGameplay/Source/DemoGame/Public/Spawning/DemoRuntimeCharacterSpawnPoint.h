@@ -45,7 +45,7 @@ enum class EDemoRuntimeCharacterSpawnResult : uint8
 };
 
 /** @brief Acquires one current character at a randomly selected cached point.
- * @details Authority caches up to 32 valid
+ * @details Authority caches a configured number of valid
  * area locations during startup.
  * @note BeginPlay starts bounded initialization after Pawn/GAS readiness.
  * @note
@@ -70,7 +70,11 @@ class ADemoRuntimeCharacterSpawnPoint : public ATargetPoint
 
 public:
 	/// Maximum distinct valid locations retained by each initialized area.
-	static constexpr int32 MaxSpawnLocationCount = 32;
+	static constexpr int32 MaxSpawnLocationCount = 256;
+
+	/// Requested cache size, clamped to 1 through 256 during initialization.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Demo|Spawning", meta = (ClampMin = "1", ClampMax = "256"))
+	int32 SpawnLocationCount = 32;
 
 	/** @brief Box volume containing the full capsule at a valid spawn location.
 	 * @details Half-extents default to 500, 500, 250 centimeters.
@@ -122,7 +126,7 @@ public:
 	DEMOGAME_API EDemoRuntimeCharacterSpawnResult SpawnCharacter(ADemoCharacter*& OutCharacter);
 
 	/** @brief Copies this area's fixed spawn locations on the game thread.
-	 * @return Up to 32 world-space capsule
+	 * @return Up to 256 world-space capsule
 	 * centers, or an empty array before
 	 * successful initialization, on clients, or after EndPlay.
 	 * @note
@@ -164,6 +168,8 @@ private:
 	EDemoRuntimeCharacterSpawnResult BuildSpawnLocations(const ADemoCharacter& CharacterTemplate);
 	EDemoRuntimeCharacterSpawnResult FindSpawnTransform(FTransform& OutTransform) const;
 
+	TOptional<FVector> RequiredNavigationAnchor;
+	TOptional<float> CaptureRadius;
 	TArray<FVector> CachedSpawnLocations;
 	FQuat CachedSpawnRotation = FQuat::Identity;
 	FCollisionResponseContainer CachedCollisionResponses;

@@ -18,15 +18,7 @@ Public APIs follow the [project coding standards](../CodingStandards/README.md),
 
 ## GameAI StateTree
 
-DemoGame provides an optional [soldier AI example](AI/DemoSoldier.md) using the
-existing character, weapon and control lifecycle, including native execution and
-GameAI StateTree bridge nodes.
-
-The [company command implementation (Chinese)](AI/DemoCompany.zh-CN.md) provides one
-authorized publisher per runtime world, concurrent objectives, scoped assignments,
-execution permissions, world-owned objective rules, player scopes and save reconciliation.
-The [virtual platoon implementation (Chinese)](AI/DemoPlatoon.zh-CN.md) coordinates
-configured virtual squads through six mission templates and explicit readiness.
+Demo gameplay, character, spawning, and AI documentation is maintained in the [Content documentation](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/README.md).
 
 Use the existing `GameplayRuntime` module dependency and include headers from its `AI/` directory. Create a StateTree asset with the `Game AI` Schema (`UGameAIStateTreeSchema`) and run it using `UGameAIStateTreeComponent` on a pawn or controller. Set the inherited Context Actor Class to the actual component owner's type. The required context entries are:
 

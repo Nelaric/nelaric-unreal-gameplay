@@ -41,6 +41,8 @@ static EStateTreeRunStatus OperationResult(const FDemoSquadTreeTaskData& Data)
 		return Plan.Phase != EDemoSquadPhase::Planning ? EStateTreeRunStatus::Succeeded : EStateTreeRunStatus::Running;
 	}
 	const auto Mission = Squad->GetMission();
+	if (Data.Operation == EDemoSquadTreeOperation::Execute && Squad->UsesMemberOrderPolicy())
+		return EStateTreeRunStatus::Running;
 	if (Data.Operation == EDemoSquadTreeOperation::Execute &&
 	    ((Mission.Type == EDemoSquadMissionType::Defend && Plan.Phase == EDemoSquadPhase::Maintain) ||
 	     (Mission.Type == EDemoSquadMissionType::Control &&
@@ -242,10 +244,10 @@ bool FDemoSquadTreeCondition::TestCondition(FStateTreeExecutionContext& Context)
 			Value = Snapshot.AmmoReadiness;
 			break;
 		case EDemoSquadTreeMetric::ThreatPressure:
-			Value = Snapshot.KnownThreatPressure;
+			Value = Squad->UsesMemberOrderPolicy() ? 0.0f : Snapshot.KnownThreatPressure;
 			break;
 		case EDemoSquadTreeMetric::SuppressionRatio:
-			Value = Snapshot.SuppressedMemberRatio;
+			Value = Squad->UsesMemberOrderPolicy() ? 0.0f : Snapshot.SuppressedMemberRatio;
 			break;
 		case EDemoSquadTreeMetric::PhaseAge:
 			Value = Squad->GetWorld()->GetTimeSeconds() - Plan.PhaseStartedAt;

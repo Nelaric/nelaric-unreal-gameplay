@@ -11,6 +11,12 @@ class ADemoGasPlayerState : public ANelaricGasPlayerState
 {
 	GENERATED_BODY()
 public:
+	/// Stable match faction independent of the currently controlled body.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Demo|Team")
+	uint8 BattlefrontTeamId = 255;
+
 public:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void CopyProperties(APlayerState* PlayerState) override;
 	DEMOGAME_API ADemoGasPlayerState();
 };

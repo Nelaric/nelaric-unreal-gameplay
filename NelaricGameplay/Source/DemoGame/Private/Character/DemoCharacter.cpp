@@ -155,6 +155,7 @@ void ADemoCharacter::PostInitializeComponents()
 
 bool ADemoCharacter::ActivateFromPool(const FTransform& Transform)
 {
+	bBattlefrontFrozen = false;
 	check(IsInGameThread());
 	const UPawnGasBindingComponent* Binding = GetGasBinding();
 	if (!GetWorld() || GetWorld()->GetNetMode() == NM_Client || !HasAuthority() || !Binding ||
@@ -409,6 +410,7 @@ void ADemoCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ADemoCharacter, DeathState);
 	DOREPLIFETIME(ADemoCharacter, TeamId);
+	DOREPLIFETIME(ADemoCharacter, bBattlefrontFrozen);
 }
 
 void ADemoCharacter::SetActorHiddenInGame(bool bNewHidden)
@@ -595,5 +597,38 @@ void ADemoCharacter::HandleDeathReturn()
 	{
 		UE_LOG(LogDemoCharacterPoolActivation, Log, TEXT("Dead character returned: %s (free slots: %u)."), *GetName(),
 		       Pool->NumFree());
+	}
+}
+
+void ADemoCharacter::SetBattlefrontFrozen(bool bFrozen)
+{
+	if (!HasAuthority())
+		return;
+	const bool bChanged = bBattlefrontFrozen != bFrozen;
+	bBattlefrontFrozen = bFrozen;
+	OnRep_BattlefrontFrozen();
+	if (bChanged)
+		ForceNetUpdate();
+}
+void ADemoCharacter::OnRep_BattlefrontFrozen()
+{
+	if (!IsPoolActive() || !IsAlive())
+		return;
+	if (bBattlefrontFrozen)
+	{
+		if (HasAuthority())
+		{
+			CancelCombatActions();
+			StopPoolBotLogic();
+		}
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->DisableMovement();
+	}
+	else
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+		if (HasAuthority())
+			if (auto* Policy = FindComponentByClass<UPawnControlComponent>())
+				Policy->StartReadyBotLogic();
 	}
 }

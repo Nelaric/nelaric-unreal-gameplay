@@ -34,76 +34,11 @@ GameplayRuntime 模块在 `Nelaric::ObjectPool` 中提供普通 C++ 对象池。
 
 Policy 使用延迟 Spawn，在 FinishSpawning 前调用 PrepareForPool，使自动控制器与原生玩法在 BeginPlay 前就已停用。构造和初始化过程必须保持停用状态。各角色在现有基类上实现接口，将通用转换委托给 Helper。
 
-ADemoCharacter 保留 ANelaricGasCharacter 基类并实现同一接口，ADemoPlayerCharacter 继续继承 ADemoCharacter。普通出生的 Demo 保持激活状态及原有控制器、复制配置；池创建的实例从停用状态开始，由权威端复制。Demo 在激活前后都检查 GAS Binding 已提交、可接收操作，且 ASC 的 Avatar 是当前角色；检查失败返回 ActivationFailed 并恢复空闲槽位。已有属性、效果、技能与控制权继续遵循原有契约，池不会按租约重建 GAS 状态。
-
-池化 Demo 在初始化时检查构造阶段是否已经提供控制策略；只有构造阶段及本机初始化配置都不提供策略时才增加临时 UPawnControlComponent；配置将在 BeginPlay 创建策略时，角色订阅 Pawn Ready 并等待该组件，避免生成重复策略。角色先保存现有策略的四个控制开关，或兜底组件的原生默认值，再在空闲期间关闭玩家接管、归还和 Bot 自动启动。激活时，在开启碰撞前恢复这些值，并显式启动已经绑定且 Ready 的 Bot，因为空闲期间完成的 Ready 通知不会重新触发。归还时再次关闭开关，停止 AI 移动以及角色、AIController 的 Brain，保留快照供下一次借出恢复。Controller 关联和 GAS 所有权继续由玩法管理，归还租约前应完成玩家控制归还和控制转换。蓝图配置为 false 的开关在激活时仍为 false。World 的 GameMode 仍需提供 Demo GAS PlayerState 属性布局，ADemoGameMode 已配置该布局。Helper 分别记录已准备的池角色和普通出生角色；DemoGame 在权威端和客户端的原生显示转换中读取逻辑池状态，使客户端选择逻辑也能看到恢复后的本地控制设置。单独修改显示状态不会改变控制状态。这些控制设置保留在 DemoGame，通用 Helper 和池生命周期管理基类不依赖 Pawn 控制或 GAS。
+Demo 角色适配、出生点、死亡回收和网络表现见 Content 中的[角色池与出生文档](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/Spawning/DemoCharacterPool.zh-CN.md)。
 
 ## 角色接入
 
 插件通过 `ObjectPool/FixedObjectPoolWorldSubsystem.h` 提供抽象的 World 生命周期管理基类。具体子系统以普通 C++ 成员持有类型化对象池，实现 PrewarmPools 和 ShutdownPools。基类在 OnWorldBeginPlay 中预热一次，此时 GameMode 尚未向 Actor 分派 BeginPlay；通过 FWorldDelegates::OnWorldBeginTearDown 在世界内 Actor 的 EndPlay 前关闭池，并在 Deinitialize 中做幂等兜底。所有回调必须保持 World 和子系统存活，不能在池转换中结束世界。
-
-DemoGame 在 `ObjectPool/DemoCharacterPoolSubsystem.h` 提供 UDemoCharacterPoolSubsystem，由引擎在所有网络模式的 Game 和 PIE World 中自动创建。子系统直接持有 `TFixedUObjectPool<ADemoCharacter, Capacity, Nelaric::Demo::FCharacterPoolPolicy, EReferenceMode::WorldRaw, ENetworkMode::Replicated>`，Demo 专用策略在通用角色生命周期上增加每次租约的团队注入。构造函数将 `/Game/Demo/Demo1_GrandWarfront/Characters/BP_DemoCharacter` 加载为 ADemoCharacter 子类，并通过反射类引用供 GC 和打包流程识别。权威端将该类传入现有 FCreateArgs::Class，在 PersistentLevel 中以 Identity Transform 预热 Capacity 个停用的蓝图角色；类加载失败返回 CreationFailed，不回退到原生角色。客户端 Prewarm 绑定自动接收视图，不创建本地权威角色。子系统独占权威角色的销毁控制，在世界内 Actor teardown 前关闭池。容量、引用模式和原生基类是编译期选择，创建参数中的类决定全部槽位实际使用的子类；其他游戏通过自己的具体 World 子系统持有对应的池，GameplayRuntime 无需依赖游戏模块或 GAS。通用角色池的默认模式仍为 WorldWeak。
-
-权威端的玩法调用在 World BeginPlay 后可用。此前、客户端或 teardown 后，借还返回 NotReady，Get 返回空，NumFree 为零。GetByIndex 在服务器读取槽位，在客户端读取已接收角色，未到达的槽位返回空；GetByIndexUnchecked 的权威端读取保留原生裸指针生命周期契约，客户端读取解析弱引用。GetPrewarmResult 保留启动结果；客户端成功表示视图绑定。IsReady 检查 World 和池存储或公告可用性，不代表全部角色已到达或 GAS 就绪。GAS 提交前借出仍可能返回 ActivationFailed。预热失败会记录、回滚并禁止同实例重试；调用方不手动预热或关闭 Demo 池。
-
-在每个初始角色位置放置 `Spawning/DemoInitialCharacterSpawnPoint.h` 中的 ADemoInitialCharacterSpawnPoint，或其蓝图子类。该类继承 ATargetPoint，使用生成点的世界 Transform，等待预热角色完成 BeginPlay、Pawn 初始化和 GAS 就绪提交后，再尝试借出一次。启动就绪状态与池存储就绪状态分别判断，启动完成后加载的生成点仍使用正常的单次租约检查。单机、监听服务器和独立服务器的权威端执行借出，客户端生成点不创建本地角色。每个成功的生成点激活一个已有 BP_DemoCharacter 实例。角色出生朝向使用生成点的世界旋转；激活时在启动 AI 前同步已有控制器的朝向，并清除其移动和玩法焦点。在关卡中旋转生成点，通常调整 Z 轴（Yaw），即可指定出生朝向。生成点的 TeamId 是首个团队注入入口，在蓝图默认值或关卡实例的 Demo / Spawning 中设置 Team Id；默认值为 0，255 表示中立。TryAcquire(Transform, TeamId) 通过 Demo 专用池策略在激活碰撞和 AI 前写入角色，角色向客户端复制 ID。归还先停止角色再清除其 ID；下一次借出重新注入。省略 TeamId 的原生调用生成中立角色，不继承上一次租约的团队。GetSpawnedCharacter 通过 generation 句柄解析当前租约，GetSpawnedHandle 提供供玩法归还使用的原生句柄。激活租约归 World 对象池所有；生成点结束时取消尚未执行的启动回调和就绪订阅，World 关闭时统一关闭租约。
-
-UDemoCharacterPoolSubsystem 在世界启动时统计已经加载的初始生成点，数量超过 Capacity 时记录警告。任何生成点借不到槽位时也会记录警告并保持空置，包括后来加载的关卡生成点。等待阶段订阅首个未就绪角色的现有 Pawn Ready 通知，并以 0.05 秒间隔检查作为 GAS 在该就绪组外推进时的兜底；实际借出延迟到初始化回调之外执行，始终只尝试一次。等待最多持续十秒 World 时间，超时警告会给出待就绪角色的 Pawn 和 GAS 状态。实际激活失败时，角色先记录被拒绝的 GAS 或原生转换状态，生成点随后报告池错误码。流程不扩容、不补 Spawn、不反复尝试借出，也不启用 Actor Tick。生成点必须提供合法位置，激活流程不会搜索无阻挡的出生位置。
-
-Demo 角色死亡后，由权威端的一次性计时器在四秒时自动回池。Subsystem 记录每次成功借出的代次句柄，ReleaseDeadCharacter 根据当前租约释放槽位，并拒绝存活、仍由玩家控制、来自其他世界或未被借出的角色。被玩家控制的 Demo 角色先通过控制协调器切换到保留的概览角色。提前回池、复活和世界结束时取消死亡计时器。TS 死亡表现在一秒后固定布娃娃，停放时恢复，不做透明度渐隐；再次借出死亡槽位时先显式重置战斗状态，存活角色回池后仍保留原有状态。初始生成点保存的句柄在自动回池后失效，不会引用后续租约的角色。
-
-`Spawning/DemoRuntimeCharacterSpawnPoint.h` 中的 ADemoRuntimeCharacterSpawnPoint 提供盒形区域内按需触发的角色借出。编辑器显示名为 Demo Runtime Character Spawn Area，SpawnArea 组件显示区域边界；修改组件的 Box Extent、相对变换或 Actor 缩放，即可调整范围和旋转。默认半尺寸为 500、500、250 厘米，对应 10 × 10 × 5 米的区域。盒体不参与碰撞，也不影响 NavMesh。角色保持直立、缩放为 1，朝向使用区域的世界 Yaw；缩放区域只改变区域大小，不缩放角色。TeamId 默认值为 0，与初始生成点一致。
-
-BeginPlay 启动最多 32 个不同可用位置的初始化。第一次检查放在下一次 World Tick，最多等待十秒，让对象池、Pawn / GAS 启动以及导航构建完成。初始化只执行一轮，最多检查 1,024 个候选位置：根据角色胶囊尺寸和导航 Agent 设置选择 NavMesh 并投影，检测实际地面及可站立坡度，把胶囊中心抬到地面支撑平面上方，验证完整胶囊位于旋转后的盒体内部且没有阻挡重叠。距离小于一厘米的位置视为重复。达到 32 个点后停止采样；采样次数耗尽时不足 32 个，也保留已找到的全部可用点。缓存非空即可使用，只有一个点也允许生成；完全找不到可用点才初始化失败，不占用角色池槽位。GroundClearance 默认 2 厘米，允许 0～50 厘米。
-
-借出新租约时，只按随机顺序从缓存中抽取一个位置，并检查当前位置是否被角色或障碍阻挡；被占用就从剩余缓存点中再抽取，检查次数以实际缓存数量为上限，范围为 1～32，不重复抽取同一点。这会在当前未受阻的缓存点之间均匀随机选择。生成请求不重新采样坐标、不重新投影导航，也不再次搜索地面。`GetSpawnLocations()` 返回实际已缓存的世界空间胶囊中心副本；初始化未完成、失败、客户端或 EndPlay 后返回空数组。位置和朝向初始化后固定，应在 BeginPlay 前配置区域。
-
-BeginPlay 不自动借出角色。玩法在启动完成后，从权威端游戏线程同步调用 `SpawnCharacter(OutCharacter)`；蓝图对应 Spawn Character 节点，各结果展开为执行引脚。C++ 和 TS 调用同样检查权威、World 生命周期、池存储就绪，以及初始生成点使用的 Pawn / GAS 启动就绪条件。客户端通过角色复制获得角色。
-
-每个运行时生成区域最多记录一个当前 generation 句柄。Spawned 返回新借出的角色；AlreadySpawned 返回该区域已有角色，不占用额外槽位、不再次抽取位置、不移动角色，也不重写其团队。角色死亡后，在现有死亡归还流程或玩法真正归还之前，仍属于该区域的当前租约。归还后，`GetSpawnedCharacter()` 返回空，再次调用会从同一组固定缓存位置中随机抽取，并注入当前 TeamId。与初始生成点相同，`GetSpawnedHandle()` 提供供玩法归还使用的原生句柄；过期句柄不会解析或归还同槽位后来的角色。初始生成点与运行时生成区域共享固定的 512 个角色容量。
-
-失败时 OutCharacter 为空。除 NotAuthority、NotReady、PoolFull、Busy、ActivationFailed 和 PoolUnavailable 外，位置选择还可返回 InvalidConfiguration、NavigationUnavailable 或 NoValidLocation。InvalidConfiguration 表示区域、胶囊几何或离地距离无效；NavigationUnavailable 表示缺少匹配角色 Agent 的导航数据，或启动导航构建等待超时；NoValidLocation 表示初始化没有找到任何可用点，或全部缓存点当前都受阻。不会回退到 Actor 原点或强行放入受阻位置。缓存初始化完成前返回 NotReady；初始化失败结果会被保留，不再次采样。缓存初始化成功后，全部点临时受阻时可稍后再请求。ActivationFailed 会把失败槽位恢复为空闲。生成请求不排队，也不自动重试。区域 EndPlay 取消启动计时器，清空缓存和本地句柄，不归还 World 所有的角色；World 关闭时统一关闭租约。
-
-蓝图使用方式：在关卡中放置 Demo Runtime Character Spawn Area，选择 SpawnArea，调整 Box Extent，让盒体覆盖可导航地面，并给整个站立胶囊留出足够空间。在 Demo / Spawning 中设置 Team Id 和 Ground Clearance，由权威端玩法逻辑保存该 Actor 引用。初始化完成后，可通过 Get Spawn Locations 查看固定缓存。任务、增援或交互事件调用 Spawn Character；Spawned 和 Already Spawned 分支使用 Out Character，其他分支先处理失败再决定是否安排下一次请求。客户端交互应先通过游戏已有的 RPC 流程到达权威端，再调用这个本地操作。
-
-```cpp
-#include "Spawning/DemoRuntimeCharacterSpawnPoint.h"
-
-ADemoCharacter* Character = nullptr;
-const EDemoRuntimeCharacterSpawnResult Result = Point->SpawnCharacter(Character);
-if (Result == EDemoRuntimeCharacterSpawnResult::Spawned ||
-    Result == EDemoRuntimeCharacterSpawnResult::AlreadySpawned)
-{
-    // Character 为借用指针，其生命周期归 World 对象池所有。
-}
-```
-
-以下示例在 DemoGame 的 World BeginPlay 后使用：
-
-```cpp
-#include "ObjectPool/DemoCharacterPoolSubsystem.h"
-
-UDemoCharacterPoolSubsystem* Pool = World->GetSubsystem<UDemoCharacterPoolSubsystem>();
-if (!Pool || !Pool->IsReady())
-{
-    return;
-}
-
-auto Lease = Pool->TryAcquire(SpawnTransform, TeamId);
-if (!Lease)
-{
-    // Lease.Result.Error 区分满池、重入、对象丢失和激活失败。
-    return;
-}
-
-const UDemoCharacterPoolSubsystem::FHandle Handle = Lease.Handle;
-ADemoCharacter* Character = Lease.Object;
-// Character 用于即时访问；跨帧通过 Pool->Get(Handle) 解析。
-ADemoCharacter* SameCharacter = Pool->GetByIndexUnchecked(Handle.Index);
-// 直接访问要求生命期有效，不会验证当前租约。
-const auto ReturnResult = Pool->Release(Handle);
-// 子系统在所属 World 开始 teardown 时自动关闭池。
-```
 
 Prewarm、Release、Shutdown 返回包含 EPoolError 的 FPoolResult，并支持布尔转换。TryAcquire 的失败原因使用 FLease::Result 中的同一结果模型。原来的布尔判断方式仍可使用。错误区分未就绪、重复预热、重入、创建失败、激活失败、满池、generation 耗尽、对象丢失和无效句柄。
 
@@ -137,8 +72,6 @@ using FNetworkPool = Nelaric::ObjectPool::TCharacterPool<
 每次借出和归还都会推进槽位修订号，即使两次更新之间归还后再次借出，最终活动位仍为 true，也会重置客户端预测。更新可以合并中间租约，修订号标识最新状态，不是事件流。通用活动状态通过 `FCharacterPoolHelper::IsActive(Character, PoolState)` 查询，准备状态通过 `IsPrepared` 查询；保留原生状态用于权威端和普通出生角色。各类型继续实现普通池生命周期和业务状态复制。
 
 句柄包含本地池地址，不能跨网络复制；客户端 TryAcquire 无法同步返回服务器租约，请求继续通过游戏的权威请求路径提交。自定义 Replication Graph 和相关性覆盖逻辑须保留池 Actor。复用前完成控制权归还，清空移动预测不能撤销旧连接所有权。
-
-Demo 池选择 Replicated。动画服务遍历已经解析的客户端槽位，在各骨骼网格到达时分别注册动画预算，并使用本地控制器的 Pawn 作为距离参考，支持概览 Pawn。
 
 ## 扩展与重入
 

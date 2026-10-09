@@ -14,3 +14,4 @@ import "./Demo/AI/Platoon/TS_PlatoonCommand";
 import "./Demo/AI/Platoon/TS_PlatoonPhase";
 
 import "./Demo/AI/Company/TS_CompanyCommand";
+import "./Demo/Gameplay/GrandWarfront/Entry";

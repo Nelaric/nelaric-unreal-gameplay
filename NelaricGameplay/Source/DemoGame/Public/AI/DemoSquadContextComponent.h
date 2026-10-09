@@ -13,6 +13,10 @@ class UDemoSquadDefinition;
 class UDemoSquadTactics;
 class UDemoSquadMemberComponent;
 
+/// Authority script policy for continuous objective movement.
+DECLARE_DYNAMIC_DELEGATE_RetVal_TwoParams(FDemoSquadMemberOrder, FDemoSquadMemberOrderPolicy, ADemoCharacter*,
+                                          Character, const FDemoSquadMemberOrder&, Order);
+
 namespace Nelaric::Squad
 {
 /// Committed context notification; observers query snapshots on game thread.
@@ -159,6 +163,10 @@ public:
 	TObjectPtr<UDemoSquadTactics> Tactics;
 
 public:
+	/// Optional authority script adapter; unbound during world teardown.
+	UPROPERTY(Transient)
+	FDemoSquadMemberOrderPolicy MemberOrderHandler;
+	bool UsesMemberOrderPolicy() const;
 	UDemoSquadContextComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 	bool RegisterMember(UDemoSquadMemberComponent* Member);
 	void UnregisterMember(FGuid UnitId, int32 BindingGeneration);
@@ -199,6 +207,9 @@ private:
 	void CancelPlan(bool bKeepSnapshot = false);
 	void HandleRoute(FDemoSquadRequestIdentity Identity, EDemoSquadFailure Failure, const TArray<FVector>& Points);
 	bool AssignPositions();
+	bool UpdatePolicyOrder(FDemoSquadAssignment& Assignment);
+	TMap<FGuid, FVector> PolicyGoals;
+	double NextPolicyRefreshAt = 0.0;
 	bool AssignPosition(FDemoSquadAssignment& Assignment, FVector Center);
 	void PublishOrders(bool bOnlyChanged);
 	void SetPhase(EDemoSquadPhase Phase);

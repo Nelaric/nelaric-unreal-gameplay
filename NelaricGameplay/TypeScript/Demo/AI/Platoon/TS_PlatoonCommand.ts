@@ -44,8 +44,14 @@ class TS_PlatoonCommand extends UE.Actor {
         const coordinator = new PlatoonCoordinator(this, this.PlatoonId, team,
             { maxReportAge: age, minimumMobile: mobile, minimumAmmo: ammo, retryDelay: 5, maximumRepairs: 2 }, membership);
         if (!coordinator.bind(squads)) { this.LastCommandMessage = coordinator.message; return false; }
-        platoons.set(this, coordinator); tree.StartLogic();
-        if (!tree.IsRunning()) { coordinator.shutdown(); platoons.delete(this); this.LastCommandMessage = "Platoon tree failed to start."; return false; }
+        platoons.set(this, coordinator);
+        membership.StepHandler.Bind(operation => {
+            const result = coordinator.step(operation);
+            this.LastCommandMessage = coordinator.describe();
+            return result === undefined ? UE.EStateTreeRunStatus.Running : result ? UE.EStateTreeRunStatus.Succeeded : UE.EStateTreeRunStatus.Failed;
+        });
+        tree.StartLogic();
+        if (!tree.IsRunning()) { membership.StepHandler.Unbind(); coordinator.shutdown(); platoons.delete(this); this.LastCommandMessage = "Platoon tree failed to start."; return false; }
         this.LastCommandMessage = "Virtual platoon ready."; return true;
     }
     SubmitMission(mission: UE.DemoPlatoonMission): boolean {
@@ -71,6 +77,8 @@ class TS_PlatoonCommand extends UE.Actor {
     StopCommander(): void {
         const tree = this.GetComponentByClass(UE.GameAIStateTreeComponent.StaticClass()) as UE.GameAIStateTreeComponent;
         if (UE.KismetSystemLibrary.IsValid(tree)) tree.StopLogic("Platoon stopped");
+        const membership = this.GetComponentByClass(UE.DemoCompanyMembershipComponent.StaticClass()) as UE.DemoCompanyMembershipComponent;
+        if (UE.KismetSystemLibrary.IsValid(membership)) membership.StepHandler.Unbind();
         platoons.get(this)?.shutdown(); platoons.delete(this);
     }
     ReceiveEndPlay(_reason: UE.EEndPlayReason): void { this.StopCommander(); }

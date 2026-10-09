@@ -158,6 +158,7 @@ public:
 	DEMOGAME_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	friend class ADemoGrandWarfrontGameMode;
 	void InitializeSpawnLocations();
 	void FinishSpawnLocationInitialization(EDemoRuntimeCharacterSpawnResult Result);
 	EDemoRuntimeCharacterSpawnResult BuildSpawnLocations(const ADemoCharacter& CharacterTemplate);

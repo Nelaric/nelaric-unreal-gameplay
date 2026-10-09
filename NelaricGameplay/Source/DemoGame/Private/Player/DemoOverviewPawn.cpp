@@ -54,6 +54,12 @@ void ADemoOverviewPawn::PanOverview(const FVector2D& LocalOffset)
 	SetActorLocation(NewLocation);
 }
 
+void ADemoOverviewPawn::ClientDeployOverview_Implementation(FVector Location)
+{
+	if (!Location.ContainsNaN() && !IsActorBeingDestroyed())
+		SetActorLocation(Location);
+}
+
 void ADemoOverviewPawn::BeginPlay()
 {
 	Super::BeginPlay();

@@ -153,7 +153,7 @@ export class PlatoonCoordinator {
     private validCompany(source: UE.Actor, a: FCompanyAssignment): boolean {
         const registry = UE.DemoCommandLibrary.GetRegistry(this.owner);
         return !this.ended && valid(source) && valid(registry) &&
-            UE.KismetMathLibrary.EqualEqual_ObjectObject(registry.GetCompany(), source) &&
+            UE.KismetMathLibrary.EqualEqual_ObjectObject(registry.GetCompany(this.teamId), source) &&
             a.platoonId === this.platoonId && a.runId === this.companyRunId && a.commandEpoch === this.companyEpoch &&
             a.membershipRevision === this.membership.GetMembershipRevision();
     }

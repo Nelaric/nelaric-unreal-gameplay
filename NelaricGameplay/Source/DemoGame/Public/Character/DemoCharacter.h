@@ -131,6 +131,15 @@ public:
 	/// Cancels active abilities and weapon actions; authority game thread.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
 	void CancelCombatActions();
+	/// Freezes a battlefront body without changing its lease or health.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Demo|Combat")
+	void SetBattlefrontFrozen(bool bFrozen);
+	/// Reports replicated deployment protection; game thread only.
+	UFUNCTION(BlueprintPure, Category = "Demo|Combat")
+	bool IsBattlefrontFrozen() const
+	{
+		return bBattlefrontFrozen;
+	}
 
 	/** @brief Restores maximum health and authored weapon ammunition.
 	 * @details Authority game thread only. Call for
@@ -230,6 +239,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	UPROPERTY(ReplicatedUsing = OnRep_BattlefrontFrozen)
+	bool bBattlefrontFrozen = false;
+	UFUNCTION()
+	void OnRep_BattlefrontFrozen();
 	Nelaric::Demo::FTeamChanged TeamChanged;
 	UPROPERTY(Transient, Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category = "Demo|Team",
 	          meta = (AllowPrivateAccess = "true"))

@@ -14,7 +14,9 @@
 
 ## 项目结构
 
-[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/README.zh-CN.md) 包含 `DemoGame` Runtime 模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplay` 插件的 `GameplayRuntime` 模块中。
+[NelaricGameplay/](NelaricGameplay/) 目录包含框架的 Unreal 项目。使用 Unreal Engine 5.6 或更新版本打开其中的 [NelaricGameplay.uproject](NelaricGameplay/NelaricGameplay.uproject)。项目的 [Source/](NelaricGameplay/Source/) 包含 `DemoGame` Runtime 模块及 Game、Editor、Server Target；可复用运行时代码位于 `NelaricGameplay` 插件的 `GameplayRuntime` 模块中。
+
+Demo 相关文档统一放在内容仓库的 [Content/Docs](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/README.zh-CN.md)，包括玩法设计、角色与装备、出生、AI、控制接入及资源配置。
 
 框架在 `NelaricGameplay` 插件内包含四个模块：Runtime（`GameplayRuntime`）、性能分析 Diagnostics（`Diagnostics`）、开发基准工具 Benchmark（`Benchmark`）和编辑器工具 Editor（`Editor`）。目录、职责与依赖见[插件与模块结构](Docs/CodingStandards/Modules.zh-CN.md#插件与模块结构)。可选工具当前提供模块骨架。
 
@@ -32,7 +34,7 @@ Linux CI 会构建该项目的 Game、Editor 和 Server Target，各目标按模
 | --- | --- | --- |
 | `LyraStarterGame` | `NelaricGameplay/Content/ThirdParty/LyraStarterGame/` | [Lyra Starter Game — Epic Games 官方 Fab 页面](https://www.fab.com/listings/93faede1-4434-47c0-85f1-bf27c0820ad0) |
 
-将 Lyra 美术资产提取到 `/Game/ThirdParty/LyraStarterGame/LyraStarterGame` 的步骤见 [Lyra 美术资产迁移说明](Docs/LyraArtMigration.zh-CN.md)。
+将 Lyra 美术资产提取到 `/Game/ThirdParty/LyraStarterGame/LyraStarterGame` 的步骤见 [Lyra 美术资产迁移说明](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/Assets/LyraArtMigration.zh-CN.md)。
 
 ## PuerTS 配置
 

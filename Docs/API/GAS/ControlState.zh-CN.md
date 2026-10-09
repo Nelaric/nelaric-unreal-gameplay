@@ -53,4 +53,4 @@
 
 适配器通过 `HandlesEffect` 接管效果，公共序列化器便不导出该效果。标准恢复在活动容器插入 Spec，不重新运行 OnApplied 管线，恢复剩余时长并从原周期截止点调度。公共周期恢复支持 NeverReset 抑制策略；ResetPeriod 和 ExecuteAndResetPeriod 由适配器处理，避免多执行一次。有自定义 OnAdded/OnRemoved 副作用、特殊目标捕获语义、外部 Handle 引用、生成 Actor 或任务的效果也需要适配器，新的效果或 Spec Handle 由它重新绑定。领域契约保证明确的恢复行为，不承诺序列化任意游戏对象。
 
-DemoGame 源码提供复制的 Health、MaxHealth、Attack，共用 PlayerState、原生 GameMode，以及通过 `Action.Jump` 激活的预测跳跃能力。Demo GameInstance 在未显式指定旅行 GameMode 时，把关卡旧模式入口选为原生 GAS 模式；原生模式继续使用现有蓝图角色。其他蓝图 GameMode 覆盖应派生 GAS GameMode，并采用兼容的 PlayerState 与 Pawn 类。
+DemoGame 的属性、跳跃能力和 GameMode 配置见 Content 中的[控制与 GAS 接入](https://github.com/liu-kaizhi/nelaric-content/blob/main/Docs/Integration/ControlAndGAS.zh-CN.md)。

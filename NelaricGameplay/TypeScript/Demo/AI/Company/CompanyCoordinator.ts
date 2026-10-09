@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Nelaric Contributors
+﻿// Copyright (c) 2026 Nelaric Contributors
 
 import { Area, Claim, clone, continuous, defaultPolicy, Dependency, equivalent, finite, fresh, FCompanyAssignment,
     FCompanyKnowledge, FCompanyMission, FCompanyObjective, FCompanyPlan, FExecutionPermit,
@@ -116,6 +116,33 @@ export class CompanyCoordinator {
         this.requestedPhase = "AssessSituation";
         this.nextAssessment = 0;
         return true;
+    }
+    /** Reconciles changed objectives without discarding unrelated live tasks. */
+    updateObjectives(objectives: FCompanyObjective[]): boolean {
+        const current = this.context.mission;
+        if (!current || this.stopped || !this.authorized()) return false;
+        if (equivalent(current.objectives, objectives)) return true;
+        const next = { ...clone(current), revision: current.revision + 1, objectives: clone(objectives) };
+        if (validateMission(next)) return false;
+        const changed = new Set([...current.objectives, ...objectives].filter(o =>
+            !equivalent(current.objectives.find(p => p.id === o.id), objectives.find(p => p.id === o.id))).map(o => o.id));
+        for (const group of [...this.context.candidates]) if (changed.has(group.objectiveId)) this.discardGroup(group);
+        this.context.mission = next;
+        for (const id of changed) { delete this.context.repairs[id]; this.markAffected(id); }
+        this.requestedPhase = "AssessSituation"; this.context.nextPhase = "AssessSituation";
+        this.nextAssessment = 0;
+        return true;
+    }
+    /** Region boundaries revoke even player-locked orders, retaining the lock policy. */
+    endObjectiveScope(outcome: CompanyContext["outcome"] = "Cancelled"): void {
+        this.discardCandidates();
+        for (const a of Object.values(this.context.plan?.assignments ?? {})) this.cancelAssignment(a);
+        const c = this.context;
+        c.mission = undefined; c.plan = undefined; c.knowledge.objectiveResults = {};
+        c.repairs = {}; c.affected.clear(); c.outcome = outcome; c.settled = "";
+        this.ruleOutcome = "Running";
+        this.pendingReports.clear(); this.terminalReports = []; this.queuedTerminal.clear();
+        this.requestedPhase = "AwaitMission"; c.nextPhase = "AwaitMission";
     }
     cancelMission(): void {
         this.discardCandidates();

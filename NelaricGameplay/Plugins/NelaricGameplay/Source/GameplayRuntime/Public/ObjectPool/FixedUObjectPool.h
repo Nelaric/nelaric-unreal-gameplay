@@ -15,6 +15,8 @@
 #include "UObject/UObjectGlobals.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
+#include <concepts>
+
 namespace Nelaric::ObjectPool
 {
 /// Compile-time lifetime strategy for the fixed object reference table.
@@ -28,10 +30,72 @@ enum class EReferenceMode : uint8
 	WorldRaw,
 };
 
+/** @brief Matches UObject types to a supported reference lifetime strategy.
+ * @tparam T Complete UObject-derived type retained by the pool.
+ * @tparam Mode Collector for UObjects, or world ownership for actors.
+ */
+template <class T, EReferenceMode Mode>
+concept CPoolReference =
+    std::derived_from<T, UObject> &&
+    (Mode == EReferenceMode::Collector ||
+     ((Mode == EReferenceMode::WorldWeak || Mode == EReferenceMode::WorldRaw) && std::derived_from<T, AActor>));
+
+/** @brief Enables direct raw actor access only for the WorldRaw strategy.
+ * @tparam T Complete actor type retained by the pool.
+ * @tparam Mode Reference strategy selected by the pool.
+ */
+template <class T, EReferenceMode Mode>
+concept CRawPoolReference = CPoolReference<T, Mode> && Mode == EReferenceMode::WorldRaw;
+
+/** @brief Requires the factory and lifecycle calls used by a fixed pool.
+ * @tparam T Complete UObject-derived type managed by the policy.
+ * @tparam Policy Static factory and lifecycle provider compatible with T.
+ */
+template <class T, class Policy>
+concept CPoolPolicy =
+    std::derived_from<T, UObject> && requires(T& Object, const typename Policy::FCreateArgs& CreateArgs,
+                                              const typename Policy::FAcquireArgs& AcquireArgs) {
+	    { Policy::Create(CreateArgs) } -> std::convertible_to<T*>;
+	    (!Policy::OnAcquire(Object, AcquireArgs)) ? true : false;
+	    Policy::OnReturn(Object);
+	    Policy::Destroy(Object);
+    };
+
+/** @brief Detects an optional identity supplied by pool creation arguments.
+ * @tparam CreateArgs Factory argument type inspected without creating it.
+ */
+template <class CreateArgs>
+concept CNamedPoolCreateArgs = requires(const CreateArgs& Args) { Args.NetworkName; };
+
+/** @brief Requires world access and a compatible optional network identity.
+ * @tparam CreateArgs Factory arguments for a replicated actor pool.
+ */
+template <class CreateArgs>
+concept CReplicatedPoolCreateArgs = requires(const CreateArgs& Args) {
+	(!Args.World) ? true : false;
+	{ *Args.World } -> std::convertible_to<UWorld&>;
+} && (!CNamedPoolCreateArgs<CreateArgs> || requires(const CreateArgs& Args) {
+	                                    Args.NetworkName.IsNone() ? true : false;
+	                                    { Args.NetworkName } -> std::convertible_to<FName>;
+                                    });
+
+/** @brief Accepts fixed pool parameters with valid storage and networking.
+ * @tparam T Complete UObject-derived type retained by the pool.
+ * @tparam Capacity Positive slot count with two reserved sentinel indices.
+ * @tparam Policy Factory and lifecycle provider compatible with T.
+ * @tparam Mode Supported reference strategy for T.
+ * @tparam NetworkMode Replicated pools require actor types.
+ */
+template <class T, uint32 Capacity, class Policy, EReferenceMode Mode, ENetworkMode NetworkMode>
+concept CPoolConfiguration =
+    CPoolCapacity<Capacity> && CPoolReference<T, Mode> && CPoolPolicy<T, Policy> && CPoolNetworkMode<NetworkMode> &&
+    (NetworkMode == ENetworkMode::Disabled ||
+     (std::derived_from<T, AActor> && CReplicatedPoolCreateArgs<typename Policy::FCreateArgs>));
+
 /// Selects weak world references for actors and GC collection for other types.
-template <class T>
+template <std::derived_from<UObject> T>
 inline constexpr EReferenceMode DefaultReferenceMode =
-    std::is_base_of_v<AActor, T> ? EReferenceMode::WorldWeak : EReferenceMode::Collector;
+    std::derived_from<T, AActor> ? EReferenceMode::WorldWeak : EReferenceMode::Collector;
 
 /// Stable failure classifications shared by pool operations and leases.
 enum class EPoolError : uint8
@@ -78,13 +142,17 @@ struct FPoolResult
 
 namespace Private
 {
-template <class T, uint32 N, EReferenceMode Mode> class TReferenceTable;
+template <class T, uint32 N, EReferenceMode Mode>
+    requires CPoolReference<T, Mode> && CPoolCapacity<N>
+class TReferenceTable;
 
 /** @brief Bridges the fixed reference table to Unreal garbage collection.
  * @tparam T Complete UObject-derived type retained by this table.
  * @tparam N Fixed number of references managed by its owning pool.
  */
-template <class T, uint32 N> class TReferenceTable<T, N, EReferenceMode::Collector> final : public FGCObject
+template <std::derived_from<UObject> T, uint32 N>
+    requires CPoolCapacity<N>
+class TReferenceTable<T, N, EReferenceMode::Collector> final : public FGCObject
 {
 public:
 	/** @brief Writes one GC-visible reference on the game thread.
@@ -135,7 +203,9 @@ private:
  * @tparam T Complete Actor-derived type stored as weak references.
  * @tparam N Fixed number of references managed by its owning pool.
  */
-template <class T, uint32 N> class TReferenceTable<T, N, EReferenceMode::WorldWeak> final
+template <std::derived_from<AActor> T, uint32 N>
+    requires CPoolCapacity<N>
+class TReferenceTable<T, N, EReferenceMode::WorldWeak> final
 {
 public:
 	/** @brief Writes one weak reference on the game thread.
@@ -165,7 +235,6 @@ public:
 	}
 
 private:
-	static_assert(std::is_base_of_v<AActor, T>, "World ownership requires an Actor");
 	TWeakObjectPtr<T> Objects[N]{};
 };
 
@@ -174,7 +243,9 @@ private:
  * cannot be destroyed externally.
  * @tparam N Fixed number of references managed by its owning pool.
  */
-template <class T, uint32 N> class TReferenceTable<T, N, EReferenceMode::WorldRaw> final
+template <std::derived_from<AActor> T, uint32 N>
+    requires CPoolCapacity<N>
+class TReferenceTable<T, N, EReferenceMode::WorldRaw> final
 {
 public:
 	/** @brief Writes one non-owning actor reference on the game thread.
@@ -204,7 +275,6 @@ public:
 	}
 
 private:
-	static_assert(std::is_base_of_v<AActor, T>, "World ownership requires an Actor");
 	T* Objects[N]{};
 };
 } // namespace Private
@@ -248,6 +318,7 @@ private:
  */
 template <class T, uint32 Capacity, class Policy, EReferenceMode Mode = DefaultReferenceMode<T>,
           ENetworkMode NetworkMode = ENetworkMode::Disabled>
+    requires CPoolConfiguration<T, Capacity, Policy, Mode, NetworkMode>
 class TFixedUObjectPool final : private Private::TPoolNetworkBinding<NetworkMode>
 {
 public:
@@ -310,9 +381,8 @@ public:
 		bAttemptedPrewarm = true;
 		if constexpr (NetworkMode == ENetworkMode::Replicated)
 		{
-			static_assert(std::is_base_of_v<AActor, T>, "Replicated pools require actors");
 			FName Name = T::StaticClass()->GetFName();
-			if constexpr (requires { Args.NetworkName; })
+			if constexpr (CNamedPoolCreateArgs<FCreateArgs>)
 			{
 				if (!Args.NetworkName.IsNone())
 				{
@@ -494,7 +564,7 @@ public:
 	 * @param Index Slot index; out-of-range indices return null.
 	 * @return Non-owning object while this pool is available, otherwise null.
 	 */
-	FORCEINLINE T* GetByIndex(uint32 Index) const
+	FORCEINLINE T* At(uint32 Index) const
 	{
 		check(IsInGameThread());
 		if (!IsReady() || bBusy || Index >= Capacity)
@@ -523,9 +593,9 @@ public:
 	 * Non-owning stored pointer, whether its slot is free or leased.
 	 * @note Reading a slot does not acquire it or validate an earlier lease.
 	 */
-	FORCEINLINE T* GetByIndexUnchecked(uint32 Index) const noexcept
+	FORCEINLINE T* operator[](uint32 Index) const noexcept
+	    requires CRawPoolReference<T, Mode>
 	{
-		static_assert(Mode == EReferenceMode::WorldRaw, "Unchecked index access requires WorldRaw actor references");
 		if constexpr (NetworkMode == ENetworkMode::Replicated)
 		{
 			if (this->IsClient())
@@ -601,7 +671,7 @@ public:
 	}
 
 public:
-	FORCEINLINE ~TFixedUObjectPool()
+	~TFixedUObjectPool()
 	{
 		check(!bBusy);
 		(void)Shutdown();
@@ -612,8 +682,6 @@ public:
 	TFixedUObjectPool& operator=(TFixedUObjectPool&&) = delete;
 
 private:
-	static_assert(std::is_base_of_v<UObject, T>, "T must derive from UObject");
-
 	struct FOperationGuard
 	{
 		bool& Flag;

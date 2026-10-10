@@ -9,8 +9,20 @@
 #include "Components/ActorComponent.h"
 #include "ObjectPool/FixedUObjectPool.h"
 
+#include <concepts>
+
 namespace Nelaric::ObjectPool
 {
+/** @brief Requires native acquire and return callbacks on a plain UObject.
+ * @tparam T Custom reusable UObject, excluding actors and actor components.
+ */
+template <class T>
+concept CPlainPoolObject = std::derived_from<T, UObject> && !std::derived_from<T, AActor> &&
+                           !std::derived_from<T, UActorComponent> && requires(T& Object) {
+	                           Object.OnPoolAcquire();
+	                           Object.OnPoolReturn();
+                           };
+
 /** @brief Creates new transient objects with native pool lifecycle methods.
  * @details T provides OnPoolAcquire and an idempotent OnPoolReturn. All calls
  * run synchronously on the game thread. This is not an asset, component,
@@ -18,12 +30,8 @@ namespace Nelaric::ObjectPool
  * Unreal GC reclaims the object when no other references keep it reachable.
  * @tparam T Custom UObject whose native lifecycle supports repeated leases.
  */
-template <class T> struct TPlainUObjectPoolPolicy
+template <CPlainPoolObject T> struct TPlainUObjectPoolPolicy
 {
-	static_assert(std::is_base_of_v<UObject, T>, "Requires UObject");
-	static_assert(!std::is_base_of_v<AActor, T>, "Actors require SpawnActor");
-	static_assert(!std::is_base_of_v<UActorComponent, T>, "Components need an owner/registration policy");
-
 	/// Synchronous creation inputs; the pool does not retain the arguments.
 	struct FCreateArgs
 	{

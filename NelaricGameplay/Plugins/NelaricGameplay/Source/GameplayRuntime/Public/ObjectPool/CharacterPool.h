@@ -11,8 +11,16 @@
 #include "ObjectPool/FixedUObjectPool.h"
 #include "ObjectPool/PoolableCharacter.h"
 
+#include <concepts>
+
 namespace Nelaric::ObjectPool
 {
+/** @brief Accepts native characters with the authority pooling contract.
+ * @tparam T Character type publicly implementing IPoolableCharacter.
+ */
+template <class T>
+concept CPoolableCharacter = std::derived_from<T, ACharacter> && std::derived_from<T, IPoolableCharacter>;
+
 /** @brief Specializes object lifetime through a native pooling interface.
  * @details Runs on the game thread in standalone and server worlds.
  * @note Spawns into PersistentLevel; Destroy is a
@@ -22,11 +30,8 @@ namespace Nelaric::ObjectPool
  * @tparam T Any ACharacter-derived type
  * implementing IPoolableCharacter.
  */
-template <class T> struct TCharacterPoolPolicy
+template <CPoolableCharacter T> struct TCharacterPoolPolicy
 {
-	static_assert(std::is_base_of_v<ACharacter, T>, "Character pool requires an ACharacter-derived type");
-	static_assert(std::is_base_of_v<IPoolableCharacter, T>, "Character must implement IPoolableCharacter");
-
 	/// Synchronous prewarm inputs; these pointers are not retained by the pool.
 	struct FCreateArgs
 	{
@@ -116,7 +121,8 @@ template <class T> struct TCharacterPoolPolicy
  * @tparam Mode Reference mode; WorldRaw requires strict lifetime control.
  * @tparam NetworkMode Optional automatic actor-pool synchronization.
  */
-template <class T, uint32 Capacity, EReferenceMode Mode = EReferenceMode::WorldWeak,
+template <CPoolableCharacter T, uint32 Capacity, EReferenceMode Mode = EReferenceMode::WorldWeak,
           ENetworkMode NetworkMode = ENetworkMode::Disabled>
+    requires CPoolConfiguration<T, Capacity, TCharacterPoolPolicy<T>, Mode, NetworkMode>
 using TCharacterPool = TFixedUObjectPool<T, Capacity, TCharacterPoolPolicy<T>, Mode, NetworkMode>;
 } // namespace Nelaric::ObjectPool

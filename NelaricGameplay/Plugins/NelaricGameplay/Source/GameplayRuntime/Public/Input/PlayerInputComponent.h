@@ -143,6 +143,7 @@ protected:
 	 * @return Whether a binding was created in the current generation.
 	 */
 	template <class UserClass, typename FuncType>
+	    requires Nelaric::Input::CNativeActionCallback<UserClass, FuncType>
 	FORCEINLINE bool BindNativeAction(const FGameplayTag& InputTag, ETriggerEvent TriggerEvent, UserClass* Object,
 	                                  FuncType Func)
 	{

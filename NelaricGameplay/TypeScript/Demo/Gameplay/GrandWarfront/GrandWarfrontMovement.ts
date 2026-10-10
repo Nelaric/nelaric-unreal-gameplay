@@ -74,7 +74,7 @@ export class GrandWarfrontMovement {
             order.bAllowStopToFight = false; order.bAllowLocalReposition = false;
             return order;
         }
-        const chasing = role.roam && !!memory?.bTargetVisible && distance(center, memory.TargetLocation) < 2500;
+        const chasing = role.roam && !!memory?.bTargetVisible && distance(center, memory.TargetLocation) < point.radius + 2500;
         let chaseGoal: UE.Vector | undefined;
         if (chasing && memory) {
             const target = memory.TargetLocation, dx = location.X - target.X, dy = location.Y - target.Y;
@@ -89,8 +89,9 @@ export class GrandWarfrontMovement {
             route.lastPosition = location; route.checkedAt = now;
         }
         const arrived = route && (distance(location, route.goal) < 120 || soldier.GetOrderStatus() === UE.EDemoSoldierOrderStatus.Completed) && now - route.selectedAt >= 0.5;
+        const failed = route && soldier.GetOrderStatus() === UE.EDemoSoldierOrderStatus.Failed && now - route.selectedAt >= 0.5;
         const targetChanged = route && chasing && chaseGoal && distance(route.goal, chaseGoal) > 300 && now - route.selectedAt >= 2;
-        if (!route || route.scope !== scope || route.chasing !== chasing || arrived || targetChanged || route.stalled >= 6) {
+        if (!route || route.scope !== scope || route.chasing !== chasing || arrived || failed || targetChanged || route.stalled >= 6) {
             const step = (route?.step ?? -1) + 1;
             const angle = role.index * 2.399963 + step * 1.7;
             const radius = role.roam ? point.radius + 250 + (role.index % 3) * 120 : point.radius * (0.25 + (role.index % 3) * 0.1);

@@ -22,7 +22,7 @@ ADemoOverviewPawn::ADemoOverviewPawn(const FObjectInitializer& ObjectInitializer
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("OverviewRoot")));
 	CameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("OverviewCamera"));
 	CameraComponent->SetupAttachment(GetRootComponent());
-	CameraComponent->SetRelativeRotation(FRotator(-60.0, 0.0, 0.0));
+	CameraComponent->SetRelativeRotation(FRotator(-80.0, -90.0, 0.0));
 	CameraComponent->bUsePawnControlRotation = false;
 }
 
@@ -63,6 +63,7 @@ void ADemoOverviewPawn::ClientDeployOverview_Implementation(FVector Location)
 void ADemoOverviewPawn::BeginPlay()
 {
 	Super::BeginPlay();
+	CameraComponent->SetRelativeRotation(FRotator(-80.0, -90.0, 0.0));
 	// The initialization config creates the policy during BeginPlay. This
 	// camera stays with its player while a character is controlled; handing
 	// it to a bot would replace its owner and prevent returning to it.

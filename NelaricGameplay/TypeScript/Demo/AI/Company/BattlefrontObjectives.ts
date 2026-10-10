@@ -31,7 +31,7 @@ export class BattlefrontSession {
             const s: BattlefrontSnapshot = JSON.parse(text);
             if (!s || !identity(s.matchId) || !identity(s.regionId) || !Number.isSafeInteger(s.sequence) || s.sequence < 1 ||
                 !Number.isSafeInteger(s.regionRevision) || s.regionRevision < 1 || !Number.isInteger(s.regionIndex) ||
-                s.regionIndex < 0 || s.regionIndex > 2 || !fresh(s.observedAt, now, 3) ||
+                s.regionIndex < 0 || s.regionIndex > 3 || !fresh(s.observedAt, now, 3) ||
                 !team(s.attackerTeamId) || !team(s.defenderTeamId) || s.attackerTeamId === s.defenderTeamId ||
                 !["Preparing", "RegionActive", "RegionTransition", "Finished", "Aborted"].includes(s.phase) ||
                 !finite(s.deadline) || s.deadline < 0 || (s.phase === "RegionActive" && s.deadline <= 0) ||
@@ -40,7 +40,6 @@ export class BattlefrontSession {
                 new Set(s.points.map(p => p?.id)).size !== s.points.length ||
                 new Set(s.points.map(p => p?.areaId)).size !== s.points.length ||
                 s.points.some(p => !p || !identity(p.id) || !areaId(p.areaId) ||
-                    [s.attackerSpawnAreaId, s.defenderSpawnAreaId].includes(p.areaId) ||
                     ![s.attackerTeamId, s.defenderTeamId].includes(p.ownerTeamId) ||
                     ![s.attackerTeamId, s.defenderTeamId, 255].includes(p.pressureTeamId) ||
                     !Number.isInteger(p.attackScore) || p.attackScore < 0 || p.attackScore > 60 ||
@@ -64,7 +63,6 @@ export class BattlefrontSession {
                         (s.phase === "Preparing" && previous.phase !== "Preparing")) return false;
                     if (s.regionRevision === previous.regionRevision &&
                         (s.regionId !== previous.regionId || s.attackerSpawnAreaId !== previous.attackerSpawnAreaId ||
-                        s.defenderSpawnAreaId !== previous.defenderSpawnAreaId ||
                         !equivalent(s.points.map(p => [p.id, p.areaId]), previous.points.map(p => [p.id, p.areaId])))) return false;
                 }
             }
@@ -145,11 +143,22 @@ export class BattlefrontCompanyAdapter {
         }
         // Keep one defending anchor; other garrisons may reinforce more valuable objectives.
         const anchor = teamId === s.defenderTeamId ? s.points.find(p => p.ownerTeamId === teamId)?.id : undefined;
-        return s.points.map(p => {
+        const targets = s.points.map(p => {
             const owned = p.ownerTeamId === teamId, underPressure = owned && p.pressureTeamId !== 255 && p.pressureTeamId !== teamId;
-            const priority = underPressure ? 180 : owned ? (teamId === s.defenderTeamId ? 100 : 30) : 120;
-            const objective = make("Point:" + p.id, this.core.areas.get(p.areaId)!, owned ? "Defend" : "SecureArea", priority, p.id === anchor);
-            if (underPressure) objective.minimumPlatoons = Math.min(2, Math.max(1, this.core.ports.size - s.points.length + 1));
+            return { point: p, owned, underPressure, weight: owned ? (underPressure ? 2 : 1) : 4, platoons: 1 };
+        }).sort((a, b) => a.point.id.localeCompare(b.point.id));
+        const budget = Math.max(targets.length, this.core.ports.size), weight = targets.reduce((sum, t) => sum + t.weight, 0);
+        // Preserve a garrison per point, then round weighted shares without leaving spare platoons idle.
+        for (let assigned = targets.length; assigned < budget; ++assigned) {
+            const next = targets.reduce((best, t) => budget * t.weight / weight - t.platoons >
+                budget * best.weight / weight - best.platoons ? t : best);
+            ++next.platoons;
+        }
+        return targets.map(t => {
+            const priority = !t.owned ? 220 : t.underPressure ? 180 : teamId === s.defenderTeamId ? 100 : 30;
+            const objective = make("Point:" + t.point.id, this.core.areas.get(t.point.areaId)!,
+                t.owned ? "Defend" : "SecureArea", priority, t.point.id === anchor);
+            objective.minimumPlatoons = t.platoons;
             return objective;
         });
     }

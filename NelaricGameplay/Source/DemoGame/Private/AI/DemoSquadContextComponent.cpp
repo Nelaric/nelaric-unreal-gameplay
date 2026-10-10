@@ -9,6 +9,8 @@
 #include "Character/DemoCharacter.h"
 #include "Components/StateTreeComponent.h"
 #include "Engine/World.h"
+#include "NavigationSystem.h"
+#include "NavigationData.h"
 #include "EngineUtils.h"
 #include "NativeGameplayTags.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
@@ -706,6 +708,7 @@ FDemoSquadArea UDemoSquadContextComponent::ResolveGoal(EDemoSquadGoalSource Sour
 void UDemoSquadContextComponent::CancelPlan(bool bKeepSnapshot)
 {
 	PolicyGoals.Reset();
+	PolicyRetryAt.Reset();
 	NextPolicyRefreshAt = 0.0;
 	if (Plan.Identity.PlanId.IsValid() && !Plan.Assignments.IsEmpty() && PlanCancellationCount < MAX_int32)
 		++PlanCancellationCount;
@@ -811,6 +814,13 @@ bool UDemoSquadContextComponent::BuildPlan(EDemoSquadTactic Tactic, EDemoSquadGo
 	}
 	FDemoSquadArea Goal = UsesMemberOrderPolicy() ? Mission.Goal : ResolveGoal(GoalSource);
 	Plan.Goal = Goal;
+	if (UsesMemberOrderPolicy())
+	{
+		Plan.Route.Add(Goal.Center);
+		Plan.RouteIndex = 0;
+		SetPhase(EDemoSquadPhase::None);
+		return true;
+	}
 	const FDemoSquadMemberStatus* Agent = Members.FindByPredicate(
 	    [](const auto& Member)
 	    { return Member.bAlive && Member.bMobile && !Member.bPlayerControlled && Member.Character.IsValid(); });
@@ -978,6 +988,15 @@ bool UDemoSquadContextComponent::UpdatePolicyOrder(FDemoSquadAssignment& Assignm
 		Service->RenewPosition(Assignment.PositionId, Plan.Identity.PlanId);
 		return true;
 	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (const double* Retry = PolicyRetryAt.Find(Assignment.UnitId); Retry && Now < *Retry)
+		return Assignment.PositionId.IsValid();
+	auto* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	auto* Body = Member->Character.Get();
+	const FVector Start = Body->GetNavAgentLocation();
+	const auto* Data = Nav ? Nav->GetNavDataForProps(Body->GetNavAgentPropertiesRef(), Start) : nullptr;
+	if (!Data)
+		return false;
 	FVector Position = FVector::ZeroVector;
 	FGuid Lease;
 	for (int32 Attempt = 0; Attempt < 9 && !Lease.IsValid(); ++Attempt)
@@ -985,8 +1004,15 @@ bool UDemoSquadContextComponent::UpdatePolicyOrder(FDemoSquadAssignment& Assignm
 		const float Angle = Attempt * PI * 0.25f;
 		const FVector Offset =
 		    Attempt == 0 ? FVector::ZeroVector : FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0) * 140.0f;
-		Lease =
-		    Service->ReservePosition(Assignment.UnitId, Plan.Identity.PlanId, Proposed.Goal.Center + Offset, Position);
+		FNavLocation Destination;
+		if (!Nav->ProjectPointToNavigation(Proposed.Goal.Center + Offset, Destination, FVector(200, 200, 6000), Data) ||
+		    !Nelaric::Squad::Inside(Proposed.MovementArea, Destination.Location))
+			continue;
+		FPathFindingQuery Query(Body, *Data, Start, Destination.Location);
+		Query.SetAllowPartialPaths(false);
+		if (!Nav->TestPathSync(Query, EPathFindingMode::Regular))
+			continue;
+		Lease = Service->ReservePosition(Assignment.UnitId, Plan.Identity.PlanId, Destination.Location, Position);
 		if (Lease.IsValid() && !Nelaric::Squad::Inside(Proposed.MovementArea, Position))
 		{
 			Service->ReleasePosition(Lease, Plan.Identity.PlanId);
@@ -994,7 +1020,11 @@ bool UDemoSquadContextComponent::UpdatePolicyOrder(FDemoSquadAssignment& Assignm
 		}
 	}
 	if (!Lease.IsValid())
+	{
+		PolicyRetryAt.Add(Assignment.UnitId, Now + 0.5);
 		return Assignment.PositionId.IsValid();
+	}
+	PolicyRetryAt.Remove(Assignment.UnitId);
 	Service->ReleasePosition(Assignment.PositionId, Plan.Identity.PlanId);
 	Assignment.PositionId = Lease;
 	PolicyGoals.Add(Assignment.UnitId, Proposed.Goal.Center);
@@ -1246,6 +1276,7 @@ void UDemoSquadContextComponent::MaintainPhase()
 				    if (auto* Service = GetWorld()->GetSubsystem<UDemoSquadPlanningSubsystem>())
 					    Service->ReleasePosition(A.PositionId, Plan.Identity.PlanId);
 				    PolicyGoals.Remove(A.UnitId);
+				    PolicyRetryAt.Remove(A.UnitId);
 				    return true;
 			    });
 			for (auto& Assignment : Plan.Assignments)
@@ -1426,6 +1457,7 @@ void UDemoSquadContextComponent::EndPlay(const EEndPlayReason::Type EndPlayReaso
 	bEnding = true;
 	MemberOrderHandler.Unbind();
 	PolicyGoals.Reset();
+	PolicyRetryAt.Reset();
 	StopExecution(nullptr);
 	GetWorld()->GetTimerManager().ClearTimer(ChangedTimer);
 	Changed.Clear();

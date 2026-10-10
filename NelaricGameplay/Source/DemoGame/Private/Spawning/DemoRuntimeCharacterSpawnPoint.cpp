@@ -2,6 +2,7 @@
 
 #include "Spawning/DemoRuntimeCharacterSpawnPoint.h"
 
+#include "AI/Navigation/NavQueryFilter.h"
 #include "CollisionQueryParams.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -9,6 +10,7 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "NavigationSystem.h"
+#include "NavigationData.h"
 #include "Templates/UnrealTemplate.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogDemoRuntimeCharacterSpawn, Log, All);
@@ -239,8 +241,13 @@ ADemoRuntimeCharacterSpawnPoint::BuildSpawnLocations(const ADemoCharacter& Chara
 	const FCollisionQueryParams Query(SCENE_QUERY_STAT(DemoRuntimeCharacterSpawn), false, this);
 	const ECollisionChannel Channel = Capsule->GetCollisionObjectType();
 	const FQuat SpawnRotation = FRotator(0.0, AreaRotation.Rotator().Yaw, 0.0).Quaternion();
-	CachedSpawnLocations.Reserve(MaxSpawnLocationCount);
-	constexpr int32 MaxCandidateAttempts = MaxSpawnLocationCount * 32;
+	const FSharedNavQueryFilter ReachabilityFilter = NavData->GetDefaultQueryFilter()->GetCopy();
+	// Whole-map spawn validation must not mistake the default search budget for a disconnected island.
+	if (RequiredNavigationAnchor.IsSet())
+		ReachabilityFilter->SetMaxSearchNodes(FMath::Max(ReachabilityFilter->GetMaxSearchNodes(), 16384u));
+	const int32 TargetCount = FMath::Clamp(SpawnLocationCount, 1, MaxSpawnLocationCount);
+	CachedSpawnLocations.Reserve(TargetCount);
+	const int32 MaxCandidateAttempts = TargetCount * 32;
 	for (int32 Attempt = 0; Attempt < MaxCandidateAttempts; ++Attempt)
 	{
 		const FVector LocalSample(FMath::FRandRange(-CenterExtent.X, CenterExtent.X),
@@ -284,8 +291,19 @@ ADemoRuntimeCharacterSpawnPoint::BuildSpawnLocations(const ADemoCharacter& Chara
 		{
 			continue;
 		}
+		if (CaptureRadius.IsSet() && FVector::DistSquared2D(Center, AreaTransform.GetLocation()) >
+		                                 FMath::Square(FMath::Max(0.0f, CaptureRadius.GetValue() - Radius)))
+			continue;
+		if (RequiredNavigationAnchor.IsSet())
+		{
+			FPathFindingQuery Reachability(this, *NavData, RequiredNavigationAnchor.GetValue(),
+			                               GroundNavigation.Location, ReachabilityFilter);
+			Reachability.SetAllowPartialPaths(false);
+			if (!Navigation->TestPathSync(Reachability, EPathFindingMode::Regular))
+				continue;
+		}
 		CachedSpawnLocations.Add(Center);
-		if (CachedSpawnLocations.Num() == MaxSpawnLocationCount)
+		if (CachedSpawnLocations.Num() == TargetCount)
 		{
 			break;
 		}

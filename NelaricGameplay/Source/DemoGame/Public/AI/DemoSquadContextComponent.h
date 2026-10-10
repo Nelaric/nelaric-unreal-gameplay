@@ -209,6 +209,7 @@ private:
 	bool AssignPositions();
 	bool UpdatePolicyOrder(FDemoSquadAssignment& Assignment);
 	TMap<FGuid, FVector> PolicyGoals;
+	TMap<FGuid, double> PolicyRetryAt;
 	double NextPolicyRefreshAt = 0.0;
 	bool AssignPosition(FDemoSquadAssignment& Assignment, FVector Center);
 	void PublishOrders(bool bOnlyChanged);

@@ -3,12 +3,12 @@
 import { BattlefrontSnapshot } from "../../AI/Company/BattlefrontObjectives";
 export interface AreaDefinition { id: string; center: { x: number; y: number; z: number }; radius: number; halfHeight: number; }
 export interface RegionDefinition {
-    id: string; seconds: number; points: AreaDefinition[]; attackerSpawn: AreaDefinition; defenderSpawn: AreaDefinition;
+    id: string; seconds: number; points: AreaDefinition[]; defenderFallbackSpawn: AreaDefinition;
 }
 export interface MatchDefinition {
     version: 1; attackerTeamId: number; defenderTeamId: number; preparingSeconds: number; transitionSeconds: number;
-    respawnSeconds: number; deploymentTimeout: number; platoonsPerTeam: number; squadsPerPlatoon: number; membersPerSquad: number;
-    regions: RegionDefinition[];
+    respawnSeconds: number; deploymentTimeout: number; attackerCount: number; defenderCount: number; squadsPerPlatoon: number; membersPerSquad: number;
+    initialAttackerSpawn: AreaDefinition; regions: RegionDefinition[];
 }
 export type Counts = Record<string, { attack: number; defend: number }>;
 export interface MatchSnapshot extends BattlefrontSnapshot { reason: string; stageEndsAt: number; observationGaps: number; }
@@ -18,22 +18,25 @@ export function parseDefinition(text: string): MatchDefinition {
     const d: MatchDefinition = JSON.parse(text);
     if (!d || d.version !== 1 || ![d.attackerTeamId, d.defenderTeamId].every(t => Number.isInteger(t) && t >= 0 && t < 255) ||
         d.attackerTeamId === d.defenderTeamId || ![d.preparingSeconds, d.transitionSeconds, d.respawnSeconds, d.deploymentTimeout].every(positive) ||
-        ![d.platoonsPerTeam, d.squadsPerPlatoon, d.membersPerSquad].every(n => Number.isInteger(n) && n > 0) ||
-        d.platoonsPerTeam > 8 || d.squadsPerPlatoon > 4 || d.membersPerSquad > 16 ||
-        d.platoonsPerTeam * d.squadsPerPlatoon * d.membersPerSquad * 2 > 512 ||
-        !Array.isArray(d.regions) || d.regions.length !== 3) throw new Error("Invalid match definition");
-    const names = new Set<string>(), regions = new Set<string>(), areas: AreaDefinition[] = [];
+        ![d.attackerCount, d.defenderCount, d.squadsPerPlatoon, d.membersPerSquad].every(n => Number.isInteger(n) && n > 0) ||
+        Math.ceil(Math.max(d.attackerCount, d.defenderCount) / (d.squadsPerPlatoon * d.membersPerSquad)) > 8 || d.squadsPerPlatoon > 4 || d.membersPerSquad > 16 ||
+        d.attackerCount + d.defenderCount > 512 ||
+        !Array.isArray(d.regions) || d.regions.length !== 4) throw new Error("Invalid match definition");
+    const names = new Set<string>(), regions = new Set<string>(), captureAreas: AreaDefinition[] = [];
     for (const r of d.regions) {
         if (!r || !id(r.id) || regions.has(r.id) || !positive(r.seconds) || r.seconds > 86400 ||
             !Array.isArray(r.points) || !r.points.length || r.points.length > 64) throw new Error("Invalid region");
         regions.add(r.id);
-        for (const a of [...r.points, r.attackerSpawn, r.defenderSpawn]) {
+        for (const a of [...r.points, r.defenderFallbackSpawn, ...(r === d.regions[0] ? [d.initialAttackerSpawn] : [])]) {
             if (!a || !id(a.id) || names.has(a.id) || !a.center || !Object.values(a.center).every(Number.isFinite) ||
                 ![a.center.x, a.center.y, a.center.z].every(Number.isFinite) || !positive(a.radius) || a.radius < 100 ||
                 !positive(a.halfHeight) || a.halfHeight < 100) throw new Error("Invalid or duplicate area");
-            if (areas.some(b => Math.hypot(a.center.x-b.center.x,a.center.y-b.center.y) < a.radius+b.radius &&
-                Math.abs(a.center.z-b.center.z) < a.halfHeight+b.halfHeight)) throw new Error("Overlapping battlefront areas");
-            names.add(a.id); areas.push(a);
+            if (r.points.includes(a)) {
+                if (captureAreas.some(b => Math.hypot(a.center.x-b.center.x,a.center.y-b.center.y) < a.radius+b.radius &&
+                    Math.abs(a.center.z-b.center.z) < a.halfHeight+b.halfHeight)) throw new Error("Overlapping capture areas");
+                captureAreas.push(a);
+            }
+            names.add(a.id);
         }
     }
     return d;
@@ -47,13 +50,26 @@ export class GrandWarfrontRules {
         const r = definition.regions[0];
         this.state = { matchId, sequence: 1, observedAt: now, phase: "Preparing", regionId: r.id, regionIndex: 0, regionRevision: 1,
             attackerTeamId: definition.attackerTeamId, defenderTeamId: definition.defenderTeamId, deadline: 0,
-            attackerSpawnAreaId: r.attackerSpawn.id, defenderSpawnAreaId: r.defenderSpawn.id, points: [], winnerTeamId: 255,
+            attackerSpawnAreaId: definition.initialAttackerSpawn.id, defenderSpawnAreaId: r.points[0].id, points: [], winnerTeamId: 255,
             reason: "", stageEndsAt: now + definition.preparingSeconds, observationGaps: 0 };
         this.resetPoints();
     }
     get terminal(): boolean { return this.state.phase === "Finished" || this.state.phase === "Aborted"; }
     get region(): RegionDefinition { return this.definition.regions[this.state.regionIndex]; }
     get sampleDue(): number { return this.startedAt + this.scoredSecond + 1; }
+    /** Legal spawn areas from the committed scores; callers may shuffle this fresh array. */
+    getSpawnCandidates(team: number): string[] {
+        const s = this.state, d = this.definition;
+        if (team === s.attackerTeamId) {
+            const rear = s.regionIndex === 0 ? [d.initialAttackerSpawn.id]
+                : d.regions[s.regionIndex - 1].points.map(p => p.id);
+            const controlled = s.points.filter(p => p.ownerTeamId === s.attackerTeamId && p.attackScore === 60).map(p => p.areaId);
+            return [...rear, ...controlled];
+        }
+        if (team !== s.defenderTeamId) return [];
+        const controlled = s.points.filter(p => p.ownerTeamId === s.defenderTeamId && p.attackScore === 0).map(p => p.areaId);
+        return controlled.length ? controlled : [this.region.defenderFallbackSpawn.id];
+    }
     private resetPoints(): void {
         const s = this.state;
         s.points = this.region.points.map(a => ({ id: a.id, areaId: a.id, attackScore: 0, ownerTeamId: s.defenderTeamId, pressureTeamId: 255, attackers: 0, defenders: 0 }));
@@ -91,12 +107,13 @@ export class GrandWarfrontRules {
                 }
             } else ++s.observationGaps;
         }
+        s.defenderSpawnAreaId = this.getSpawnCandidates(s.defenderTeamId)[0];
         // Commit every point before evaluating the all-owned condition or the clock.
         if (s.points.every(p => p.ownerTeamId === s.attackerTeamId)) {
-            if (s.regionIndex === 2) { s.phase = "Finished"; s.winnerTeamId = s.attackerTeamId; s.reason = "AllRegionsCaptured"; }
+            if (s.regionIndex === this.definition.regions.length - 1) { s.phase = "Finished"; s.winnerTeamId = s.attackerTeamId; s.reason = "AllRegionsCaptured"; }
             else {
                 ++s.regionIndex; ++s.regionRevision; s.regionId = this.region.id; s.phase = "RegionTransition";
-                s.attackerSpawnAreaId = this.region.attackerSpawn.id; s.defenderSpawnAreaId = this.region.defenderSpawn.id;
+                s.attackerSpawnAreaId = this.definition.regions[s.regionIndex - 1].points[0].id; s.defenderSpawnAreaId = this.region.points[0].id;
                 s.deadline = 0; s.stageEndsAt = now + this.definition.transitionSeconds; this.resetPoints();
             }
         } else if (now >= s.deadline) { s.phase = "Finished"; s.winnerTeamId = s.defenderTeamId; s.reason = "RegionTimeout"; }

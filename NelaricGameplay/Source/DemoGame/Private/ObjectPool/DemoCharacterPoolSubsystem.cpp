@@ -97,7 +97,7 @@ bool UDemoCharacterPoolSubsystem::AreInitialCharactersReady(UPawnInitializationC
 	check(IsReady());
 	for (uint32 Index = 0; Index < Capacity; ++Index)
 	{
-		ADemoCharacter* Character = Pool.GetByIndexUnchecked(Index);
+		ADemoCharacter* Character = Pool[Index];
 		UPawnInitializationComponent* Initialization = Character->GetPawnInitializationComponent();
 		const UPawnGasBindingComponent* Binding = Character->GetGasBinding();
 		if (!Character->HasActorBegunPlay() || !Initialization->IsPawnInitialized() || !Binding->IsReadyForActions())

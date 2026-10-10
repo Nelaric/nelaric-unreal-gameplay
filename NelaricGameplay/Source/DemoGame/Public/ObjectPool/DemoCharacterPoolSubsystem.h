@@ -109,13 +109,13 @@ public:
 
 	/** @brief Reads a local demo slot or an automatically received replica.
 	 * @details Game thread only; clients may have unresolved empty slots.
-	 * @param Index Slot in [0, Capacity).
+	 * @param Index Slot index; out-of-range indices return null.
 	 * @return Non-owning character, or null while unavailable or unresolved.
 	 * @note Does not acquire a lease or verify its generation.
 	 */
-	FORCEINLINE ADemoCharacter* GetByIndex(uint32 Index) const
+	FORCEINLINE ADemoCharacter* At(uint32 Index) const
 	{
-		return IsReady() ? Pool.GetByIndex(Index) : nullptr;
+		return IsReady() ? Pool.At(Index) : nullptr;
 	}
 
 	/** @brief Reads a demo slot with the native pool's raw-access contract.
@@ -127,9 +127,9 @@ public:
 	 * @return Non-owning character; does not acquire or verify a
 	 * lease.
 	 */
-	FORCEINLINE ADemoCharacter* GetByIndexUnchecked(uint32 Index) const noexcept
+	FORCEINLINE ADemoCharacter* operator[](uint32 Index) const noexcept
 	{
-		return Pool.GetByIndexUnchecked(Index);
+		return Pool[Index];
 	}
 
 	/// Returns local storage or client-view availability on the game thread.

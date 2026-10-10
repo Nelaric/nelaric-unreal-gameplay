@@ -130,7 +130,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldTickStart(UWorld* World, ELevelTick
 	// grace period alone would keep recently visible off-view meshes in budget.
 	for (int32 UnitIndex = 0; UnitIndex < MaxUnits; ++UnitIndex)
 	{
-		const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(UnitIndex));
+		const ADemoCharacter* Character = Pool->At(static_cast<uint32>(UnitIndex));
 		USkeletalMeshComponentBudgeted* Mesh =
 		    IsValid(Character) ? CastChecked<USkeletalMeshComponentBudgeted>(Character->GetMesh()) : nullptr;
 		if (BudgetMeshes[UnitIndex].Get() != Mesh)
@@ -195,7 +195,7 @@ void UDemoUnitAnimationSubsystem::UpdateDistanceLevels()
 	const FVector ReferenceLocation = ReferenceCharacter->GetActorLocation();
 	for (int32 UnitIndex = 0; UnitIndex < MaxUnits; ++UnitIndex)
 	{
-		const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(UnitIndex));
+		const ADemoCharacter* Character = Pool->At(static_cast<uint32>(UnitIndex));
 		if (!IsValid(Character) || !Character->IsPoolActive())
 		{
 			SlotAnimationInstances[UnitIndex].Reset();
@@ -262,7 +262,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 		for (int32 Entry = 0; Entry < LevelCounts[Level]; ++Entry)
 		{
 			const int32 UnitIndex = LevelIndices[Level][Entry];
-			const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(UnitIndex));
+			const ADemoCharacter* Character = Pool->At(static_cast<uint32>(UnitIndex));
 			if (!IsValid(Character) || !Character->IsPoolActive() || IntervalFrames == 0)
 			{
 				SlotAnimationInstances[UnitIndex].Reset();
@@ -333,7 +333,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 	Jobs.RemoveAllSwap(
 	    [Pool, Budget](const FAnimationUpdateJob& Job)
 	    {
-		    const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(Job.UnitIndex));
+		    const ADemoCharacter* Character = Pool->At(static_cast<uint32>(Job.UnitIndex));
 		    USkeletalMeshComponent* Mesh = IsValid(Character) ? Character->GetMesh() : nullptr;
 		    return !IsValid(Character) || !Character->IsPoolActive() || !IsValid(Mesh) ||
 		           Mesh->GetAnimInstance() != Job.Instance.Get() || Mesh->IsRunningParallelEvaluation() ||
@@ -347,7 +347,7 @@ void UDemoUnitAnimationSubsystem::HandleWorldPreActorTick(UWorld* World, ELevelT
 	// All mesh callbacks have completed. Capture values before any worker runs.
 	for (const FAnimationUpdateJob& Job : Jobs)
 	{
-		const ADemoCharacter* Character = Pool->GetByIndex(static_cast<uint32>(Job.UnitIndex));
+		const ADemoCharacter* Character = Pool->At(static_cast<uint32>(Job.UnitIndex));
 		static_cast<UDemoAnimationDataInstance*>(Job.Instance.Get())->PrepareAnimationData(*Character);
 	}
 

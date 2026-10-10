@@ -7,7 +7,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Templates/UnrealTypeTraits.h"
+
+#include <concepts>
 
 class ANelaricCharacter;
 class ANelaricPawn;
@@ -17,6 +18,10 @@ class UPawnInitializationComponent;
 
 namespace Nelaric::Pawn
 {
+// Project pawns that store an initialization component directly.
+template <typename TPawn>
+concept CInitializationPawn = std::derived_from<TPawn, ANelaricPawn> || std::derived_from<TPawn, ANelaricCharacter>;
+
 /** @brief Provides direct access to project pawn initialization components.
  *
  * @details Call on the game thread. The
@@ -34,11 +39,8 @@ public:
 	 * @return
 	 * Non-owning component, or null for a null owner.
 	 */
-	template <typename TPawn> static UPawnInitializationComponent* Get(const TPawn* Owner)
+	template <CInitializationPawn TPawn> static UPawnInitializationComponent* Get(const TPawn* Owner)
 	{
-		static_assert(TIsDerivedFrom<TPawn, ANelaricPawn>::IsDerived ||
-		                  TIsDerivedFrom<TPawn, ANelaricCharacter>::IsDerived,
-		              "TPawn must derive from ANelaricPawn or ANelaricCharacter.");
 		return Owner ? Owner->PawnInitializationComponent.Get() : nullptr;
 	}
 

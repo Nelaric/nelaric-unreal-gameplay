@@ -7,8 +7,9 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
-#include "Templates/UnrealTypeTraits.h"
 #include "Templates/Casts.h"
+
+#include <concepts>
 
 #include "NelaricPawnComponent.generated.h"
 
@@ -47,9 +48,8 @@ public:
 	 * @tparam T Complete pawn type derived from APawn.
 	 * @return Non-owning pawn, or null if unavailable or of another type.
 	 */
-	template <typename T> T* GetPawn() const
+	template <std::derived_from<APawn> T> T* GetPawn() const
 	{
-		static_assert(TIsDerivedFrom<T, APawn>::IsDerived, "T must derive from APawn.");
 		return Cast<T>(GetPawn());
 	}
 
@@ -68,9 +68,8 @@ public:
 	 * @tparam T Complete controller type derived from AController.
 	 * @return Non-owning controller, or null if unavailable or mismatched.
 	 */
-	template <typename T> T* GetController() const
+	template <std::derived_from<AController> T> T* GetController() const
 	{
-		static_assert(TIsDerivedFrom<T, AController>::IsDerived, "T must derive from AController.");
 		return Cast<T>(GetController());
 	}
 
@@ -89,9 +88,8 @@ public:
 	 * @tparam T Complete player controller type derived from APlayerController.
 	 * @return Non-owning player controller, or null if unavailable or mismatched.
 	 */
-	template <typename T> T* GetPlayerController() const
+	template <std::derived_from<APlayerController> T> T* GetPlayerController() const
 	{
-		static_assert(TIsDerivedFrom<T, APlayerController>::IsDerived, "T must derive from APlayerController.");
 		return Cast<T>(GetPlayerController());
 	}
 
@@ -110,9 +108,8 @@ public:
 	 * @tparam T Complete player state type derived from APlayerState.
 	 * @return Non-owning player state, or null if unavailable or mismatched.
 	 */
-	template <typename T> T* GetPlayerState() const
+	template <std::derived_from<APlayerState> T> T* GetPlayerState() const
 	{
-		static_assert(TIsDerivedFrom<T, APlayerState>::IsDerived, "T must derive from APlayerState.");
 		return Cast<T>(GetPlayerState());
 	}
 

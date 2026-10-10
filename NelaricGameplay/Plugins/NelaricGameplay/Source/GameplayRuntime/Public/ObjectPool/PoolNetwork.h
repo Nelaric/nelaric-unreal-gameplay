@@ -22,6 +22,12 @@ enum class ENetworkMode : uint8
 	Replicated,
 };
 
+/** @brief Accepts only the supported pool networking modes.
+ * @tparam Mode Local operation or automatic replication.
+ */
+template <ENetworkMode Mode>
+concept CPoolNetworkMode = Mode == ENetworkMode::Disabled || Mode == ENetworkMode::Replicated;
+
 namespace Private
 {
 struct FPoolNetworkStorage;
@@ -46,7 +52,9 @@ private:
 };
 
 /// Empty specialization keeps local pools free of network state.
-template <ENetworkMode Mode> struct TPoolNetworkBinding
+template <ENetworkMode Mode>
+    requires CPoolNetworkMode<Mode>
+struct TPoolNetworkBinding
 {
 };
 

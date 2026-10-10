@@ -14,6 +14,12 @@
 
 namespace Nelaric::ObjectPool
 {
+/** @brief Accepts slot counts with room for two reserved sentinel indices.
+ * @tparam Capacity Positive compile-time number of slots.
+ */
+template <std::uint32_t Capacity>
+concept CPoolCapacity = Capacity > 0 && Capacity <= UINT32_MAX - 1u;
+
 /** @brief Allocates slot indices without allocating object memory.
  * @details Uses fixed-width integers, inline arrays, and UE platform macros.
  * @note The owner serializes access and keeps the pool address stable.
@@ -21,7 +27,9 @@ namespace Nelaric::ObjectPool
  * expire before pool destruction.
  * @tparam Capacity Positive number of slots, excluding two reserved indices.
  */
-template <std::uint32_t Capacity> class TFixedSlotPool final
+template <std::uint32_t Capacity>
+    requires CPoolCapacity<Capacity>
+class TFixedSlotPool final
 {
 public:
 	/// Index type with room for the slots and two reserved sentinel values.
@@ -128,9 +136,6 @@ public:
 	TFixedSlotPool& operator=(TFixedSlotPool&&) = delete;
 
 private:
-	static_assert(Capacity > 0, "Capacity must be positive");
-	static_assert(Capacity <= UINT32_MAX - 1u, "Two index values are reserved");
-
 	std::uint64_t Generations[Capacity]{};
 	FIndex Next[Capacity]{};
 	std::uint32_t FreeCount = Capacity;

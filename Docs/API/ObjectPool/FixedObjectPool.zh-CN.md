@@ -8,6 +8,8 @@ GameplayRuntime 模块在 `Nelaric::ObjectPool` 中提供普通 C++ 对象池。
 
 池自身没有反射宏。Capacity 是模板参数，槽位代数、索引空闲链和对象引用使用内联定长数组。预热成功时一次创建全部对象；借还不会扩容，也不会补建丢失的对象。管理存储固定不代表动画、物理、碰撞回调和业务逻辑不产生内存分配。
 
+C++ 概念在模板声明处检查容量、引用与联网模式，以及策略的工厂和生命周期调用。`CPoolPolicy` 要求创建和借出参数类型、可转换为池对象指针的工厂返回值、可作布尔判断的激活结果，以及可调用的归还和销毁方法。联网策略还必须提供 World 访问；可选的 `NetworkName` 必须支持池所使用的 `FName` 操作。角色策略要求公开原生实现 `IPoolableCharacter`；普通 UObject 策略要求可调用的 `OnPoolAcquire` 和 `OnPoolReturn` 方法。
+
 ## 所有权与生命周期
 
 世界级普通 C++ 管理器或 Subsystem 保持池地址稳定。所有操作、读取、构造、析构和策略回调均在 Game Thread 执行。World 的 Actor 结束玩法或引擎资源清理前调用 Shutdown。池禁止复制和移动；句柄必须早于池实例销毁而作废，不能跨同地址的池实例重建保留。
@@ -22,7 +24,7 @@ GameplayRuntime 模块在 `Nelaric::ObjectPool` 中提供普通 C++ 对象池。
 
 弱引用检查对象生命期，generation 检查逻辑租约复用，二者都不延长池实例生命期。Get 在转换中、句柄失效或对象失效时返回空，不改变对象丢失标记。空闲链头部的 generation 饱和后停止借出，禁止计数回绕。
 
-`GetByIndexUnchecked(Index)` 仅供 WorldRaw 池使用，强制内联后直接读取固定指针数组。不执行下标、Game Thread、World、就绪状态、转换状态、generation 或对象生命期检查，没有分配、查找或弱引用解析；地址计算和指针读取本身仍有成本。调用方保证 `Index < CapacityValue`、预热成功、池与 Actor 存活、在 Game Thread 调用且没有正在执行的生命周期转换。其他引用模式调用该接口时会触发编译期断言。联网池的客户端读取改为解析弱引用，未收到角色或关闭时可返回空。GetByIndex 为全部引用模式提供带下标检查的访问。
+`Pool[Index]` 仅供 WorldRaw 池使用，强制内联后直接读取固定指针数组。不执行下标、Game Thread、World、就绪状态、转换状态、generation 或对象生命期检查，没有分配、查找或弱引用解析；地址计算和指针读取本身仍有成本。调用方保证 `Index < CapacityValue`、预热成功、池与 Actor 存活、在 Game Thread 调用且没有正在执行的生命周期转换。`requires` 约束使该接口在其他引用模式下不可用。联网池的客户端读取改为解析弱引用，未收到角色或关闭时可返回空。`At(Index)` 为全部引用模式提供带下标检查的访问。
 
 接口可以返回空闲或已借出槽位中的对象，不会借出该槽位。Lease.Handle.Index 标识物理槽位，但仅凭下标无法识别槽位复用前后的逻辑租约；需要 generation 校验时仍使用 Get(Handle) 和 Release(Handle)。World teardown 或 Shutdown 开始前必须结束直接访问，WorldRaw 模式禁止外部 Destroy 和会到期的 LifeSpan。
 
@@ -67,7 +69,7 @@ using FNetworkPool = Nelaric::ObjectPool::TCharacterPool<
 
 权威端预热创建固定数量的 Actor，开启 Actor 和移动复制，保持 AlwaysRelevant 和 Awake。模块在各 NetDriver 上自动注册通道，每个完成初始化的连接开启一个共享通道。可靠且有界的消息传递池标识、槽位索引、NetGUID、修订号和活动状态。归还保留客户端代理；晚加入客户端会收到当前池快照和后续变化。
 
-池公告与 Actor 创建可以按任意顺序到达。运行时通过 UE 缓存解析 NetGUID，等待 Actor BeginPlay，再应用通用角色移动、骨骼暂停、碰撞、显示和 Tick 状态。`IsReady` 表示池公告已经到达，部分 `GetByIndex` 仍可能因角色尚未到达而返回空；此状态也不保证 GAS 就绪。运行时可以先接收视图，再绑定本地原生池。客户端 Shutdown 只解绑本地视图，不销毁服务器代理；权威池关闭会使对应客户端视图失效。
+池公告与 Actor 创建可以按任意顺序到达。运行时通过 UE 缓存解析 NetGUID，等待 Actor BeginPlay，再应用通用角色移动、骨骼暂停、碰撞、显示和 Tick 状态。`IsReady` 表示池公告已经到达，部分 `At(Index)` 仍可能因角色尚未到达而返回空；此状态也不保证 GAS 就绪。运行时可以先接收视图，再绑定本地原生池。客户端 Shutdown 只解绑本地视图，不销毁服务器代理；权威池关闭会使对应客户端视图失效。
 
 每次借出和归还都会推进槽位修订号，即使两次更新之间归还后再次借出，最终活动位仍为 true，也会重置客户端预测。更新可以合并中间租约，修订号标识最新状态，不是事件流。通用活动状态通过 `FCharacterPoolHelper::IsActive(Character, PoolState)` 查询，准备状态通过 `IsPrepared` 查询；保留原生状态用于权威端和普通出生角色。各类型继续实现普通池生命周期和业务状态复制。
 

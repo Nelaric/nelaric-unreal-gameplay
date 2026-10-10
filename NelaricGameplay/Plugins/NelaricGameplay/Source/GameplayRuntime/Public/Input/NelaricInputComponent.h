@@ -5,10 +5,28 @@
 #pragma once
 #include "EnhancedInputComponent.h"
 #include "Input/NelaricInputConfig.h"
+
+#include <concepts>
+
 #include "NelaricInputComponent.generated.h"
 
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputMappingContext;
+
+namespace Nelaric::Input
+{
+/** @brief Accepts native action callbacks supported by Enhanced Input.
+ * @tparam UserClass UObject target retained weakly by the input binding.
+ * @tparam FuncType Nullable member callback matching a handler signature.
+ */
+template <class UserClass, class FuncType>
+concept CNativeActionCallback =
+    std::derived_from<UserClass, UObject> && requires(UEnhancedInputComponent& Component, const UInputAction* Action,
+                                                      ETriggerEvent TriggerEvent, UserClass* Object, FuncType Func) {
+	    { !Func } -> std::convertible_to<bool>;
+	    { Component.BindAction(Action, TriggerEvent, Object, Func) } -> std::same_as<FEnhancedInputActionEventBinding&>;
+    };
+} // namespace Nelaric::Input
 
 /** @brief Enhanced Input component with native bindings addressed by tags.
  * @details Unreal creates this component for the pawn input stack.
@@ -73,6 +91,7 @@ public:
 	 * @return Whether a binding was created.
 	 */
 	template <class UserClass, typename FuncType>
+	    requires Nelaric::Input::CNativeActionCallback<UserClass, FuncType>
 	FORCEINLINE bool BindNativeAction(const UNelaricInputConfig* InputConfig, const FGameplayTag& InputTag,
 	                                  ETriggerEvent TriggerEvent, UserClass* Object, FuncType Func,
 	                                  TArray<uint32>& BindHandles)

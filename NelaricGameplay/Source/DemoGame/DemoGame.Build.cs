@@ -8,32 +8,6 @@ public class DemoGame : ModuleRules
 		: base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		PublicDependencyModuleNames.AddRange(
-			new string[]
-			{
-				"Core",
-				"CoreUObject",
-				"Engine",
-				"GameplayRuntime",
-				"EnhancedInput",
-				"GameplayTags",
-				"GameplayAbilitiesIntegration",
-				"GameplayAbilities",
-				"AIModule",
-				"StateTreeModule",
-				"GameplayStateTreeModule",
-			}
-		);
-		PrivateDependencyModuleNames.AddRange(
-			new string[]
-			{
-				"NavigationSystem",
-				"AnimationBudgetAllocator",
-				"GameplayTasks",
-				"JsEnv",
-				"Json",
-				"JsonUtilities",
-			}
-		);
+		PrivateDependencyModuleNames.Add("Core");
 	}
 }

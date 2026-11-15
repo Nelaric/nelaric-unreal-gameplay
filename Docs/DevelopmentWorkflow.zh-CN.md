@@ -29,6 +29,6 @@ GitHub Actions 会检查 PR 和提交命名、格式与文本规范，以及 API
 
 ## 检查失败时
 
-从 PR 页面打开失败的 GitHub Actions 目标 Job，查看结果摘要并点击对应的 CircleCI Job 日志链接。[CircleCI 流水线](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server)在 GitHub 仓库改名后仍使用原项目 slug。如果某项检查没有出现，或你无法解决失败问题，请在 PR 中附上链接和已经尝试过的排查步骤。
+从 PR 页面打开失败的 GitHub Actions 目标 Job，查看结果摘要并点击对应的 CircleCI Job 日志链接。[CircleCI 流水线历史](https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-gameplay)列出了最近的构建。如果某项检查没有出现，或你无法解决失败问题，请在 PR 中附上链接和已经尝试过的排查步骤。
 
 工作流配置分别位于 [GitHub Actions Quality](../.github/workflows/quality.yml)、[Fork PR Linux build](../.github/workflows/fork-pr-linux.yml)、[API Pages](../.github/workflows/pages.yml) 和 [CircleCI](../.circleci/config.yml)。

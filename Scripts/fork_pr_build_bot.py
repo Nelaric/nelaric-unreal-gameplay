@@ -17,8 +17,8 @@ from pr_build_policy import PolicyError, get_pull_request, verify_pull_request
 
 
 _REPOSITORY = "Nelaric/nelaric-unreal-gameplay"
-# CircleCI retains the original project slug after the GitHub repository rename.
-_CIRCLECI_PROJECT = "gh/Nelaric/nelaric-unreal-server"
+_CIRCLECI_PROJECT = f"gh/{_REPOSITORY}"
+_CIRCLECI_PIPELINE_URL = f"https://app.circleci.com/pipelines/github/{_REPOSITORY}"
 _STATUS_CONTEXT = "ci/fork-pr-linux-build"
 _JOB_CONTEXTS = {
     "build_game_linux": "ci/linux-game-build",
@@ -159,8 +159,33 @@ def find_pipeline(nonce: str) -> dict | None:
     return None
 
 
+def circleci_v3_status(attributes: dict) -> str:
+    """Normalize the v3 execution phase and terminal outcome."""
+    outcome = attributes.get("outcome") or attributes.get("current_outcome")
+    if outcome:
+        return {"succeeded": "success", "errored": "error"}.get(outcome, outcome)
+    return {"queued": "queued", "started": "running", "ended": "error"}.get(
+        attributes.get("phase"), "queued"
+    )
+
+
 def find_workflow(pipeline_id: str) -> dict | None:
-    result = request_json(f"https://circleci.com/api/v2/pipeline/{pipeline_id}/workflow")
+    try:
+        result = request_json(f"https://circleci.com/api/v2/pipeline/{pipeline_id}/workflow")
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        query = urllib.parse.urlencode({"filter[run_id]": pipeline_id, "page[limit]": 20})
+        result = request_json(f"https://circleci.com/api/v3/workflows?{query}")
+        for item in result.get("data", []):
+            attributes = item.get("attributes", {})
+            if attributes.get("name") == "fork_pr_linux_build":
+                return {
+                    "id": item["id"],
+                    "name": attributes["name"],
+                    "status": circleci_v3_status(attributes),
+                }
+        return None
     matching = [item for item in result.get("items", []) if item.get("name") == "fork_pr_linux_build"]
     if not matching:
         return None
@@ -172,7 +197,24 @@ def workflow_jobs(workflow_id: str) -> dict[str, dict]:
     page_token: str | None = None
     while True:
         query = f"?{urllib.parse.urlencode({'page-token': page_token})}" if page_token else ""
-        result = request_json(f"https://circleci.com/api/v2/workflow/{workflow_id}/job{query}")
+        try:
+            result = request_json(f"https://circleci.com/api/v2/workflow/{workflow_id}/job{query}")
+        except urllib.error.HTTPError as error:
+            if error.code != 404:
+                raise
+            query = urllib.parse.urlencode({"filter[workflow_id]": workflow_id, "page[limit]": 20})
+            result = request_json(f"https://circleci.com/api/v3/jobs?{query}")
+            for item in result.get("data", []):
+                attributes = item.get("attributes", {})
+                name = attributes.get("name")
+                if name in _JOB_CONTEXTS:
+                    jobs[name] = {
+                        "id": item["id"],
+                        "name": name,
+                        "status": circleci_v3_status(attributes),
+                        "job_number": attributes.get("number"),
+                    }
+            return jobs
         for job in result.get("items", []):
             if job.get("name") in _JOB_CONTEXTS:
                 jobs[job["name"]] = job
@@ -200,7 +242,7 @@ def monitor(number: int, sha: str, nonce: str) -> bool:
             pipeline = find_pipeline(nonce)
         if pipeline is not None:
             target_url = (
-                "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
+                f"{_CIRCLECI_PIPELINE_URL}/"
                 f"{pipeline['number']}/details"
             )
             workflow = find_workflow(pipeline["id"])
@@ -220,7 +262,7 @@ def monitor(number: int, sha: str, nonce: str) -> bool:
                     job_url = target_url
                     if job.get("job_number"):
                         job_url = (
-                            "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
+                            f"{_CIRCLECI_PIPELINE_URL}/"
                             f"{pipeline['number']}/workflows/{workflow['id']}/jobs/{job['job_number']}"
                         )
                     post_status(sha, state, f"UE 5.6.1 Linux {name}: {job_status}", job_url, context=context)
@@ -272,7 +314,7 @@ def _circleci_step_output(url: str) -> tuple[str, bool]:
 
 def mirror_circleci_job(job_number: int) -> None:
     """Copy CircleCI step details into the corresponding Actions job log."""
-    build = request_json(f"https://circleci.com/api/v1.1/project/github/Nelaric/nelaric-unreal-server/{job_number}")
+    build = request_json(f"https://circleci.com/api/v1.1/project/github/{_REPOSITORY}/{job_number}")
     for step in build.get("steps", []):
         for action in step.get("actions", []):
             name = _safe_log_text(action.get("name") or step.get("name") or "CircleCI step").replace("\n", " ")
@@ -356,7 +398,7 @@ def watch_target(number: int, sha: str, nonce: str, job_name: str) -> tuple[str,
                 print(f"Found CircleCI pipeline #{pipeline['number']} for {_JOB_LABELS[job_name]}", flush=True)
         if pipeline:
             pipeline_url = (
-                "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
+                f"{_CIRCLECI_PIPELINE_URL}/"
                 f"{pipeline['number']}/details"
             )
             if pipeline.get("errors"):
@@ -373,7 +415,7 @@ def watch_target(number: int, sha: str, nonce: str, job_name: str) -> tuple[str,
                     job_url = pipeline_url
                     if job.get("job_number"):
                         job_url = (
-                            "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
+                            f"{_CIRCLECI_PIPELINE_URL}/"
                             f"{pipeline['number']}/workflows/{workflow['id']}/jobs/{job['job_number']}"
                         )
                         try:
@@ -443,7 +485,7 @@ def finish_main() -> None:
                 result = status
                 if pipeline and workflow and job.get("job_number"):
                     job_url = (
-                        "https://app.circleci.com/pipelines/github/Nelaric/nelaric-unreal-server/"
+                        f"{_CIRCLECI_PIPELINE_URL}/"
                         f"{pipeline['number']}/workflows/{workflow['id']}/jobs/{job['job_number']}"
                     )
                     result = f"[{status}]({job_url})"

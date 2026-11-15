@@ -2,4 +2,5 @@
 
 #include "Modules/ModuleManager.h"
 
+// Register this module with Unreal Engine.
 IMPLEMENT_MODULE(FDefaultModuleImpl, GameplayAbilitiesIntegration)
